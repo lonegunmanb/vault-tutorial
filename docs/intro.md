@@ -19,7 +19,7 @@ title: 课程介绍
 - 执行密码轮换策略极其痛苦，导致机密长期不换
 - 需要将机密安全加密存储，但又不想将密钥暴露给应用程序
 
-这种现象被称为[**机密蔓生（Secret Sprawl）**](https://www.hashicorp.com/en/resources/what-is-secret-sprawl-why-is-it-harmful)——系统机密信息被零散地以不同形式保存在许多彼此不相关的地方，我们既不知道哪些系统保存了哪些机密，也不知道哪些机密被哪些人获取过。即使发现某个机密信息流失在外，我们也无法回溯是何人申请使用、何人泄漏，更无法确信立即吊销该机密不会引发生产故障。
+这种现象被称为[**机密蔓生（Secret Sprawl）**](https://www.hashicorp.com/en/resources/what-is-secret-sprawl-why-is-it-harmful——系统机密信息被零散地以不同形式保存在许多彼此不相关的地方，我们既不知道哪些系统保存了哪些机密，也不知道哪些机密被哪些人获取过。即使发现某个机密信息流失在外，我们也无法回溯是何人申请使用、何人泄漏，更无法确信立即吊销该机密不会引发生产故障。
 
 机密蔓生引发了一连串的严重问题，导致我们既不能事前防备机密泄漏，也无法事后快速响应进行损害管制。
 
@@ -67,4 +67,4 @@ secret_key         wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 
 每个章节末尾都有一个 **动手实验** 按钮，点击后会在新标签页打开 Killercoda 实验环境。实验环境已预装 Vault，无需任何本地安装和配置，打开浏览器即可开始动手。
 
-<KillercodaEmbed src="https://killercoda.com/lonegunmanb/scenario/vault-basics" title="Vault 入门实验" />
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/vault-basics" title="Vault 入门实验" />

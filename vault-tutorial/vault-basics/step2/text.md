@@ -2,11 +2,8 @@
 
 KV（Key-Value）Secrets Engine 是 Vault 最基础的密钥存储方式。
 
-首先，启用 KV v2 secrets engine：
-
-```bash
-vault secrets enable -path=secret kv-v2
-```
+> **提示**：Vault Dev 模式启动时已自动挂载 `secret/`（KV v2），无需手动启用。
+> 如果需要在其他路径挂载，可以使用：`vault secrets enable -path=mypath kv-v2`
 
 写入一个密钥：
 
