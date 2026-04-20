@@ -1,0 +1,43 @@
+{
+  "title": "什么是现代意义上的 Vault：生产部署初体验",
+  "description": "亲手部署一个生产风格的单节点 Vault（Integrated Storage + Shamir 封印），观察 Barrier 加密效果，理解 Sealed/Unsealed 生命周期",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "拉取并验证官方 Vault 镜像",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "编写生产风格 HCL 配置（Raft 存储）",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "初始化 + Shamir 解封",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "观察 Barrier 加密效果",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

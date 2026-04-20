@@ -1,5 +1,6 @@
 {
   "items": [
-    { "path": "vault-basics" }
+    { "path": "vault-basics" },
+    { "path": "what-is-vault" }
   ]
 }

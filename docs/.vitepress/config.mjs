@@ -24,7 +24,8 @@ export default defineConfig({
       {
         text: '教程章节',
         items: [
-         { text: '课程介绍', link: '/intro' }
+         { text: '课程介绍', link: '/intro' },
+         { text: '什么是现代意义上的 Vault', link: '/what-is-vault' }
         ],
       },
     ],
