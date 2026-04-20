@@ -95,7 +95,7 @@ cluster_addr = "https://vault-1.example.com:8201"
 ui = true
 ```
 
-为什么是 Raft？回顾一下原《Essential Vault》介绍的存储后端：Consul、Etcd、各种数据库……都是 **外置** 存储，部署运维复杂度高、版本兼容矩阵庞大。**Integrated Storage** 是 Vault 自己内置的、基于 Raft 一致性协议的嵌入式存储，从 Vault 1.4 开始 GA，现在已经成为官方钦定的事实标准。
+为什么是 Raft？回顾一下原[《Essential Vault》](https://lonegunmanb.github.io/essential-vault/2.%E5%9F%BA%E6%9C%AC%E6%A6%82%E5%BF%B5/13.%E5%AD%98%E5%82%A8.html)介绍的存储后端：Consul、Etcd、各种数据库……都是 **外置** 存储，部署运维复杂度高、版本兼容矩阵庞大。**Integrated Storage** 是 Vault 自己内置的、基于 Raft 一致性协议的嵌入式存储，从 Vault 1.4 开始 GA，现在已经成为官方钦定的事实标准。
 
 生产集群的典型拓扑：
 
