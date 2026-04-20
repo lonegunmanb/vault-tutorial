@@ -1,0 +1,9 @@
+#!/bin/bash
+# Background setup — runs before the user sees the terminal
+
+source /root/setup-common.sh
+
+install_vault
+start_vault_dev
+
+finish_setup
