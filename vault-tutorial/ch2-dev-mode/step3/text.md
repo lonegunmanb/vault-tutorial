@@ -87,11 +87,9 @@ grep -a "api_key\|SUPER_SENSITIVE\|payment" /tmp/vault-traffic.cap | head -10
 | 同一局域网（Dev 监听 0.0.0.0 时） | 无特殊权限 | 低 |
 | 云上同 VPC 内的另一台虚机 | 无特殊权限 | 低 |
 
-## 3.6 对比：生产 Vault 中的 TLS 保护
+## 3.6 小结
 
-本实验无法在同一环境内演示 HTTPS Vault 的嗅探结果，但结论是确定的：当 `VAULT_ADDR` 使用 `https://` 时，tcpdump 抓到的是 TLS Record Layer 的加密字节流，没有任何可读的明文，Token 和机密值都不可见。
-
-这是 Dev 模式（`http://`）与生产模式（`https://`）之间最根本的安全差距之一。
+HTTP Dev 模式下，Token 和机密值以明文出现在每个网络包中。下一步我们将用 `-dev-tls` 模式做一次现场对比，亲眼验证 TLS 开启后嗅探结果的差异。
 
 ## 3.7 清理并验证理解
 

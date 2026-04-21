@@ -26,40 +26,70 @@ vault kv list secret/ --format=json \
   || VAULT_TOKEN="${STOLEN_TOKEN}" vault kv list secret/
 ```
 
-## 4.2 `-dev-tls` 模式——略好但仍不够
+## 4.2 `-dev-tls`：用 tcpdump 对比 TLS 加密效果
 
-Vault 提供了一个稍微安全一点的 Dev 变体：
+Vault 提供了 `-dev-tls` 变体——自动生成自签名 CA 和服务器证书，监听同一个 8200 端口但走 HTTPS。我们用它重复上一步的 tcpdump 实验，直接对比有无 TLS 时的抓包结果。
 
 ```bash
 # 停止当前 Dev 实例
 pkill -f "vault server" 2>/dev/null || true
 sleep 2
 
-# 启动带 TLS 的 Dev 模式
+# 启动 -dev-tls，日志里包含 VAULT_ADDR 和 VAULT_CACERT 路径
 vault server -dev-tls -dev-root-token-id=root \
   > /tmp/vault-dev-tls.log 2>&1 &
 sleep 3
-
-# 查看启动日志
-grep -E "VAULT_ADDR|CA cert|certificate" /tmp/vault-dev-tls.log | head -10
 ```
 
-`-dev-tls` 自动生成自签名 CA 和服务器证书，并提示 `VAULT_ADDR=https://...`。与纯 HTTP 相比，流量是加密的。
-
-**但它仍然不适合生产，因为：**
-- 自签名证书无法通过公开 PKI 链验证（浏览器和标准工具会报错）
-- 证书和私钥存储在临时目录，每次重启都重新生成
-- 存储后端仍是内存，数据仍然不持久
+从启动日志中提取环境变量：
 
 ```bash
-# 停止 -dev-tls 实例，恢复普通 dev
+eval $(grep -E 'export VAULT_(ADDR|CACERT)' /tmp/vault-dev-tls.log | sed 's/^[[:space:]]*\$[[:space:]]*//')
+echo "VAULT_ADDR:   $VAULT_ADDR"
+echo "VAULT_CACERT: $VAULT_CACERT"
+```
+
+再次抓包，然后执行与步骤 3.3 完全相同的写入/读取操作：
+
+```bash
+tcpdump -i lo -A -s 0 'tcp port 8200' > /tmp/vault-tls-traffic.cap 2>&1 &
+TLS_PID=$!
+sleep 1
+
+vault kv put secret/tls-test value="sensitive-data-should-be-hidden"
+vault kv get secret/tls-test
+
+kill $TLS_PID
+sleep 1
+```
+
+用步骤 3.4 中完全相同的关键词搜索抓包文件：
+
+```bash
+grep -ac "sensitive-data\|X-Vault-Token\|tls-test" /tmp/vault-tls-traffic.cap
+```
+
+输出应为 `0`——什么都找不到。流量依然在，只是 TLS 把它变成了只有通信双方才能解密的密文。
+
+**`-dev-tls` 解决了明文传输问题，但仍然不适合生产，因为：**
+- 自签名证书无法通过公开 PKI 链验证，应用需要显式信任该 CA
+- 证书和私钥存储在临时目录，每次重启都重新生成，无法固定
+- 存储后端仍是内存，数据不持久
+
+清理并还原普通 dev 供后续步骤使用：
+
+```bash
 pkill -f "vault server" 2>/dev/null || true
+rm -f /tmp/vault-tls-traffic.cap /tmp/vault-dev-tls.log
 sleep 2
+
 vault server -dev -dev-root-token-id=root \
   > /tmp/vault-dev.log 2>&1 &
 sleep 2
 export VAULT_ADDR='http://127.0.0.1:8200'
 export VAULT_TOKEN='root'
+unset VAULT_CACERT
+echo "已还原 Dev 模式（http://）"
 ```
 
 ## 4.3 正确使用 Dev 模式：CI Pipeline 示例
