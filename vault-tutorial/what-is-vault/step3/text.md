@@ -14,9 +14,14 @@
 
 ```bash
 # 把输出保存到文件，方便后续步骤读取
-vault operator init -format=json > /root/vault-init.json
+# 仅在尚未初始化时执行（幂等：避免重跑本步骤时报 "Vault is already initialized"）
+if [ ! -s /root/vault-init.json ]; then
+  vault operator init -format=json > /root/vault-init.json
+fi
 cat /root/vault-init.json | jq
 ```
+
+> 如果你看到 `Error: Vault is already initialized`，说明之前已经初始化过——Vault 集群在其生命周期内**只能初始化一次**。此时只需直接读取已保存的 `/root/vault-init.json` 即可。如果你想从零再来一遍，必须先清空数据目录：`pkill vault && rm -rf /opt/vault/data/* /root/vault-init.json`，然后回到第二步重新启动 Vault。
 
 > **生产环境警告**：在真实生产部署中，绝对不能把 5 份 Unseal Key 写到同一台机器的同一个文件里。正确做法是把 5 份分别加密分发给 5 名不同的 Key Holder（通常用各自的 PGP 公钥加密，配合 `init -pgp-keys=...` 参数），任意 3 人到场才能解封。这是 Shamir 算法的安全意义所在。
 
