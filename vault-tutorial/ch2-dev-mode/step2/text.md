@@ -64,20 +64,15 @@ vault kv get secret/myapp/db
 你会得到：
 
 ```
-Error making API request.
-
-URL: GET http://127.0.0.1:8200/v1/secret/data/myapp/db
-Code: 404. Errors:
-
-* no secret mount point found at path '...'
+No value found at secret/data/myapp/db
 ```
 
-甚至连 `secret/` 挂载点都不存在了——因为这是一个全新的内存实例，什么都没有。
+注意：`secret/` 挂载点**依然存在**（Dev 模式每次启动都会自动重新挂载它），但挂载点下的所有数据已全部消失。这正是内存存储的本质——结构是代码写死的，数据是运行时产生的，进程一旦终止，数据荡然无存。
 
 ## 2.4 确认"一切归零"的程度
 
 ```bash
-# 新实例中没有任何机密引擎（除了内置的）
+# 挂载点还在，但数据已空
 vault secrets list
 
 # 没有任何自定义策略（除了 root 和 default）
