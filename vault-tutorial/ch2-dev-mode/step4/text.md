@@ -131,38 +131,20 @@ echo "关键要素：隔离容器 + 已知 Token + 测试结束即销毁"
 
 ## 4.4 生产 Vault 的正确初始化流程预览
 
-对比一下生产 Vault 的启动流程，理解 Dev 模式"short-circuit"了多少步骤：
+Dev 模式"short-circuit"了生产环境中每一个有意义的安全步骤：
+
+| 步骤 | 生产环境 | Dev 模式 |
+| :--- | :--- | :--- |
+| 1. 配置文件 | 手动编写 HCL（listener / storage / seal） | 跳过，全部内置默认值 |
+| 2. 初始化 | `vault operator init`，生成 5 个 Shamir 分片 | 自动完成 |
+| 3. 解封 | 3 人各提供 1 个分片，`vault operator unseal` × 3 | 自动完成 |
+| 4. 审计设备 | `vault audit enable file ...`（强制开启） | 未配置 |
+| 5. 最小权限策略 | 创建细粒度 Policy，按需授权 | 只有 `root` + `default` |
+| 6. 吊销 Root Token | 初始化后立即吊销，紧急时用 `operator generate-root` 重建 | 永久有效的 `root` |
 
 ```bash
-echo "=== 生产 Vault 启动清单（对比 Dev 模式）==="
-echo ""
-echo "生产步骤                              Dev 模式"
-echo "──────────────────────────────────────────────────────"
-echo "1. 准备 HCL 配置文件              ← vault server -dev"
-echo "   (listener/storage/seal 等)        (全部自动化/跳过)"
-echo ""
-echo "2. vault operator init              ← 自动完成"
-echo "   (生成 5 个 Shamir 分片)"
-echo "   (输出 Root Token 一次)"
-echo ""
-echo "3. vault operator unseal (×3)       ← 自动完成"
-echo "   (三个不同人员各提供一个分片)"
-echo ""
-echo "4. 配置审计设备                     ← 未配置"
-echo "   vault audit enable file ..."
-echo ""
-echo "5. 创建细粒度策略                   ← 只有 root + default"
-echo "   (最小权限原则)"
-echo ""
-echo "6. 吊销初始 Root Token              ← 永远有效的 'root'"
-echo "   (只在紧急时使用 operator generate-root)"
-```
-
-```bash
-# 实际验证：Root Token 在 Dev 模式下永不过期
+# 验证：Dev 模式下 Root Token 永不过期，且拥有最高权限
 vault token lookup | grep -E "expire_time|policies"
-# expire_time: n/a  ← 永不过期
-# policies: [root]  ← 最高权限
 ```
 
 ## 4.5 最终决策树
