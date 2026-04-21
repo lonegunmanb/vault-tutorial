@@ -109,11 +109,19 @@ token/    token    auth_token_xxxxxxxx    token based credentials    n/a
 
 Dev 模式自动挂载了以下内容：
 
-- **`secret/`（KV v2）**：可直接用于读写机密，无需手动 `vault secrets enable`
+- **`secret/`（KV）**：可直接用于读写机密，无需手动 `vault secrets enable`
 - **`cubbyhole/`**：每个 Token 的私有存储空间，不可被其他 Token 访问
 - **`identity/`**：身份实体存储，Dev 模式下同样可用
 - **Token 认证**：唯一预挂载的认证方法，无 AppRole、GitHub、LDAP 等
 
-注意 `secret/` 的类型是 `kv`（KV v2），由 Dev 模式自动启用。在生产环境中你需要显式执行 `vault secrets enable -version=2 kv` 才能得到相同的引擎，且挂载路径由你自己定义。
+`vault secrets list` 的 `Type` 列对 KV v1 和 v2 都显示 `kv`，无法从这里区分版本。用 `-detailed` 可以看到实际版本：
+
+```bash
+vault secrets list -detailed | grep secret
+```
+
+你会在 `Options` 列看到 `map[version:2]`，确认 Dev 模式挂载的是 KV v2。如果需要 v1，可以在启动时加 `-dev-kv-v1` 标志。
+
+在生产环境中，需要显式执行 `vault secrets enable -version=2 -path=secret kv` 才能得到同等效果，挂载路径也由你自己决定。
 
 完成后点击 **Continue** 进入第二步。
