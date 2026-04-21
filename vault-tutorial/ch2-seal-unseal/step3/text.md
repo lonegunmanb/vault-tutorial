@@ -109,28 +109,35 @@ ls -l /root/workspace/new-shares/
 vault operator seal
 
 # 尝试用老分片解封（保留输出，便于观察老分片失效的现场）
+# 注意：rekey 之后 threshold 已经是 4，必须提交 4 份才会触发 Shamir 重组
 vault operator unseal "$(cat /root/workspace/shares/share-1.key)"
 vault operator unseal "$(cat /root/workspace/shares/share-2.key)"
 vault operator unseal "$(cat /root/workspace/shares/share-3.key)"
+vault operator unseal "$(cat /root/workspace/shares/share-4.key)"
 
 vault status | grep -E "Sealed|Unseal Progress"
 ```
 
-仔细观察三次输出。前两次老分片**会被服务端接受**——因为 Vault 没法在收到分片时立刻判断它的有效性（Shamir 分片单独看只是一串字节，必须凑齐 threshold 才能尝试重组）。所以你会看到：
+仔细观察四次输出。前三次老分片**会被服务端接受**——因为 Vault 没法在收到分片时立刻判断它的有效性（Shamir 分片单独看只是一串字节，必须凑齐 threshold 才能尝试重组）。所以你会看到：
 
 ```
-Unseal Progress    1/3
+Unseal Progress    1/4
 ...
-Unseal Progress    2/3
+Unseal Progress    2/4
+...
+Unseal Progress    3/4
 ```
 
-**真正的失败发生在第 3 份提交时**——服务端凑齐 3 份后调用 Shamir 重组算法，得到一个"Unseal Key 候选"，再用它去解密磁盘上保存的 Root Key 密文。这一步会因为 HMAC 校验失败而报错：
+**真正的失败发生在第 4 份提交时**——服务端凑齐 4 份后调用 Shamir 重组算法，得到一个"Unseal Key 候选"，再用它去解密磁盘上保存的 Root Key 密文。这一步会因为 HMAC 校验失败而报错：
 
 ```
 Error unsealing: Error making API request.
+
 URL: PUT http://127.0.0.1:8200/v1/sys/unseal
 Code: 400. Errors:
-* failed to decrypt encrypted stored keys: cipher: message authentication failed
+
+* unable to retrieve stored keys: invalid key: failed to decrypt keys from storage: error decrypting seal wrapped value
+error decrypting using seal shamir: cipher: message authentication failed
 ```
 
 注意细节：**老分片不是"格式错误被拒"**，而是"格式正确但解密结果不对"。这正是 Shamir + HMAC 组合的设计——服务端不会泄漏"哪份分片是错的"这种信息（任何 K 份的组合都能算出**某个**值，只是不对），攻击者无法借此做分片穷举。
@@ -143,7 +150,7 @@ vault status | grep -E "Sealed|Unseal Progress"
 
 ```
 Sealed             true
-Unseal Progress    0/3
+Unseal Progress    0/4
 ```
 
 ## 3.5 用新分片完成解封
