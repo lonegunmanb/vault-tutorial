@@ -97,8 +97,6 @@ echo "已还原 Dev 模式（http://）"
 Dev 模式在以下场景中是**完全合理**的选择：
 
 ```bash
-# 模拟 CI 环境中的使用方式
-cat << 'SCRIPT'
 #!/bin/bash
 # .github/workflows/test.yml 或 Makefile 中的 vault 集成测试片段
 
@@ -123,11 +121,9 @@ vault kv put secret/config db_url="test://localhost/testdb"
 ./run-integration-tests.sh
 
 # 容器销毁时所有数据随之消失，无需清理
-SCRIPT
-
-echo "以上是 CI pipeline 中安全使用 Dev 模式的标准模板"
-echo "关键要素：隔离容器 + 已知 Token + 测试结束即销毁"
 ```
+
+关键要素：**隔离容器 + 已知 Token + 测试结束即销毁**。三个条件缺一不可，缺少任何一个都会让上面分析过的风险重新成立。
 
 ## 4.4 生产 Vault 的正确初始化流程预览
 
