@@ -40,7 +40,7 @@ Unseal Nonce       n/a
 ## 1.3 提交第 1 份分片，观察 Nonce 出现
 
 ```bash
-vault operator unseal "$(cat shares/share-1.key)"
+vault operator unseal "$(cat /root/workspace/shares/share-1.key)"
 ```
 
 输出尾部：
@@ -65,7 +65,7 @@ echo "当前 Nonce: $NONCE"
 ## 1.4 提交第 2 份，验证 Nonce 不变
 
 ```bash
-vault operator unseal "$(cat shares/share-2.key)"
+vault operator unseal "$(cat /root/workspace/shares/share-2.key)"
 
 echo "提交后 Nonce: $(vault status -format=json | jq -r '.nonce')"
 ```
@@ -104,7 +104,7 @@ Code: 503. Errors:
 我们故意不用第 3 份，跳过它，直接用第 4 份：
 
 ```bash
-vault operator unseal "$(cat shares/share-4.key)"
+vault operator unseal "$(cat /root/workspace/shares/share-4.key)"
 vault status | grep "Sealed"
 ```
 
@@ -129,8 +129,8 @@ vault kv get secret/seal-demo
 vault operator seal
 
 # 提交 2 份后突然反悔
-vault operator unseal "$(cat shares/share-1.key)" > /dev/null
-vault operator unseal "$(cat shares/share-2.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/shares/share-1.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/shares/share-2.key)" > /dev/null
 vault status | grep -E "Unseal Progress|Nonce"
 
 # 一键重置
@@ -150,9 +150,9 @@ Unseal Nonce       n/a
 ## 1.8 重新解封，准备进入第二步
 
 ```bash
-vault operator unseal "$(cat shares/share-1.key)" > /dev/null
-vault operator unseal "$(cat shares/share-2.key)" > /dev/null
-vault operator unseal "$(cat shares/share-3.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/shares/share-1.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/shares/share-2.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/shares/share-3.key)" > /dev/null
 
 vault status | grep "Sealed"
 vault kv get secret/seal-demo

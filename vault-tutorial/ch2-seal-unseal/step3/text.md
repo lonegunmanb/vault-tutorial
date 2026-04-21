@@ -12,9 +12,9 @@
 vault operator rekey -init \
   -key-shares=7 \
   -key-threshold=4 \
-  -format=json > rekey-init.json
+  -format=json > /root/workspace/rekey-init.json
 
-cat rekey-init.json | jq .
+cat /root/workspace/rekey-init.json | jq .
 ```
 
 输出：
@@ -45,11 +45,11 @@ cat rekey-init.json | jq .
 ## 3.2 用当前 3 份分片完成授权
 
 ```bash
-NONCE=$(jq -r '.nonce' rekey-init.json)
+NONCE=$(jq -r '.nonce' /root/workspace/rekey-init.json)
 
 # 第 1 份当前分片
 vault operator rekey -nonce="$NONCE" \
-  "$(cat shares/share-1.key)"
+  "$(cat /root/workspace/shares/share-1.key)"
 ```
 
 ```
@@ -62,7 +62,7 @@ Rekey Progress:  1/3
 ```bash
 # 第 2 份
 vault operator rekey -nonce="$NONCE" \
-  "$(cat shares/share-2.key)"
+  "$(cat /root/workspace/shares/share-2.key)"
 ```
 
 ```
@@ -72,9 +72,9 @@ Rekey Progress:  2/3
 ```bash
 # 第 3 份——临界点，会输出全新的 7 份分片
 vault operator rekey -nonce="$NONCE" -format=json \
-  "$(cat shares/share-3.key)" > rekey-result.json
+  "$(cat /root/workspace/shares/share-3.key)" > /root/workspace/rekey-result.json
 
-cat rekey-result.json | jq .
+cat /root/workspace/rekey-result.json | jq .
 ```
 
 输出包含**全新的 7 份分片**：
@@ -92,14 +92,14 @@ cat rekey-result.json | jq .
 ## 3.3 提取新分片
 
 ```bash
-mkdir -p new-shares
+mkdir -p /root/workspace/new-shares
 for i in 0 1 2 3 4 5 6; do
-  jq -r ".keys_base64[$i]" rekey-result.json \
-    > new-shares/share-$((i+1)).key
+  jq -r ".keys_base64[$i]" /root/workspace/rekey-result.json \
+    > /root/workspace/new-shares/share-$((i+1)).key
 done
-chmod 600 new-shares/*.key
+chmod 600 /root/workspace/new-shares/*.key
 
-ls -l new-shares/
+ls -l /root/workspace/new-shares/
 ```
 
 ## 3.4 验证老分片彻底失效
@@ -109,9 +109,9 @@ ls -l new-shares/
 vault operator seal
 
 # 尝试用老分片解封
-vault operator unseal "$(cat shares/share-1.key)" > /dev/null
-vault operator unseal "$(cat shares/share-2.key)" > /dev/null
-vault operator unseal "$(cat shares/share-3.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/shares/share-1.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/shares/share-2.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/shares/share-3.key)" > /dev/null
 
 vault status | grep "Sealed"
 ```
@@ -135,10 +135,10 @@ vault operator unseal -reset
 `Threshold` 已经从 3 变成 4，需要 4 份才能解封：
 
 ```bash
-vault operator unseal "$(cat new-shares/share-1.key)" > /dev/null
-vault operator unseal "$(cat new-shares/share-2.key)" > /dev/null
-vault operator unseal "$(cat new-shares/share-3.key)" > /dev/null
-vault operator unseal "$(cat new-shares/share-4.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/new-shares/share-1.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/new-shares/share-2.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/new-shares/share-3.key)" > /dev/null
+vault operator unseal "$(cat /root/workspace/new-shares/share-4.key)" > /dev/null
 
 vault status | grep -E "Sealed|Total Shares|Threshold"
 ```
@@ -189,7 +189,7 @@ ttl                 0s
 吊销：
 
 ```bash
-vault token revoke "$(cat root.token)"
+vault token revoke "$(cat /root/workspace/root.token)"
 ```
 
 验证已失效：
