@@ -73,6 +73,14 @@ vault status
 
 ## 3.5 写入第一个测试数据
 
+与上一章的 dev 模式不同，**生产模式下 `secret/` 路径默认没有挂载任何 Secrets Engine**——这正体现了"零信任"的设计：所有功能都必须显式启用。先挂载一个 kv-v2 引擎：
+
+```bash
+vault secrets enable -path=secret kv-v2
+```
+
+然后写入并读取一条测试数据：
+
 ```bash
 vault kv put secret/hello world="from raft storage"
 vault kv get secret/hello
