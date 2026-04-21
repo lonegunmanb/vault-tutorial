@@ -197,3 +197,4 @@ vault status
 - Do NOT use flat step files (`step1.md`) — must be `step1/text.md` directory format.
 - Do NOT edit `vault-tutorial/*/assets/setup-common.sh` directly — it is auto-generated.
 - Do NOT use Vault dev mode in production scenarios — it is for learning only (in-memory, no persistence).
+- Do NOT mention "环境正在初始化，请稍候..." in `init.md` - The student would be confused by two different "initialization" messages (one in foreground.sh, one in init.md). The init.md should be a static introduction to the scenario, without dynamic progress messages.

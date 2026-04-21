@@ -89,15 +89,9 @@ grep -a "api_key\|SUPER_SENSITIVE\|payment" /tmp/vault-traffic.cap | head -10
 
 ## 3.6 对比：生产 Vault 中的 TLS 保护
 
-```bash
-# 尝试对生产风格（HTTPS）的 Vault 做同样的嗅探：
-# tcpdump 看到的将是 TLS 握手包和加密的应用数据
-# 完全无法读出其中的任何有意义的内容
+本实验无法在同一环境内演示 HTTPS Vault 的嗅探结果，但结论是确定的：当 `VAULT_ADDR` 使用 `https://` 时，tcpdump 抓到的是 TLS Record Layer 的加密字节流，没有任何可读的明文，Token 和机密值都不可见。
 
-echo "如果是 HTTPS，tcpdump 的输出将是乱码密文，例如："
-echo "............E..H....@.@........................"
-echo "（TLS Record Layer + 加密的 Application Data）"
-```
+这是 Dev 模式（`http://`）与生产模式（`https://`）之间最根本的安全差距之一。
 
 ## 3.7 清理并验证理解
 
