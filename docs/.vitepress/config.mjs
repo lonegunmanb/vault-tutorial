@@ -30,7 +30,8 @@ export default defineConfig({
            text: '第 2 章：核心机制与高级状态机概念',
            collapsed: false,
            items: [
-             { text: '2.1 "Dev" 开发模式的适用边界与安全风险预警', link: '/ch2-dev-mode' }
+             { text: '2.1 "Dev" 开发模式的适用边界与安全风险预警', link: '/ch2-dev-mode' },
+             { text: '2.2 封印与解封（Seal/Unseal）机制的密码学底层原理', link: '/ch2-seal-unseal' }
            ]
          }
         ],

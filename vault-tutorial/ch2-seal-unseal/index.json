@@ -1,0 +1,39 @@
+{
+  "title": "Shamir 阈值深观察、Rotate vs Rekey 实战",
+  "description": "在一个已 init+解封的 Vault 上，深入观察 Shamir 阈值机制（Nonce、任意 K 份、少于 K 份的卡住状态），并完整执行 DEK 轮转（rotate）与 Unseal Key 重切分（rekey），最后吊销初始 Root Token",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "Shamir 阈值的深入观察：Nonce、任意 K 份、少于 K 份",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "Rotate：DEK 在线轮转",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Rekey：重新生成 Unseal Key 并重切分片",
+        "text": "step3/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

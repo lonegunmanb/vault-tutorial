@@ -2,6 +2,7 @@
   "items": [
     { "path": "vault-basics" },
     { "path": "what-is-vault" },
-    { "path": "ch2-dev-mode" }
+    { "path": "ch2-dev-mode" },
+    { "path": "ch2-seal-unseal" }
   ]
 }
