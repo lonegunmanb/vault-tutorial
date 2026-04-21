@@ -25,7 +25,14 @@ export default defineConfig({
         text: '教程章节',
         items: [
          { text: '课程介绍', link: '/intro' },
-         { text: '什么是现代意义上的 Vault', link: '/what-is-vault' }
+         { text: '什么是现代意义上的 Vault', link: '/what-is-vault' },
+         {
+           text: '第 2 章：核心机制与高级状态机概念',
+           collapsed: false,
+           items: [
+             { text: '2.1 "Dev" 开发模式的适用边界与安全风险预警', link: '/ch2-dev-mode' }
+           ]
+         }
         ],
       },
     ],

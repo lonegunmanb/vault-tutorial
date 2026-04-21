@@ -1,0 +1,43 @@
+{
+  "title": "Dev 模式的适用边界与安全风险亲手复现",
+  "description": "启动 Dev 模式并亲手复现三个关键安全缺陷：数据短暂性（重启即丢失）、明文 HTTP 流量中的 Token 泄露、Root Token 的公开性",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启动 Dev 模式并解读启动警告",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "验证数据短暂性：重启即清零",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "验证明文传输：tcpdump 截获 Token",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "确立边界：何时可用，何时绝对禁止",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
