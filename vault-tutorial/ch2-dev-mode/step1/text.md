@@ -92,6 +92,28 @@ vault secrets list
 vault auth list
 ```
 
-Dev 模式自动挂载了 KV v2 引擎（`secret/`）。这很方便，但也意味着你看到的"一切都正常工作"与生产环境中的行为可能存在细微但关键的差异。
+你会看到如下输出：
+
+```
+Path          Type         Accessor              Description
+----          ----         --------              -----------
+cubbyhole/    cubbyhole    cubbyhole_xxxxxxxx    per-token private secret storage
+identity/     identity     identity_xxxxxxxx     identity store
+secret/       kv           kv_xxxxxxxx           key/value secret storage
+sys/          system       system_xxxxxxxx       system endpoints used for control, policy and debugging
+
+Path      Type     Accessor               Description                Version
+----      ----     --------               -----------                -------
+token/    token    auth_token_xxxxxxxx    token based credentials    n/a
+```
+
+Dev 模式自动挂载了以下内容：
+
+- **`secret/`（KV v2）**：可直接用于读写机密，无需手动 `vault secrets enable`
+- **`cubbyhole/`**：每个 Token 的私有存储空间，不可被其他 Token 访问
+- **`identity/`**：身份实体存储，Dev 模式下同样可用
+- **Token 认证**：唯一预挂载的认证方法，无 AppRole、GitHub、LDAP 等
+
+注意 `secret/` 的类型是 `kv`（KV v2），由 Dev 模式自动启用。在生产环境中你需要显式执行 `vault secrets enable -version=2 kv` 才能得到相同的引擎，且挂载路径由你自己定义。
 
 完成后点击 **Continue** 进入第二步。
