@@ -11,12 +11,20 @@ vault read sys/key-status
 输出：
 
 ```
-Key            Value
----            -----
-encryptions    n/a
-install_time   2026-xx-xx...
-term           1                ← 当前 DEK 版本号
+Key             Value
+---             -----
+encryptions     35
+install_time    2026-xx-xxT...
+term            1                ← 当前 DEK 版本号
 ```
+
+三个字段的含义：
+
+- `term`：DEK 的版本号。Vault 初始化生成第一个 DEK 时为 `1`，每次 `vault operator rotate` 后 +1
+- `install_time`：当前 term 的 DEK 被生成并装入 keyring 的时间戳
+- `encryptions`：**当前 term 的 DEK 已经执行了多少次加密操作**——这是触发自动轮转的关键指标
+
+> Vault 内置了基于 NIST SP 800-38D 的安全阈值：单个 AES-GCM 密钥的加密次数接近 2³² 时必须轮转，否则有 nonce 复用导致的密钥泄漏风险。Vault 会在接近上限时**自动**触发 rotate，不需要人为干预。35 这个数字来自实验环境初始化时 Vault 内部产生的一系列写入（启用 KV 引擎、写入两条机密、内部元数据等）。
 
 `term=1` 表示这是 Vault 初始化时生成的第一个 DEK。环境已经预先用 term=1 写入了一条机密 `secret/before-rotate`：
 
@@ -51,7 +59,11 @@ vault read sys/key-status
 ```
 
 ```
-term           2                ← 升级到 2
+Key             Value
+---             -----
+encryptions     1                ← 新 DEK 计数从头开始
+install_time    2026-xx-xxT...   ← 时间戳更新
+term            2                ← 升级到 2
 ```
 
 **这条命令没有要求任何分片授权**——已解封状态下的管理员（持有 `sys/rotate` 权限的 Token）即可执行。
