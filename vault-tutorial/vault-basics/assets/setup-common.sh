@@ -50,6 +50,40 @@ start_vault_dev() {
   cat /var/log/vault-dev.log
 }
 
+start_postgres() {
+  # Start a Postgres container for dynamic-secret demos.
+  # Image: postgres:16. Superuser: root / rootpassword. Listens on 5432.
+  if ! command -v docker > /dev/null 2>&1; then
+    echo "WARNING: docker not available, cannot start postgres"
+    return 1
+  fi
+
+  docker rm -f learn-postgres > /dev/null 2>&1 || true
+  docker run -d \
+    --name learn-postgres \
+    -e POSTGRES_USER=root \
+    -e POSTGRES_PASSWORD=rootpassword \
+    -p 5432:5432 \
+    --rm \
+    postgres:16 > /dev/null
+
+  echo "Waiting for Postgres to be ready..."
+  for i in $(seq 1 60); do
+    if docker exec learn-postgres pg_isready -U root > /dev/null 2>&1; then
+      echo "Postgres is ready."
+      # Create the read-only role that dynamic users will inherit from.
+      docker exec -i learn-postgres psql -U root -c \
+        "CREATE ROLE \"ro\" NOINHERIT;" > /dev/null 2>&1 || true
+      docker exec -i learn-postgres psql -U root -c \
+        "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"ro\";" > /dev/null 2>&1 || true
+      return 0
+    fi
+    sleep 1
+  done
+  echo "WARNING: Postgres did not become healthy within 60 seconds"
+  docker logs learn-postgres || true
+}
+
 finish_setup() {
   touch /tmp/.setup-done
 }

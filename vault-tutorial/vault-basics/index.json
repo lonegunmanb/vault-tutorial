@@ -19,6 +19,10 @@
       {
         "title": "管理密钥版本",
         "text": "step3/text.md"
+      },
+      {
+        "title": "动态机密：按需生成数据库凭据",
+        "text": "step4/text.md"
       }
     ],
     "finish": {

@@ -5,5 +5,6 @@ source /root/setup-common.sh
 
 install_vault
 start_vault_dev
+start_postgres
 
 finish_setup
