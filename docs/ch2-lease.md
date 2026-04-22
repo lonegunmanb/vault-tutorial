@@ -88,9 +88,9 @@ abc123def456...            <-- 该次签发的唯一 ID
 ```
 
 这不是为了好看，**而是为了支持「按前缀批量撤销」**——这是租约设计里
-最致命的一个能力，我们在 §6 里展开讲。
+最强力的一个能力，我们在 §6 里展开讲。
 
-### 3.2 `ttl` 与 `max_ttl` 的二维约束
+### 3.2 `ttl` 与 `max_ttl` 的两重约束
 
 每次签发或续约，Vault 实际给出的 TTL 是下面三者中的最小值：
 
@@ -284,3 +284,13 @@ vault token revoke <token>             # 撤掉，连带它创建的所有 lease
 
 进入实验前请把 §3.2、§4.1、§5.2、§6 这四段重读一遍，实验里出现的"反直觉"
 现象都对应着这四段里的某一句话。
+
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch2-lease" title="实验：租约边界条件——max_ttl 天花板、increment 反向缩短、Token 级联与前缀撤销" />
+
+## 参考文档
+
+- [Lease, renew, and revoke — Concepts](https://developer.hashicorp.com/vault/docs/concepts/lease)
+- [Tokens — Concepts](https://developer.hashicorp.com/vault/docs/concepts/tokens)
+- [`vault lease` 命令参考](https://developer.hashicorp.com/vault/docs/commands/lease)
+- [`vault lease revoke` 命令参考](https://developer.hashicorp.com/vault/docs/commands/lease/revoke)
+- [Database secrets engine — Postgres](https://developer.hashicorp.com/vault/docs/secrets/databases/postgresql)
