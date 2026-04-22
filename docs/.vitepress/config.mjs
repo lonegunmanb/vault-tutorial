@@ -31,7 +31,8 @@ export default defineConfig({
            collapsed: false,
            items: [
              { text: '2.1 "Dev" 开发模式的适用边界与安全风险预警', link: '/ch2-dev-mode' },
-             { text: '2.2 封印与解封（Seal/Unseal）机制的密码学底层原理', link: '/ch2-seal-unseal' }
+             { text: '2.2 封印与解封（Seal/Unseal）机制的密码学底层原理', link: '/ch2-seal-unseal' },
+             { text: '2.3 租约（Lease）、无感续期与强制撤销的生命周期管理', link: '/ch2-lease' }
            ]
          }
         ],

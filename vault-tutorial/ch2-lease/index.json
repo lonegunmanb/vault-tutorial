@@ -1,0 +1,47 @@
+{
+  "title": "租约（Lease）的边界条件实战：max_ttl 上限、increment 反向缩短、Token 级联撤销、前缀撤销",
+  "description": "在一个已就绪的 Vault + Postgres 环境上，把 lease 文档里的四个反直觉边界条件全部跑一遍：max_lease_ttl 怎么压死续约、increment 是从现在重新算（可主动缩短）、token revoke 的级联清理、-prefix 撤销在事故响应里的威力",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "lease_id 的前缀结构与 sys/leases 的层级",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "max_lease_ttl 是续约的硬天花板",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "increment 是「从现在开始算」——可以主动缩短租约",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Token revoke 的级联清理：一句话回收所有动态账号",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "前缀撤销：事故响应里的核武器",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
