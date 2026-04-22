@@ -66,7 +66,7 @@ vault write database/config/postgresql \
 Vault 需要知道**怎么在 Postgres 里创建用户**。把 SQL 模板写到一个文件里：
 
 ```bash
-tee /root/workspace/readonly.sql <<'EOF'
+tee /root/readonly.sql <<'EOF'
 CREATE ROLE "{{name}}" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}' INHERIT;
 GRANT ro TO "{{name}}";
 EOF
@@ -80,7 +80,7 @@ EOF
 ```bash
 vault write database/roles/readonly \
   db_name=postgresql \
-  creation_statements=@/root/workspace/readonly.sql \
+  creation_statements=@/root/readonly.sql \
   default_ttl=1m \
   max_ttl=24h
 ```
