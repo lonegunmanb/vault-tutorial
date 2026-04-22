@@ -34,6 +34,18 @@ start_vault_dev() {
   export VAULT_ADDR='http://127.0.0.1:8200'
   export VAULT_TOKEN='root'
 
+  # Persist env for ALL future shells (Killercoda's editor terminal is a
+  # separate shell that does not inherit from background.sh, and may not
+  # source ~/.bashrc — /etc/profile.d/*.sh is loaded by every login shell).
+  cat > /etc/profile.d/vault.sh <<'EOF'
+export VAULT_ADDR='http://127.0.0.1:8200'
+export VAULT_TOKEN='root'
+EOF
+  chmod +x /etc/profile.d/vault.sh
+  # Also append to /root/.bashrc so non-login interactive shells pick it up.
+  grep -q "VAULT_ADDR=" /root/.bashrc 2>/dev/null || \
+    cat /etc/profile.d/vault.sh >> /root/.bashrc
+
   vault server -dev -dev-root-token-id=root \
     -dev-listen-address=0.0.0.0:8200 \
     > /var/log/vault-dev.log 2>&1 &
