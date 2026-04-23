@@ -35,7 +35,7 @@ vault token lookup -accessor "$JOB_ACCESSOR"
 只接受 token ID，不接受 accessor）：
 
 ```bash
-vault write sys/capabilities-accessor accessor="$JOB_ACCESSOR" paths='["auth/token/renew-self"]'
+vault write sys/capabilities-accessor accessor="$JOB_ACCESSOR" path="auth/token/renew-self"
 ```
 
 因为 `default` policy 包含 `auth/token/renew-self` 的 `update` 权限，
