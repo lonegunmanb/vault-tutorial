@@ -66,7 +66,7 @@ vault delete auth/userpass/users/alice
 这个 `$ALICE_TOKEN` 仍然有效（直到 TTL 到期或被显式 revoke）：
 
 ```bash
-VAULT_TOKEN=$ALICE_TOKEN vault token lookup-self | grep -E "display_name|policies"
+VAULT_TOKEN=$ALICE_TOKEN vault token lookup | grep -E "display_name|policies"
 ```
 
 ——证实了文档里"Token 自身的元数据决定一切"的论断。
