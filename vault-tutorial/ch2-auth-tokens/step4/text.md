@@ -30,7 +30,7 @@ vault token lookup "$TOKEN_NORMAL" | grep -E "ttl|explicit_max_ttl|period"
 vault token renew -increment=3600 "$TOKEN_NORMAL"
 ```
 
-返回的 `lease_duration` 不会真的是 3600，会被挂载点 / 系统 max_ttl 顶住
+返回的 `token_duration` 不会真的是 3600，会被挂载点 / 系统 max_ttl 顶住
 （dev 模式默认 32 天，所以这次能给到 3600）。重点不在这次能不能续到，
 重点是：**它有一个动态计算的天花板，每次续约都重新算**。
 
