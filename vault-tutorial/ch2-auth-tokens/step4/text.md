@@ -27,7 +27,7 @@ vault token lookup "$TOKEN_NORMAL" | grep -E "ttl|explicit_max_ttl|period"
 试图续命 1 小时：
 
 ```bash
-vault token renew "$TOKEN_NORMAL" -increment=3600
+vault token renew -increment=3600 "$TOKEN_NORMAL"
 ```
 
 返回的 `lease_duration` 不会真的是 3600，会被挂载点 / 系统 max_ttl 顶住
@@ -87,8 +87,8 @@ vault token lookup "$CAPPED" | grep -E "ttl|period|explicit_max_ttl|expire_time"
 试图续命：
 
 ```bash
-sleep 20 && vault token renew "$CAPPED" -increment=3600 | grep duration
-sleep 20 && vault token renew "$CAPPED" -increment=3600 | grep duration
+sleep 20 && vault token renew -increment=3600 "$CAPPED" | grep duration
+sleep 20 && vault token renew -increment=3600 "$CAPPED" | grep duration
 ```
 
 第一次续约能给到 ~40s（剩余到 explicit_max_ttl 的距离），第二次只能
