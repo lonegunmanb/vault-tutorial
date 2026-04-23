@@ -41,7 +41,7 @@ vault write sys/capabilities-accessor accessor="$JOB_ACCESSOR" paths='["sys/heal
 **Renew**：
 
 ```bash
-vault token renew -accessor "$JOB_ACCESSOR" -increment=2h
+vault token renew -increment=2h -accessor "$JOB_ACCESSOR"
 ```
 
 **Revoke**：
