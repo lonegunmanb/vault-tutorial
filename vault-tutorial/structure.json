@@ -4,6 +4,7 @@
     { "path": "what-is-vault" },
     { "path": "ch2-dev-mode" },
     { "path": "ch2-seal-unseal" },
-    { "path": "ch2-lease" }
+    { "path": "ch2-lease" },
+    { "path": "ch2-auth-tokens" }
   ]
 }

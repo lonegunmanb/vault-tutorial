@@ -1,0 +1,47 @@
+{
+  "title": "Token 树、accessor、periodic 与 service vs batch",
+  "description": "把 Vault Token 文档里五个反直觉的设计跑一遍：auth method 是 Token 工厂、token 树级联撤销、accessor 单向引用、periodic 永生、batch 自包含",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "auth method 是 Token 工厂",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "Token 树与级联撤销",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Accessor：单向引用与远程吊销",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Periodic Token vs explicit_max_ttl",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "Service vs Batch Token 的本质差异",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
