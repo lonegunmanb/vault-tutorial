@@ -30,9 +30,9 @@ echo "BATCH: $BATCH"
 创建时把整个响应留下来对比：
 
 ```bash
-vault token create -type=service -format=json | jq '.auth | {accessor, client_token}'
+vault token create -type=service -policy=default -format=json | jq '.auth | {accessor, client_token}'
 echo "---"
-vault token create -type=batch -ttl=10m -format=json | jq '.auth | {accessor, client_token}'
+vault token create -type=batch -policy=default -ttl=10m -format=json | jq '.auth | {accessor, client_token}'
 ```
 
 batch 的输出里 `accessor` 是 **空字符串**——文档对比表里那一行
@@ -41,12 +41,27 @@ batch 的输出里 `accessor` 是 **空字符串**——文档对比表里那一
 
 ## 5.3 子 Token：service 能创建，batch 不能
 
+先创建一个允许签发 token 的策略，避免 `default` 策略权限不足干扰实验：
+
+```bash
+vault policy write token-admin - <<'EOF'
+path "auth/token/create" {
+  capabilities = ["create", "update"]
+}
+EOF
+
+SVC_ADM=$(vault token create -type=service -policy=token-admin -format=json | jq -r .auth.client_token)
+BATCH_ADM=$(vault token create -type=batch -policy=token-admin -ttl=10m -format=json | jq -r .auth.client_token)
+```
+
+然后分别用这两个 token 尝试创建子 token：
+
 ```bash
 echo "Service token 创建子 token:"
-VAULT_TOKEN=$SVC vault token create -ttl=5m -format=json | jq -r .auth.client_token
+VAULT_TOKEN=$SVC_ADM vault token create -ttl=5m -format=json | jq -r .auth.client_token
 
 echo "Batch token 尝试创建子 token:"
-VAULT_TOKEN=$BATCH vault token create -ttl=5m 2>&1 | tail -3
+VAULT_TOKEN=$BATCH_ADM vault token create -ttl=5m 2>&1 | tail -3
 ```
 
 batch 那一句应该报错（拒绝创建子 token）—— 文档对比表里
