@@ -33,10 +33,11 @@ vault lease renew -increment=10 "$FULL_LEASE_ID"
 vault lease lookup "$FULL_LEASE_ID" | grep -E "ttl|expire"
 ```
 
-`expire_time` 已经被往**前**挪到了"现在 + 10s"。再过 10 秒：
+`expire_time` 已经被往**前**挪到了"现在 + 10s"。再等大约 30 秒（Vault
+后台的过期管理器不是毫秒级触发的，要给它一点时间去回调引擎钩子）：
 
 ```bash
-sleep 12 && vault lease lookup "$FULL_LEASE_ID" 2>&1 || echo "(已过期)"
+sleep 30 && vault lease lookup "$FULL_LEASE_ID" 2>&1 || echo "(已过期)"
 ```
 
 应该看到 `invalid lease`——这条凭据已经被 Vault 自动 revoke 了，对应的
