@@ -16,9 +16,26 @@ export VAULT_TOKEN='root'
 
 ## 2.1 构造 3 层 token 树
 
+先写一条允许创建子 token 的 policy（`default` policy 不包含
+`auth/token/create` 权限，直接用会 403）：
+
 ```bash
-# 第 1 层：从 root 派生 ops 节点
-OPS=$(vault token create -policy=default -ttl=1h -format=json | jq -r .auth.client_token)
+vault policy write token-admin - <<'EOF'
+path "auth/token/create" {
+  capabilities = ["create", "update"]
+}
+path "auth/token/lookup" {
+  capabilities = ["update"]
+}
+path "auth/token/revoke" {
+  capabilities = ["update"]
+}
+EOF
+```
+
+```bash
+# 第 1 层：从 root 派生 ops 节点，附带 token-admin policy
+OPS=$(vault token create -policy=default -policy=token-admin -ttl=1h -format=json | jq -r .auth.client_token)
 echo "OPS=$OPS"
 
 # 第 2 层：以 OPS 身份派生两个 mid 节点
@@ -84,7 +101,7 @@ vault token lookup "$MID_B" 2>&1 | grep ttl
 重新搭一棵：
 
 ```bash
-OPS2=$(vault token create -policy=default -ttl=1h -format=json | jq -r .auth.client_token)
+OPS2=$(vault token create -policy=default -policy=token-admin -ttl=1h -format=json | jq -r .auth.client_token)
 MID2=$(VAULT_TOKEN=$OPS2 vault token create -ttl=30m -format=json | jq -r .auth.client_token)
 LEAF2_1=$(VAULT_TOKEN=$MID2 vault token create -ttl=10m -format=json | jq -r .auth.client_token)
 LEAF2_2=$(VAULT_TOKEN=$MID2 vault token create -ttl=10m -format=json | jq -r .auth.client_token)
