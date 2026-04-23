@@ -31,10 +31,11 @@ vault token lookup -accessor "$JOB_ACCESSOR"
 注意输出里 `id` 字段的值是 `n/a`（普通 lookup 能看到真实 token ID）——
 这就是文档说的 "not including the actual token ID"。
 
-**Lookup capabilities**：
+**Lookup capabilities**（需要通过 API，CLI 的 `vault token capabilities`
+只接受 token ID，不接受 accessor）：
 
 ```bash
-vault token capabilities "$JOB_ACCESSOR" sys/health
+vault write sys/capabilities-accessor accessor="$JOB_ACCESSOR" paths='["sys/health"]'
 ```
 
 **Renew**：
