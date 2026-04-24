@@ -157,14 +157,13 @@ VAULT_TOKEN=$TOKEN vault kv put secret/foo anything="should-fail-but-wont"
 # 403 permission denied
 ```
 
-你可能以为 `allowed_parameters = { "data" = [] }` 已经放行了写入所需的
-`data` 参数，但 `vault kv put` 的实际请求体里还包含 `options` 等 KV v2
-引擎自动注入的参数——这些不在白名单里，所以被 policy 挡掉了。
+看起来 `allowed_parameters = { "data" = [] }` 应该能放行写入，但实际
+返回 403。官方文档对"不支持"没有解释具体机制，只是明确告诉你：**不要
+在 KV v2 上使用参数约束，行为不可预测**。实测也印证了这一点——你写的
+约束可能拦住合法请求，也可能放过非法请求。
 
-换句话说，参数约束在 KV v2 上**不是被忽略，而是会以你意想不到的方式
-生效**：合法写入也会被拦截，而换一种写法又可能绕过。**KV v2 的字段级
-控制必须靠路径分割（不同 mount / 不同子路径）解决，不能靠 parameter
-constraints**。这是踩 policy 时最常见的坑之一。
+**KV v2 的字段级控制必须靠路径分割（不同 mount / 不同子路径）解决，
+不能靠 parameter constraints**。这是踩 policy 时最常见的坑之一。
 
 **这一步的核心结论**：
 
