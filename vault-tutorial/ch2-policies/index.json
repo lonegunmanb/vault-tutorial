@@ -1,0 +1,47 @@
+{
+  "title": "ACL Policy 与 Password Policy 编写实战",
+  "description": "把 Vault Policies 文档里五个关键设计跑一遍：capabilities 与 -output-policy、路径优先级与 deny 一票否决、parameter constraints、templated policy 按 entity 隔离、password policy 生成器",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "最小 policy + capabilities 与 -output-policy",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "路径匹配优先级与 deny 一票否决",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Parameter constraints：用户自助改密码",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Templated policy：每个 entity 一片子空间",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "Password Policy 与 generate 端点",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
