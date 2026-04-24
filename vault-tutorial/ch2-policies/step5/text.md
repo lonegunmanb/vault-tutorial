@@ -142,16 +142,10 @@ extreme 那个会肉眼可见地慢——生成器不断生成 8 字符候选，
 
 ## 5.4 让机密引擎用这条 policy
 
-password policy 真正的用途是被机密引擎调用。dev 模式下没装真实数据
-库，但可以快速看一眼配置接口长什么样——以 database 引擎为例：
+password policy 真正的用途是被机密引擎调用。配置时通过
+`password_policy` 参数引用即可，例如 database 引擎：
 
-```bash
-vault secrets enable database
-
-# 这里只演示"配置时怎么引用 password policy"——不实际连数据库，
-# 所以只看命令形态，不看运行结果
-echo "如果要用 strict policy 给 PostgreSQL 引擎生成密码，配置长这样:"
-cat <<'EXAMPLE'
+```hcl
 vault write database/config/my-pg \
   plugin_name=postgresql-database-plugin \
   password_policy=strict \
@@ -159,11 +153,11 @@ vault write database/config/my-pg \
   allowed_roles="*" \
   username=vaultadmin \
   password=...
-EXAMPLE
-
-echo ""
-echo "（database 章节会真的连 PostgreSQL；本步只示意 password_policy 的引用语法）"
 ```
+
+关键就是 `password_policy=strict` 这一行——引擎在需要生成密码时会自动
+调用对应的 password policy。database 章节会实际连 PostgreSQL 演示完整
+流程，这里只需要知道引用语法。
 
 **这一步的核心结论**：
 
