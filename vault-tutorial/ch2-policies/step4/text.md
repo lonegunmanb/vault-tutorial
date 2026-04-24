@@ -115,7 +115,7 @@ USERPASS_ACC=$(vault auth list -format=json | jq -r '."userpass/".accessor')
 echo "userpass mount accessor = $USERPASS_ACC"
 ```
 
-写一份按 username 分子目录的 policy：
+写一份按 username 划分子目录的 policy：
 
 ```bash
 vault policy write self-kv-by-name - <<EOF
