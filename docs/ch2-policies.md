@@ -185,6 +185,8 @@ allow 落在**同一次评估**里。
 
 文档支持 3 个细粒度约束：
 
+<div v-pre>
+
 ```hcl
 # 用户只能改自己 userpass 里的密码，不能改 policies / token_ttl 等
 path "auth/userpass/users/{{identity.entity.aliases.<acc>.name}}" {
@@ -194,6 +196,8 @@ path "auth/userpass/users/{{identity.entity.aliases.<acc>.name}}" {
   }
 }
 ```
+
+</div>
 
 | 字段 | 含义 |
 | --- | --- |
@@ -257,6 +261,8 @@ path "auth/approle/role/my-role/secret-id" {
 很多场景需要"每个用户只能访问自己的子目录"——一万个员工就要写一万
 条 policy 吗？文档给的方案是 **templated policy**：
 
+<div v-pre>
+
 ```hcl
 # 每个 entity 自己一片 KV 子空间
 path "secret/data/{{identity.entity.id}}/*" {
@@ -267,7 +273,9 @@ path "secret/metadata/{{identity.entity.id}}/*" {
 }
 ```
 
-请求评估时，`{{identity.entity.id}}` 会被替换成**当前请求 token 关联
+</div>
+
+请求评估时，<code v-pre>{{identity.entity.id}}</code> 会被替换成**当前请求 token 关联
 的 entity 的实际 ID**。一份 policy 服务全员，每个人各自被关进自己的
 子目录。
 
@@ -290,6 +298,8 @@ path "secret/metadata/{{identity.entity.id}}/*" {
 
 ### 4.2 一个常用的"用户改自己密码"案例
 
+<div v-pre>
+
 ```hcl
 # 把当前 entity 在 userpass mount 上的 alias name（= username）拼进 path
 path "auth/userpass/users/{{identity.entity.aliases.auth_userpass_a3b8c1d2.name}}" {
@@ -297,6 +307,8 @@ path "auth/userpass/users/{{identity.entity.aliases.auth_userpass_a3b8c1d2.name}
   allowed_parameters = { "password" = [] }
 }
 ```
+
+</div>
 
 效果：alice 登录后，这条 policy 解出来是
 `auth/userpass/users/alice`，**只允许她调 update + 只能传 password 字
@@ -520,7 +532,7 @@ vault read sys/policies/password/strict/generate
    票否决；
 3. **Parameter constraints**：写一条"用户只能改自己 userpass 密码"
    的 policy，验证传 `policies` 字段会被拒；
-4. **Templated policy**：写一条 `secret/data/{{identity.entity.id}}/*`
+4. **Templated policy**：写一条 <code v-pre>secret/data/{{identity.entity.id}}/*</code>
    的 policy，验证 alice 和 bob 互相看不到对方的子目录；
 5. **Password Policies**：写一条 strict password policy，调
    `sys/policies/password/<name>/generate` 看生成的密码，对比默认
