@@ -9,5 +9,7 @@
 - Templated policy 用 `{{identity.entity.id}}` 让一份 policy 服务全员
 - Password Policy 与 ACL Policy 完全无关，是密码生成规则
 
-后台脚本会启动 Vault dev 模式（root token = `root`），并安装 `jq`
-方便后续 JSON 解析。
+后台脚本会启动 Vault dev 模式（root token = `root`）、安装 `jq`，并
+顺便起一个 Postgres 容器（`learn-postgres`，超级用户 `root` /
+`rootpassword`，监听 `5432`，预先建好只读角色 `ro`）——第一步
+§1.4 会用它演示"`read` capability 其实在创建新账号"。
