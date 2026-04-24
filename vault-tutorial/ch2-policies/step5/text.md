@@ -121,7 +121,7 @@ EOF
 
 vault write sys/policies/password/extreme policy=@/root/extreme.hcl
 
-echo "extreme policy（8 长度但要 6 个 !@）生成 3 次（注意每次延迟）:"
+echo 'extreme policy（8 长度但要 6 个 !@）生成 3 次（注意每次延迟）:'
 for i in 1 2 3; do
   time vault read -field=password sys/policies/password/extreme/generate > /dev/null
 done
