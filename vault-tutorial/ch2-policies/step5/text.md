@@ -140,29 +140,7 @@ done
 extreme 那个会肉眼可见地慢——生成器不断生成 8 字符候选，发现"6 个
 都得是 !@ 之一"的条件极少自然满足，反复重试。
 
-## 5.4 文档强制的边界条件
-
-试几个**不合法**的 password policy，看 Vault 怎么拒：
-
-```bash
-echo "1) 没有任何 charset rule（必失败）:"
-echo 'length = 20' > /tmp/bad1.hcl
-vault write sys/policies/password/bad1 policy=@/tmp/bad1.hcl 2>&1 | tail -3
-
-echo ""
-echo "2) length 太短（< 4，必失败）:"
-cat > /tmp/bad2.hcl <<'EOF'
-length = 3
-rule "charset" {
-  charset = "abc"
-}
-EOF
-vault write sys/policies/password/bad2 policy=@/tmp/bad2.hcl 2>&1 | tail -3
-```
-
-这些边界检查就是文档里反复列的硬约束。
-
-## 5.5 让机密引擎用这条 policy
+## 5.4 让机密引擎用这条 policy
 
 password policy 真正的用途是被机密引擎调用。dev 模式下没装真实数据
 库，但可以快速看一眼配置接口长什么样——以 database 引擎为例：
