@@ -122,7 +122,7 @@ batch token 看起来"什么都不能干"，那它存在的意义是什么？文
 - 在 active 节点之外，所有 performance standby 节点都能直接签 batch token
   （service token 必须由 active 节点写 Raft，吞吐严格受限）
 - 一个 K8s 集群有 5000 个 pod 启动时同时拉密钥——用 service token 会
-  把 active 节点 Raft 写爆；用 batch token 可以把请求**分散到所有
+  把 active 节点 Raft 写满；用 batch token 可以把请求**分散到所有
   performance standby 上**
 
 所以 batch token 的设计哲学是："**给我一个用过即抛、TTL 内自包含、

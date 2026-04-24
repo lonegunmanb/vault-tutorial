@@ -5,7 +5,7 @@
 | 主题 | 一句话总结 |
 | --- | --- |
 | auth method 是 Token 工厂 | 任何外部认证最终产物都是一条 service token，之后鉴权完全看 token 自身元数据 |
-| Token 树与级联撤销 | 父子关系沿 token 树走，撤父节点 → 整棵子树死，配合 `revoke-orphan` 做外科手术 |
+| Token 树与级联撤销 | 父子关系沿 token 树走，撤父节点 → 整棵子树一并失效，配合 `revoke-orphan` 做精确撤销 |
 | Accessor 单向引用 | 能撤销 / 查属性 / 但拿不到 token 本身——治理权与访问权分离 |
 | Periodic vs explicit_max_ttl | periodic 实现"应用活就一直活"，explicit_max_ttl 是无可越过的硬天花板 |
 | Service vs Batch | service 重而全功能；batch 轻、可被 standby 节点签发，扛大规模 |

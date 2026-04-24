@@ -82,7 +82,7 @@ CAPPED=$(vault token create -period=30s -explicit-max-ttl=1m -format=json | jq -
 vault token lookup "$CAPPED" | grep -E "ttl|period|explicit_max_ttl|expire_time"
 ```
 
-注意 `expire_time` —— 这是一个**烧死的死刑日**，从签发那一刻起算 60 秒。
+注意 `expire_time` —— 这是一个**在签发时就锁定的过期时刻**，从那一刻起 60 秒后该 token 必然失效。
 
 试图续命：
 
@@ -94,13 +94,13 @@ sleep 20 && vault token renew -increment=3600 "$CAPPED" | grep duration
 第一次续约能给到 ~40s（剩余到 explicit_max_ttl 的距离），第二次只能
 给到 ~20s——**单调递减，趋近 0**。
 
-继续等到死刑日之后：
+继续等到 `expire_time` 之后：
 
 ```bash
 sleep 30 && vault token lookup "$CAPPED" 2>&1 | tail -2
 ```
 
-应该看到 `bad token` —— 即使是 periodic token，**也越不过
+应该看到 `bad token` —— 即使是 periodic token，**也无法超过
 explicit_max_ttl**。这是文档原话强调的："This has an effect even when
 using periodic tokens to escape the normal TTL mechanism."
 
@@ -114,4 +114,4 @@ using periodic tokens to escape the normal TTL mechanism."
 | 应急用的 root token | `operator generate-root` 临时签，用完立即 revoke |
 
 `explicit_max_ttl` 几乎总是建议带上——它是**最后一道安全闸门**，无论
-应用代码错误还是恶意续约都越不过去。
+应用代码错误还是恶意续约都无法绕过。

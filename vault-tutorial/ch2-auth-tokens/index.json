@@ -1,6 +1,6 @@
 {
   "title": "Token 树、accessor、periodic 与 service vs batch",
-  "description": "把 Vault Token 文档里五个反直觉的设计跑一遍：auth method 是 Token 工厂、token 树级联撤销、accessor 单向引用、periodic 永生、batch 自包含",
+  "description": "把 Vault Token 文档里五个反直觉的设计跑一遍：auth method 是 Token 工厂、token 树级联撤销、accessor 单向引用、periodic 持续续约、batch 自包含",
   "details": {
     "intro": {
       "text": "init/init.md",

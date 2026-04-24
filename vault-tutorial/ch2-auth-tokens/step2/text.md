@@ -88,12 +88,12 @@ vault token lookup "$MID_B" 2>&1 | grep ttl
 ```
 
 `MID_A` / `LEAF_1` / `LEAF_2` 应该都报 `bad token` —— **MID_A 整棵子树
-被一句话连根拔起**；`MID_B` 在另一棵分支上，毫发无损。
+一并失效**；`MID_B` 在另一棵分支上，不受影响。
 
 这就是 2.3 章节"撤父 token 级联撤所有子租约"的本质——级联是沿着 token
 **树**走的，不是沿着 lease 走的。
 
-## 2.3 用 revoke-orphan 做"外科手术"
+## 2.3 用 revoke-orphan 做精确撤销
 
 文档 §3.4 那个危险但有用的命令——撤掉中间节点，但**让它的直接子节点
 升格为 orphan**，孙子节点不受影响。
@@ -136,7 +136,7 @@ vault token lookup "$LEAF2_2" | grep -E "orphan|ttl"
 `MID2` 死了，但 `LEAF2_1` / `LEAF2_2` 还活着，并且 `orphan true`——
 它们各自成了一棵新树的根。**这一招的实战意义**：当你需要紧急吊销
 某个中间层（例如某个 dept-level service account 被怀疑泄漏），但又
-不想把它管的几百个下游子 token 全部殃及导致业务停摆，就用这个。
+不想让它管的几百个下游子 token 一同失效导致业务停摆，就用这个。
 
 文档原话："Use with caution!" —— orphan 之后这些 token 就不再受任何
 集中撤销保护，必须人工额外管理。
