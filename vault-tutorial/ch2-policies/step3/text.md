@@ -130,7 +130,7 @@ EOF
 加了 `required_parameters` 之后，alice 即使想"啥都不传糊弄过去"也会
 被拒——前置防御纵深。
 
-## 3.7 KV v2 的"参数约束完全失效"陷阱
+## 3.7 KV v2 的"参数约束行为不可预测"陷阱
 
 文档明确写道：
 
@@ -138,7 +138,7 @@ EOF
 > fields are **not supported** for policies used with the version 2 kv
 > secrets engine.
 
-试一下就知道：
+这里的"不支持"不是指"完全无视"，而是**行为不可预测**。试一下就知道：
 
 ```bash
 vault policy write kv-restrict - <<'EOF'
@@ -152,13 +152,19 @@ EOF
 
 TOKEN=$(vault token create -policy=kv-restrict -format=json | jq -r .auth.client_token)
 
-# 这个 policy 的本意是"只能写 data 字段"，但 KV v2 完全无视参数约束：
+# 本意是"只允许 data 字段"，看起来合理——但实际被拒：
 VAULT_TOKEN=$TOKEN vault kv put secret/foo anything="should-fail-but-wont"
+# 403 permission denied
 ```
 
-写入照样成功——**KV v2 的字段级控制必须靠路径分割（不同 mount / 不
-同子路径）解决，不能靠 parameter constraints**。这是踩 policy 时最常
-见的坑之一。
+你可能以为 `allowed_parameters = { "data" = [] }` 已经放行了写入所需的
+`data` 参数，但 `vault kv put` 的实际请求体里还包含 `options` 等 KV v2
+引擎自动注入的参数——这些不在白名单里，所以被 policy 挡掉了。
+
+换句话说，参数约束在 KV v2 上**不是被忽略，而是会以你意想不到的方式
+生效**：合法写入也会被拦截，而换一种写法又可能绕过。**KV v2 的字段级
+控制必须靠路径分割（不同 mount / 不同子路径）解决，不能靠 parameter
+constraints**。这是踩 policy 时最常见的坑之一。
 
 **这一步的核心结论**：
 
@@ -167,4 +173,4 @@ VAULT_TOKEN=$TOKEN vault kv put secret/foo anything="should-fail-but-wont"
 | 只允许传特定几个参数 | `allowed_parameters` 白名单 |
 | 只禁止特定几个参数 | `denied_parameters` 黑名单 |
 | 强制要求带某参数（堵默认值绕过） | `required_parameters` |
-| KV v2 上做字段级控制 | ❌ 不可能，必须拆 path / 拆 mount |
+| KV v2 上做字段级控制 | ❌ 参数约束行为不可预测，必须拆 path / 拆 mount |
