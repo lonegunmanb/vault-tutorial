@@ -11,6 +11,31 @@
 
 ## 5.1 准备两条 policy
 
+本步会逐步搭起来的最终结构（实验做到 5.3 后）：
+
+```
+  +-----------------------+
+  | Group: company        |   policies=[company-policy]
+  +-----------------------+
+            ▲ subgroup
+            │
+  +-----------------------+
+  | Group: engineering    |   policies=[eng-policy]
+  +-----------------------+
+            ▲ member
+            │
+  +-----------------------+
+  | Entity: alice-real    |   policies=[]   ← 自身不挂任何 policy
+  +-----------------------+
+            ▲ entity_id
+            │
+  Token hvs.xxx  policies=[default]
+            │
+            ↓
+  capabilities = default ∪ eng-policy ∪ company-policy
+                              （沿组链路自动聚合）
+```
+
 ```bash
 vault policy write eng-policy - <<'EOF'
 path "secret/data/eng-only" {
@@ -29,6 +54,21 @@ vault kv put secret/company-info message="hello-from-company"
 ```
 
 ## 5.2 创建 engineering 组并把 alice 加进去
+
+本子步只搭最底下两层（company 还不存在）：
+
+```
+  Group: engineering   policies=[eng-policy]
+            ▲
+            │ member
+  Entity: alice-real   policies=[]
+            ▲
+            │ entity_id
+  Token (新登)  policies=[default]
+
+  → 能读 eng-only（沿 entity → engineering 拿到 eng-policy）
+  → 不能读 company-info（company-policy 还没挂到任何能链到 alice 的地方）
+```
 
 ```bash
 ENT_REAL=$(vault read -format=json identity/entity/name/alice-real | jq -r .data.id)
@@ -61,6 +101,24 @@ engineering 组的成员，自动继承 eng-policy**。company-info 还没法读
 因为 company-policy 还没挂到任何能链接到 alice 的地方。
 
 ## 5.3 建父组 company，把 engineering 设为子组
+
+现在补上最顶层。注意 alice 既没被显式加进 company，也没碰任何 token：
+
+```
+  Group: company        policies=[company-policy]
+            ▲
+            │ subgroup（间接成员）
+  Group: engineering    policies=[eng-policy]
+            ▲
+            │ member（直接成员）
+  Entity: alice-real    policies=[]
+            ▲
+            │ entity_id  ← 同一个 token，没重登
+  Token hvs.xxx  policies=[default]
+
+  ↓ 请求时求并集
+  capabilities = default ∪ eng-policy ∪ company-policy
+```
 
 ```bash
 vault write identity/group \

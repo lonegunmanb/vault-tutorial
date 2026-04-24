@@ -10,6 +10,19 @@
 
 ## 4.1 准备一个"只有 entity policy 才能读"的 KV
 
+本步要搭出来的初始格局：
+
+```
+  +-------------------+        +----------------------+
+  | Entity alice-real |        | Policy: eng-policy   |
+  | policies: []      |        | secret/data/eng-only |
+  +-------------------+        |   capabilities=read  |
+                               +----------------------+
+           ↑                              ↑
+  (4.2 alice token 上)          (4.3 才会挂上去)
+  policies = [default]
+```
+
 ```bash
 # dev 模式默认在 secret/ 路径下挂了 KV v2
 vault kv put secret/eng-only message="hello-from-eng"
@@ -27,6 +40,19 @@ EOF
 
 ## 4.2 alice 用普通登录拿一个 token，**先证明它读不到**
 
+现在的状态——alice 拿到 token，但通往 eng-policy 的路径还没接通：
+
+```
+  Token hvs.xxx ──→ entity_id=ent-alice-real ──→ Entity alice-real
+  policies=[default]                              policies=[]   ← 还是空
+         │                                              │
+         │                                              ✗ 没挂 eng-policy
+         ↓                                              ↓
+  capabilities = [default]  ∪  []  =  [default] (没有 eng-only 的 read)
+                                                          ↓
+                                                  4.2 读 eng-only → 403
+```
+
 ```bash
 # step3 已经把 alice 的两个 alias 都归到 alice-real 下了
 ALICE_TOKEN=$(vault login -format=json -method=userpass \
@@ -43,6 +69,18 @@ VAULT_TOKEN=$ALICE_TOKEN vault kv get secret/eng-only 2>&1 | tail -3
 应该是 403——token 上只有 `default`，没有 `eng-policy`。
 
 ## 4.3 给 alice-real 这个 entity 挂上 eng-policy
+
+这一步要触发的状态变化（注意 token 完全不变）：
+
+```
+  Token hvs.xxx ──→ entity_id=ent-alice-real ──→ Entity alice-real
+  policies=[default]   (token 字段未动)         policies=[eng-policy]  ← 新挂
+         │                                              │
+         ↓                                              ↓
+  capabilities = [default]  ∪  [eng-policy]
+                              ↓
+           secret/data/eng-only 上 read 命中 eng-policy → 200
+```
 
 ```bash
 ENT_REAL=$(vault read -format=json identity/entity/name/alice-real | jq -r .data.id)
@@ -77,6 +115,18 @@ VAULT_TOKEN=$ALICE_TOKEN vault token lookup -format=json \
 
 ## 4.4 摘掉 entity policy，立刻失能
 
+反向操作。此时 4.2 的"断开"格局又回来了：
+
+```
+  Token hvs.xxx ──→ Entity alice-real
+  policies=[default]   policies=[]    ← 又被清空
+         │                   │
+         ↓                   ↓
+  capabilities = [default]  → 再读 eng-only 就回到 403
+         ↑
+   token 自身没动过；entity 一改，下一次请求就生效
+```
+
 ```bash
 vault write identity/entity/id/$ENT_REAL \
   name=alice-real \
@@ -89,6 +139,19 @@ VAULT_TOKEN=$ALICE_TOKEN vault kv get secret/eng-only 2>&1 | tail -3
 回到 403——撤权也是即时生效。
 
 ## 4.5 验证 §5.2："entity policy 只能加，不能减"
+
+这一步要展示的反直觉点——entity policy 是**并集**，不是交集，所以
+往 entity 上挂 deny 完全压不住 token 自身的权限：
+
+```
+  Token  policies=[X]  ──┐
+                          ├──→  capabilities = X ∪ Y
+  Entity policies=[Y]  ──┘
+
+          想用 entity 的 "deny" 压住 token 的 "read"？
+          不可能 ── 并集里只要有一个 allow 就 allow
+          唯一减权方式：让 token 重新签发，把 X 自己缩小
+```
 
 写一条**拒绝**读 secret/* 的 policy：
 
