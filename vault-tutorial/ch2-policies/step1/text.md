@@ -167,10 +167,7 @@ docker exec -i learn-postgres \
 - HTTP 语义：`GET /v1/database/creds/readonly`；
 - ACL 语义：**`read`**（不是 `create` / `update`）。
 
-**写 policy 永远以 HTTP 动词为准，不要被"它实际在干什么"误导**。同样
-反直觉的还有 `pki/issue/<role>`——名字带 issue，但底层是 POST，所以
-需要 `update` / `create`，而不是 `read`。判断一个 Vault API 真正的
-HTTP 动词最简单的办法就是 `-output-policy` 反推一次，让 CLI 帮你回答。
+**写 policy 永远以 HTTP 动词为准，不要被"它实际在干什么"误导**。判断一个 Vault API 真正的 HTTP 动词最简单的办法就是 `-output-policy` 反推一次，让 CLI 帮你回答。
 
 **这一步的核心结论**：
 
