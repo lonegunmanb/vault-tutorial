@@ -66,9 +66,11 @@ path "secret/foo" {
 
 几个反直觉点必须记住：
 
-- **多数 Vault 路径不区分 create 和 update**——所以你写 `["create"]`
-  实际上等同于"啥都不能做"，因为 update 也是必需的。**默认就写
-  `["create", "update"]`**；
+- **多数 Vault 写入端点只检查 `update`**，根本不看 `create`——只有少
+  数端点（最典型是 KV）才区分"首次写要 `create`、覆盖写要 `update`"。
+  所以单写 `["create"]` 在大部分地方等于没给权限（`update` 没在集合
+  里→拒绝），在 KV 这种区分两者的地方也只能写一次后就再也改不了。
+  **默认就写 `["create", "update"]` 一起给，这样两类端点都能用**；
 - `read` 其实是"GET"——动态机密接口（如 `database/creds/<role>`）虽然
   在做"创建一个数据库账号"，但 HTTP 动词是 GET，所以 policy 里要写
   `read` 而不是 `create`。**永远以 HTTP 动词为准**；
@@ -372,7 +374,7 @@ effective_policies(token) = policies_on_token             ← 签发时冻结
 
 ## 7. Password Policies：跟 ACL 完全无关的另一套"策略"
 
-文档开篇就把读者拉警惕：
+文档开篇就提醒读者注意：
 
 > Note: Password policies are unrelated to Policies other than sharing
 > similar names.
@@ -425,8 +427,8 @@ rule "charset" {
 **性能陷阱**：当某条 rule 要求"必须有 1 个来自小字符集的字符"（例
 如 `!@#$` 这种 4 字符集）时，生成器要不停重试直到撞中——**rule 越
 苛刻、字符集越小，单次生成耗时呈指数级上升**。文档自己有性能曲线图。
-建议：**如果业务对密码长度没有强制要求，加长长度反而比加严 rule 更
-便宜**——长密码自然更容易满足 min-chars 约束。
+建议：**如果业务对密码长度没有强制要求，调大 `length` 比加严 rule
+生成密码更快**——长密码自然更容易满足 min-chars 约束，生成器一次就过。
 
 ### 7.3 默认密码策略
 
@@ -469,40 +471,40 @@ vault read sys/policies/password/strict/generate
 ## 8. 一张图总览本节所有概念的关系
 
 ```
-+--------------------------------------------------------------------+
-|                  Vault 鉴权决策链 (本节内容)                        |
-|                                                                     |
-|  HTTP request: GET /v1/secret/data/foo  +  X-Vault-Token: hvs.xxx   |
-|                              │                                      |
-|                              ▼                                      |
-|     ┌────────────────── 鉴权阶段 ────────────────────┐             |
-|     │                                                │             |
-|     │  effective_policies(token) =                   │             |
-|     │      policies_on_token        ← 冻结于签发时   │             |
-|     │    ∪ policies_on_entity       ← 请求时实时查   │             |
-|     │    ∪ policies_on_groups_∀     ← 沿子组传递    │             |
-|     │                                                │             |
-|     │  对每条 policy 逐条匹配 path 规则：             │             |
-|     │      1. 找出最具体匹配 (优先级 §3)             │             |
-|     │      2. 任意 deny → 拒                         │             |
-|     │      3. 否则取并集 capabilities               │             |
-|     │      4. 检查 capabilities 是否含本次 HTTP verb │             |
-|     │      5. 检查 parameter constraints             │             |
-|     └────────────────────────────────────────────────┘             |
-|                              │                                      |
-|                              ▼                                      |
-|                           允许 / 拒绝                               |
-+--------------------------------------------------------------------+
++----------------------------------------------------------------------
+ Vault 鉴权决策链 (本节内容)
 
-+--------------------------------------------------------------------+
-|              Password Policies — 完全独立的另一套                   |
-|                                                                     |
-|   database/postgres 引擎生成账号密码时：                             |
-|     vault → 加载 password_policy "strict" → 跑生成循环              |
-|       length + rule "charset" { ... }  → 候选密码 → 通过 → 返回     |
-|                                                                     |
-|   ※ 跟上面的鉴权决策链没有任何交集，仅仅名字像                       |
-+--------------------------------------------------------------------+
+   HTTP request: GET /v1/secret/data/foo  +  X-Vault-Token: hvs.xxx
+                                |
+                                v
+       +------------------- 鉴权阶段 ----------------------+
+       |
+       |  effective_policies(token) =
+       |      policies_on_token       <- 冻结于签发时
+       |    U policies_on_entity      <- 请求时实时查
+       |    U policies_on_groups_*    <- 沿子组传递
+       |
+       |  对每条 policy 逐条匹配 path 规则：
+       |    1. 找出最具体匹配 (优先级 §3)
+       |    2. 任意 deny -> 拒
+       |    3. 否则取并集 capabilities
+       |    4. 检查 capabilities 是否含本次 HTTP verb
+       |    5. 检查 parameter constraints
+       +-------------------------------------------------+
+                                |
+                                v
+                            允许 / 拒绝
++----------------------------------------------------------------------
+
++----------------------------------------------------------------------
+ Password Policies — 完全独立的另一套
+
+   database/postgres 引擎生成账号密码时：
+     vault -> 加载 password_policy "strict" -> 跑生成循环
+       length + rule "charset" { ... } -> 候选密码 -> 通过 -> 返回
+
+   ※ 跟上面的鉴权决策链没有任何交集，仅仅名字像
++----------------------------------------------------------------------
 ```
 
 ---
