@@ -68,15 +68,9 @@ vault write sys/wrapping/lookup token=$FAKE_WRAP
 注意 `creation_path` —— 输出是 `sys/wrapping/wrap`，**不是**你期望的
 `secret/data/db-cred`！
 
-```bash
-echo ""
-echo "对比：真正的 wrapping token creation_path 应该是 secret/data/db-cred"
-echo "实际看到的 creation_path 是 sys/wrapping/wrap → 数据来源不对！"
-echo "→ 应立即触发安全事件调查"
-```
-
 **这就是 creation_path 验证的价值：即使中间人完美复制了数据内容，
-路径来源也会出卖它。**
+路径来源也会出卖它。看到 `sys/wrapping/wrap` 而非预期的
+`secret/data/db-cred`，应立即触发安全事件调查。**
 
 ## 2.4 lookup 不消耗 token——可以反复查
 

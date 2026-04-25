@@ -1,11 +1,11 @@
 ---
 order: 27
-title: 2.7 响应包装（Response Wrapping）与防篡改一次性数据传递
+title: 2.7 响应封装（Response Wrapping）与防篡改一次性数据传递
 group: 第 2 章：核心机制与高级状态机概念
 group_order: 20
 ---
 
-# 2.7 响应包装（Response Wrapping）与防篡改一次性数据传递
+# 2.7 响应封装（Response Wrapping）与防篡改一次性数据传递
 
 > **核心结论**：Response Wrapping 是 Vault 的"密封快递"机制——调用任何
 > API 时加一个 `-wrap-ttl` 参数，Vault 就不把真正的数据直接返回给你，而是
@@ -238,7 +238,7 @@ path "auth/approle/role/my-role/secret-id" {
 进入实验前请回顾 §2（cubbyhole 是 token 私有的）、§5（policy 强制
 wrapping 的 min/max TTL 语法）和 §7（验证四步法）。
 
-<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch2-response-wrapping" title="实验：响应包装（Response Wrapping）防篡改一次性数据传递" />
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch2-response-wrapping" title="实验：响应封装（Response Wrapping）防篡改一次性数据传递" />
 
 ## 参考文档
 

@@ -1,4 +1,4 @@
-# 响应包装（Response Wrapping）防篡改一次性数据传递
+# 响应封装（Response Wrapping）防篡改一次性数据传递
 
 阅读 [2.7 章节文档](../ch2-response-wrapping) 之后，本实验把 Response
 Wrapping 文档里五个核心操作亲手验证一遍：

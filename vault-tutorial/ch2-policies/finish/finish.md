@@ -12,7 +12,7 @@
 
 ## 下一步
 
-- **2.7 响应包装（Response Wrapping）**：本节里 `min_wrapping_ttl` 字
+- **2.7 响应封装（Response Wrapping）**：本节里 `min_wrapping_ttl` 字
   段就是为它准备的——下一节演示一次性密封的 cubbyhole 传递机制
 - **2.8 集群 HA**：策略本身是集群级数据，HA 章节会讲它在 Raft 里的复
   制语义

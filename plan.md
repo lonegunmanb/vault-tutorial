@@ -259,7 +259,7 @@ Vault 推出的 **机密同步（Secret Sync）** 功能，提出了一种开源
 * 2.4 认证（Authentication）与 令牌（Tokens）树状层级关系本质  
 * 2.5 身份实体（Identity Entity）：打通多维度认证源的元数据中心  
 * 2.6 细粒度策略（Policies）与合规性密码策略（Password Policies）编写指南  
-* 2.7 响应包装（Response Wrapping）与防篡改一次性数据传递  
+* 2.7 响应封装（Response Wrapping）与防篡改一次性数据传递  
 * 2.8 集群高可用模式（HA）的设计哲学及其数据一致性保障  
 * 2.9 **【核心新增】** 工作负载身份联邦（Workload Identity Federation, WIF）机制架构详解  
 * 2.10 **【核心新增】** 底层引擎挂载点无损热迁移（Mount Migration）技术剖析  

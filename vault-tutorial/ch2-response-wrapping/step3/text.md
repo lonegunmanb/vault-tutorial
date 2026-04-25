@@ -84,7 +84,7 @@ vault unwrap $WRAP_B
 ## 3.3 rewrap 的安全注意事项
 
 ```bash
-# rewrap 后 creation_path 会变成 sys/wrapping/rewrap
+# rewrap 后 creation_path 仍然保持原始路径
 WRAP_C=$(vault kv get -wrap-ttl=60s -format=json secret/db-cred | jq -r .wrap_info.token)
 WRAP_D=$(vault write -wrap-ttl=60s -format=json sys/wrapping/rewrap token=$WRAP_C | jq -r .wrap_info.token)
 
@@ -92,13 +92,11 @@ echo "rewrap 后 lookup creation_path:"
 vault write -format=json sys/wrapping/lookup token=$WRAP_D | jq .data.creation_path
 ```
 
-注意——rewrap 后新 token 的 `creation_path` 变成了
-`sys/wrapping/rewrap`，**不再是原始的 `secret/data/db-cred`**。
+注意——rewrap 后新 token 的 `creation_path` **仍然是原始的
+`secret/data/db-cred`**，不会变成 `sys/wrapping/rewrap`。
 
-这意味着接收方做 creation_path 验证时，如果看到
-`sys/wrapping/rewrap`，**不能简单断定是攻击**——也可能是调度方合法
-地做了 rewrap。接收方需要与调度方**事先约定**是否允许 rewrap，并据
-此调整验证逻辑。
+这意味着 rewrap 操作对接收方是透明的——接收方仍然可以通过
+`creation_path` 验证数据来源，无需感知中间是否经过了 rewrap。
 
 ## 3.4 TTL 选择建议
 

@@ -1,5 +1,5 @@
 {
-  "title": "响应包装（Response Wrapping）防篡改一次性数据传递",
+  "title": "响应封装（Response Wrapping）防篡改一次性数据传递",
   "description": "把 Response Wrapping 文档里五个核心操作跑一遍：-wrap-ttl 包装与 unwrap 一次性拆封、lookup 验证 creation_path、TTL 过期自动销毁、policy 强制 wrapping、AppRole SecretID 安全交付完整流程",
   "details": {
     "intro": {
