@@ -1,0 +1,47 @@
+{
+  "title": "响应包装（Response Wrapping）防篡改一次性数据传递",
+  "description": "把 Response Wrapping 文档里五个核心操作跑一遍：-wrap-ttl 包装与 unwrap 一次性拆封、lookup 验证 creation_path、TTL 过期自动销毁、policy 强制 wrapping、AppRole SecretID 安全交付完整流程",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "基础包装与一次性拆封",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "lookup 检查与 creation_path 验证",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "TTL 过期自动销毁与 rewrap 续命",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Policy 强制 wrapping (min/max_wrapping_ttl)",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "完整场景：AppRole SecretID 安全交付",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
