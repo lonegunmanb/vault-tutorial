@@ -42,7 +42,9 @@ vault read aws/creds/s3-app
 
 输出里 `lease_id` / `lease_duration` / `access_key` / `secret_key` /
 `session_token=<nil>`——典型的 IAM User AK/SK 形态（没 session_token）。
-记下 `access_key`：
+
+接下来再 `vault read` 一次，把字段拆出来存到 shell 变量里，留给后续
+步骤用：
 
 ```bash
 CREDS=$(vault read -format=json aws/creds/s3-app)
@@ -53,6 +55,12 @@ echo "lease=$LEASE1"
 echo "AK=$AK1"
 ```
 
+> ⚠️ **提醒**：上面是**两次独立的** `vault read aws/creds/s3-app`——
+> 第一次给你看人类可读输出，第二次拿 JSON 拆字段。**每一次 read 都
+> 是一次完整的"AWS 上建一个新 user"**——所以这一步结束时 IAM 上有
+> **2 个 user**，而不是 1 个。这正好是下一节要演示的"每次取都是新
+> user"行为，提前在这里见识一下。
+
 去 MiniStack 端确认 IAM User 真的存在：
 
 ```bash
@@ -60,8 +68,9 @@ aws --endpoint-url=http://127.0.0.1:4566 iam list-users \
   | jq '.Users[] | {UserName, CreateDate}'
 ```
 
-会看到一个名字像 `vault-token-s3-app-<unix_time>-<random>` 的 user——
-这就是 §5.2 里讲的 `username_template` 默认渲染结果。
+会看到**两个**名字像 `vault-token-s3-app-<unix_time>-<random>` 的
+user——这就是 §5.2 里讲的 `username_template` 默认渲染结果。两个
+`<unix_time>` 之间相差几秒，正好就是你执行那两条 `vault read` 的间隔。
 
 ## 2.4 第二次、第三次取——每次都是新 user
 
@@ -74,8 +83,9 @@ aws --endpoint-url=http://127.0.0.1:4566 iam list-users \
   | jq '[.Users[] | .UserName] | length'
 ```
 
-IAM User 数量应该是 3（第一次 + 这次的 2 次）。**这就是"每次取都是
-全新凭据"的字面意义——不复用、不共享。**
+IAM User 数量应该是 4（§2.3 留下的 2 个 + 这一节 `for` 循环里 read
+两次又新建的 2 个）。**这就是"每次取都是全新凭据"的字面意义——不复
+用、不共享。**
 
 ## 2.5 用 Vault 颁发的凭据真的去调 AWS
 
