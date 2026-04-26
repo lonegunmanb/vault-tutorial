@@ -1,30 +1,13 @@
 {
-  "title": "AWS 机密引擎：动态 IAM 凭据全流程 - MiniStack 模拟",
-  "description": "在 Dev 模式 Vault 上挂载 AWS 机密引擎，配合 MiniStack 本地 AWS 模拟器，亲手跑通三种 credential_type 中的 iam_user 与 assumed_role：观察 Vault 真的去 IAM 创建 / 删除用户，体会 lease revoke 与 IAM User 生命周期的等价关系，最后用 Policy 把权限按 Role 切到最小",
+  "title": "AWS placeholder",
+  "description": "AWS Secrets Engine lab placeholder",
   "details": {
     "intro": {
       "text": "init/init.md",
       "background": "init/background.sh",
       "foreground": "init/foreground.sh"
     },
-    "steps": [
-      {
-        "title": "启动 MiniStack、enable AWS 引擎并指向本地端点",
-        "text": "step1/text.md"
-      },
-      {
-        "title": "iam_user：每次取凭据 = AWS 上多一个真 IAM User",
-        "text": "step2/text.md"
-      },
-      {
-        "title": "assumed_role：让 Vault 替你 AssumeRole 拿 STS 三件套",
-        "text": "step3/text.md"
-      },
-      {
-        "title": "Policy 路径踩坑：creds/ vs sts/ vs config/",
-        "text": "step4/text.md"
-      }
-    ],
+    "steps": [],
     "finish": {
       "text": "finish/finish.md"
     },
