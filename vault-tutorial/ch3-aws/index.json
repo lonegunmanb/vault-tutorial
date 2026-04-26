@@ -1,5 +1,5 @@
 {
-  "title": "AWS 机密引擎：动态 IAM 凭据全流程 - MiniStack 模拟",
+  "title": "AWS Secrets Engine - Dynamic IAM Credentials with MiniStack",
   "description": "AWS Secrets Engine lab placeholder",
   "details": {
     "intro": {
