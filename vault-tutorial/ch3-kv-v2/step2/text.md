@@ -15,9 +15,14 @@ echo "=== 当前最新版本 ==="
 vault kv get kv/app/db | tail -8
 ```
 
-输出里 `version 4` 之类——这取决于第一步你在 1.2 节是否也 put 过
-一次。`current_version` 反映的是**自这条 key 第一次写入以来累计的
-版本号**，永不回退。
+输出里 `version 4` 之类——这取决于第一步你在 §1.2 是否也 put 过一
+次。`vault kv get` 显示的 **`version`** 字段表示"你这次读到的是第几
+版"；只有在 `vault kv metadata get`（见下一节）里才能看到引擎层面
+的 **`current_version`**——这条 key 的最新版本号。在没有版本被 destroy
+的情况下，两者数值相等，但字段名不同。
+
+无论怎么 destroy / delete，**版本号永不回退**——`put` 永远在最大值
+基础上 +1。
 
 ## 2.2 列出全部版本
 
