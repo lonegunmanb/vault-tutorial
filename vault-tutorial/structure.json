@@ -9,6 +9,7 @@
     { "path": "ch2-identity-entity" },
     { "path": "ch2-policies" },
     { "path": "ch2-response-wrapping" },
-    { "path": "ch2-mount-migration" }
+    { "path": "ch3-secrets-engines" },
+    { "path": "ch5-mount-migration" }
   ]
 }

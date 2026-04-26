@@ -1,0 +1,43 @@
+{
+  "title": "机密引擎概览：路由、生命周期与 Barrier View",
+  "description": "在一个 Dev 模式 Vault 上动手验证机密引擎的核心机制：多实例挂载、Accessor / UUID 的物理隔离、路径大小写与前缀冲突、tune 在线调参、disable 的销毁式卸载",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "挂载多个 KV 实例并观察 Accessor / UUID",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "路径大小写敏感与前缀冲突两条硬规则",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "tune 在线调参 vs disable 的销毁式卸载",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Barrier View 的物理隔离证据",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

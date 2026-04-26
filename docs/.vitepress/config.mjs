@@ -35,7 +35,22 @@ export default defineConfig({
              { text: '2.3 租约（Lease）、无感续期与强制撤销的生命周期管理', link: '/ch2-lease' },
              { text: '2.4 认证（Authentication）与令牌（Tokens）树状层级关系本质', link: '/ch2-auth-tokens' },
              { text: '2.5 身份实体（Identity Entity）：打通多维度认证源的元数据中心', link: '/ch2-identity-entity' },
-             { text: '2.6 细粒度策略（Policies）与合规性密码策略（Password Policies）编写指南', link: '/ch2-policies' }
+             { text: '2.6 细粒度策略（Policies）与合规性密码策略（Password Policies）编写指南', link: '/ch2-policies' },
+             { text: '2.7 响应封装（Response Wrapping）与防篡改一次性数据传递', link: '/ch2-response-wrapping' }
+           ]
+         },
+         {
+           text: '第 3 章：核心机密引擎管理体系 (Secret Engines)',
+           collapsed: false,
+           items: [
+             { text: '3.1 机密引擎概览：路由、生命周期与 Barrier View', link: '/ch3-secrets-engines' }
+           ]
+         },
+         {
+           text: '第 5 章：现代命令行工具与高级管理实战 (CLI)',
+           collapsed: false,
+           items: [
+             { text: '5.7 底层引擎挂载点无损热迁移（Mount Migration）技术剖析', link: '/ch5-mount-migration' }
            ]
          }
         ],
