@@ -65,8 +65,10 @@ vault write aws/config/root \
 vault read aws/config/root
 ```
 
-注意输出里 `secret_key` 不会显示——这是 Vault 默认的写入即不可读保
-护。`iam_endpoint` 和 `sts_endpoint` 应该都是 `http://127.0.0.1:4566`。
+注意输出里 `secret_key` 不会显示——Vault 对所有 `config/root` 类敏感
+字段都是"只能写、读不出"：写进去之后回读只看得到非敏感参数，看不到
+原始 secret，避免运维误把它打到日志里。`iam_endpoint` 和
+`sts_endpoint` 都应该是 `http://127.0.0.1:4566`。
 
 ## 1.5 设置默认 lease：让本实验的凭据"短寿命"
 
