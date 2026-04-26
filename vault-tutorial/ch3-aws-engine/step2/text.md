@@ -122,14 +122,23 @@ aws --endpoint-url=http://127.0.0.1:4566 iam list-users \
 数量减一——Vault 在 revoke 时反过来调了 `DeleteAccessKey` +
 `DeleteUserPolicy` + `DeleteUser`，AWS 上对应的 user 已经不在了。
 
-被 revoke 的那把 AK/SK 自然也失效了：
+直接拿被 revoke 的那个 user 名去 MiniStack 查一下，确认它真的没了：
 
 ```bash
-AWS_ACCESS_KEY_ID=$AK1 AWS_SECRET_ACCESS_KEY=$SK1 \
-  aws --endpoint-url=http://127.0.0.1:4566 s3 ls 2>&1 | tail -2
+USER1=$(echo "$CREDS" | jq -r .data.username)
+echo "查的 user: $USER1"
+aws --endpoint-url=http://127.0.0.1:4566 iam get-user --user-name "$USER1" 2>&1 | tail -3
 ```
 
-返回 `InvalidClientTokenId` 之类错误——AK/SK 已经被 AWS 这一侧删掉了。
+返回 `NoSuchEntity`——这把临时 user 在 IAM 上已经被 Vault 真的
+`DeleteUser` 掉了。
+
+> ⚠️ **MiniStack 的限制（不影响结论）**：在真 AWS 上，被删 user 的
+> AK/SK 立刻不能再调任何 AWS API（返回 `InvalidClientTokenId`）。但
+> MiniStack 为了开发体验，**对 AK/SK 的 IAM 校验是宽松的**——你拿一
+> 把已删的 AK/SK 调它的 S3，它依然会放行。所以本实验用 `iam get-user`
+> 这个**控制平面**操作来验证"user 真的没了"，而不是用"S3 调用是否
+> 失败"作为替代证据。在生产 AWS 上，两种验证方法都成立。
 
 ## 2.7 一次性把剩下的 lease 都 revoke 掉
 
