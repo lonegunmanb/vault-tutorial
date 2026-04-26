@@ -11,11 +11,12 @@ vault kv put kv/app/secret-x password=p2 > /dev/null
 vault kv put kv/app/secret-x password=p3 > /dev/null
 
 echo "=== 当前版本元数据 ==="
-vault kv metadata get kv/app/secret-x | head -10
+vault kv metadata get kv/app/secret-x
 ```
 
 应该看到 `current_version=3`、3 个 `Version N` 块都健康（`destroyed=false`、
-`deletion_time=n/a`）。
+`deletion_time=n/a`）。`Version N` 块在输出最下方——`vault kv metadata
+get` 整体输出有 30+ 行，截断会看不到，所以这里直接全打。
 
 ## 3.2 软删除：`vault kv delete`
 
