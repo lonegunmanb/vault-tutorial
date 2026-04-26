@@ -12,4 +12,10 @@
 - Userpass 认证挂载在 `old-login/`，用户 `bob`
 - 一条引用 `secret/data/app-team-a/*` 路径的 Policy
 
+下图展示了迁移前的状态、即将执行的迁移计划，以及迁移后期望看到的结果——
+**注意：仓库 / 大门里的"住户"（数据、用户）和"编号"（Accessor / UUID）
+全程不变，变的只是屋顶上的"门牌"（挂载路径）**：
+
+![Mount Migration 实验：迁移前 → 迁移命令 → 迁移后](../assets/migration-plan.png)
+
 你将亲手执行机密引擎迁移、认证方法迁移，并观察迁移后 Policy 的行为变化。
