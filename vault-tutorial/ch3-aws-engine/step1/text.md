@@ -66,22 +66,9 @@ vault read aws/config/root
 ```
 
 注意输出里 `secret_key` 不会显示——Vault 对所有 `config/root` 类敏感
-字段都是"只能写、读不出"。
-
-> **"读不出我怎么用？"**——这正是设计意图。`secret_key` **从来不
-> 应该被你或任何应用读出来**：它的唯一用途是让 Vault**在内部**用它
-> 去调 AWS API 铸临时凭据（接下来 step2 / step3 会反复用到）。你和你
-> 的应用**只需要**用 `vault read aws/creds/<role>` / `aws/sts/<role>`
-> 拿那份**临时**凭据，而不是 root key 本身。这样 root key 只活在
-> Vault 进程内存里，一旦泄露就只能从 Vault 渗出，而不会从应用日志、
-> CI 历史、镜像层这些地方泄露——这就是"只写不读"对运维的价值。
->
-> 如果将来真要换 root key（比如轮转/紧急吊销），就用
-> `vault write aws/config/root ...` 直接覆盖，或用专门的
-> `vault write -force aws/config/rotate-root` 让 Vault 自己去 AWS
-> 创建一对新 AK/SK 替换。
-
-`iam_endpoint` 和 `sts_endpoint` 都应该是 `http://127.0.0.1:4566`。
+字段都是"只能写、读不出"：写进去之后回读只看得到非敏感参数，看不到
+原始 secret，避免运维误把它打到日志里。`iam_endpoint` 和
+`sts_endpoint` 都应该是 `http://127.0.0.1:4566`。
 
 ## 1.5 设置默认 lease：让本实验的凭据"短寿命"
 
