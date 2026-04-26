@@ -57,11 +57,16 @@ vault secrets list -detailed
 vault secrets enable -path=team-dev-kv -version=2 kv
 ```
 
-输出应该类似：
+输出：
 
 ```
-Success! Enabled the kv-v2 secrets engine at: team-dev-kv/
+Success! Enabled the kv secrets engine at: team-dev-kv/
 ```
+
+> ⚠️ 注意输出里写的是 `kv` 而**不是** `kv-v2`——引擎的**类型名**始终是
+> `kv`，`-version=2` 只是给该实例的一个**选项**（写到 mount 的 options
+> 里）。后面用 `vault secrets list` 看到的 `Type` 列也只会显示 `kv`，
+> 区分 v1 / v2 要看 `-detailed` 输出里的 `Options.version` 字段。
 
 写入一些数据：
 
@@ -76,6 +81,16 @@ vault kv put team-dev-kv/api token=ak_dev_xxxxx
 vault secrets enable -path=team-prod-kv -version=2 kv
 vault kv put team-prod-kv/db host=db.prod.internal password=PROD-SECRET
 ```
+
+确认一下两个挂载点都在：
+
+```bash
+vault secrets list | grep -E '^(team-dev-kv|team-prod-kv)/'
+```
+
+应当看到两行输出。如果只看到一行，请先把上面缺失的那条 `enable` 命令
+补上——下一小节的 `jq` 命令会同时引用两个挂载点，少一个就会得到
+`null`。
 
 ## 1.4 对比两个实例的 Accessor 与 UUID
 
