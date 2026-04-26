@@ -13,6 +13,26 @@ vault kv put team-dev-kv/api token=ak_dev_re_created
 
 `team-prod-kv/db` 第一步已经写过 `password=PROD-SECRET`，留着不动。
 
+接下来为了 4.4 能看到 "disable 前 → 重新 enable 后" 的 UUID 对比，
+先把 `team-prod-kv/` 当前的 Accessor / UUID 存到临时文件：
+
+```bash
+vault secrets list -format=json \
+  | jq '."team-prod-kv/" | {accessor, uuid}' \
+  | tee /tmp/team-prod-kv.before.json
+```
+
+输出会类似：
+
+```json
+{
+  "accessor": "kv_yyyyyyyy",
+  "uuid": "bbbbbbbb-3333-4444-..."
+}
+```
+
+记住这个 UUID（4.4 要拿它跟 disable+重新 enable 后的新值对比）。
+
 ## 4.2 同名 key 的内容彼此独立
 
 ```bash
@@ -57,14 +77,39 @@ vault kv get -field=password team-dev-kv/db
 vault secrets enable -path=team-prod-kv -version=2 kv
 ```
 
-看新 UUID：
+拿出新 UUID，和 4.1 保存的旧 UUID 拼在一起看：
 
 ```bash
 vault secrets list -format=json \
-  | jq '."team-prod-kv/" | {accessor, uuid}'
+  | jq '."team-prod-kv/" | {accessor, uuid}' \
+  > /tmp/team-prod-kv.after.json
+
+echo "=== disable 之前（4.1 记录的）==="
+cat /tmp/team-prod-kv.before.json
+echo
+echo "=== 重新 enable 之后（同名路径、全新实例）==="
+cat /tmp/team-prod-kv.after.json
 ```
 
-**关键观察**：跟第一步记录的 UUID 完全不同——这是一个**全新的**引擎实例，恰好挂在了同名路径上。之前的 `team-prod-kv/db` 数据在第三步原理下**永远找不回来**：
+两份 JSON 会明显不同：
+
+```json
+=== disable 之前 ===
+{
+  "accessor": "kv_yyyyyyyy",
+  "uuid":     "bbbbbbbb-3333-4444-..."
+}
+=== 重新 enable 之后 ===
+{
+  "accessor": "kv_zzzzzzzz",
+  "uuid":     "cccccccc-5555-6666-..."
+}
+```
+
+**关键观察**：路径一模一样（都是 `team-prod-kv/`），但 `accessor` 与
+`uuid` 都是**全新**的——这是一个完全独立的引擎实例，只是恰好被挂在了
+同名路径上。之前的 `team-prod-kv/db` 数据在第三步原理下**永远找不回
+来**：
 
 ```bash
 vault kv list team-prod-kv/ 2>&1 | tail -3
