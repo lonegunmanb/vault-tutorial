@@ -104,9 +104,50 @@ ui = true
 - **Autopilot（自动驾驶仪）**：开源版从 1.7 开始内置，自动管理新节点的稳定期、识别并清理已死亡的节点，避免人工 raft remove-peer 的高风险操作
 - **Auto-Unseal**：生产中通常用 AWS KMS / Azure Key Vault / GCP KMS 等云端 KMS 自动解封，避免重启时人工输入 Shamir 密钥分片
 
-## 6. Vault 内部数据流转与加密核心架构深度解析
+## 6. 挂载点模型与请求路由
 
-理解 Vault 最关键的概念是 **Barrier（屏障）**。Vault 的存储后端（Raft / Consul / S3 等）始终被视为 **不可信** 的——任何写入存储后端的数据都必须先通过 Barrier 加密。
+在看 Vault 的内部架构图之前，先理解一个贯穿全书的基础概念——**挂载点（Mount）**。
+
+Vault 本身并不直接存储机密或验证身份。它把这些能力拆分成一个个独立的**插件**（Secrets Engine 和 Auth Method），每个插件通过一个 **路径前缀** 挂载到 Vault Core 内部的路由表上。你可以把它想象成一个文件系统，每个引擎就是一块"分区"：
+
+```
+Vault 路由表
+├── secret/           ← KV v2 机密引擎（默认路径）
+├── database/         ← Database 动态凭据引擎
+├── transit/          ← Transit 加密即服务引擎
+├── pki/              ← PKI 证书签发引擎
+├── auth/userpass/    ← Userpass 认证方法
+├── auth/approle/     ← AppRole 认证方法
+├── sys/              ← 系统内置端点（不可卸载）
+└── cubbyhole/        ← 每个 Token 私有的临时存储（不可卸载）
+```
+
+当你执行 `vault secrets enable -path=my-kv kv-v2` 时，Vault 在路由表中注册 `my-kv/` 这个前缀，并为这个挂载分配一个不可变的 **Accessor**（唯一标识符）。此后所有发往 `my-kv/*` 的请求都会被路由到这个 KV v2 引擎实例。
+
+几个关键性质：
+
+- **同类型可多次挂载**：你可以同时有 `secret/`（开发团队）和 `prod-kv/`（运维团队），它们是两个完全独立的 KV v2 实例，数据互不可见
+- **认证方法同理**：`vault auth enable -path=corp-login userpass` 在 `auth/corp-login/` 路径下挂一个 Userpass 实例
+- **Policy 基于路径**：Vault 的整个权限体系就建立在这棵路由树上——`path "secret/data/team-a/*"` 指的是"挂载在 `secret/` 的引擎下 `team-a/` 前缀"
+
+下面这张图直观展示了 Vault Core 与各类插件（Secrets Engine / Auth Method）之间通过挂载路径建立的路由关系：
+
+![Vault 与插件的挂载路由关系](/images/what-is-vault/vault-mount-routing.png)
+
+理解这一点之后，下面架构图中的"路由到 Secrets Engine"就不再抽象——它就是查这张路由表，按路径前缀把请求分发到对应的引擎插件。后续学习 Policy（2.6 节）、Identity（2.5 节）、以及 Mount Migration（2.8 节）时，也都会反复回到这个模型。
+
+查看当前系统中所有已挂载的引擎和认证方法：
+
+```bash
+vault secrets list    # 机密引擎
+vault auth list       # 认证方法
+```
+
+---
+
+## 7. 内部架构与加密屏障
+
+有了挂载点和路由表的概念后，现在来看完整的架构。Vault 最关键的设计是 **Barrier（屏障）**——存储后端始终被视为 **不可信** 的，任何写入存储的数据都先经过 Barrier 用 AES-GCM-256 加密。
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -116,18 +157,21 @@ ui = true
                      ▼
 ┌──────────────────────────────────────────────────┐
 │  Vault Core                                      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │
-│  │  Auth    │→ │  Policy  │→ │  Audit Broker│   │
-│  │  Methods │  │  Engine  │  │              │   │
-│  └──────────┘  └────┬─────┘  └──────┬───────┘   │
-│                     │               │            │
-│                     ▼               ▼            │
-│           ┌─────────────────┐  ┌──────────┐     │
-│           │ Secrets Engines │  │ Audit    │     │
-│           │ (KV / DB / PKI) │  │ Devices  │     │
-│           └────────┬────────┘  └──────────┘     │
-│                    │                             │
-│  ═══════════════ Barrier (AES-GCM 256) ═══════  │
+│                                                  │
+│  ① Auth Methods ─→ 验证身份，返回 Token          │
+│         │                                        │
+│         ▼                                        │
+│  ② Policy Engine ─→ 按 Token 绑定的 Policy，     │
+│         │            用请求路径做 ACL 判定         │
+│         ▼                                        │
+│  ③ Router（路由表）─→ 按路径前缀分发到引擎        │
+│    ┌────┴──────────────┐                         │
+│    ▼                   ▼                         │
+│  Secrets Engines    Audit Devices                │
+│  (KV/DB/PKI/...)    (File/Syslog/Socket)         │
+│    │                   │                         │
+│    ▼                   ▼                         │
+│  ═══════════════ Barrier (AES-GCM-256) ════════  │
 │                    │                             │
 │           ┌────────▼────────┐                   │
 │           │ Storage Backend │                   │
@@ -136,12 +180,12 @@ ui = true
 └──────────────────────────────────────────────────┘
 ```
 
-理解这张图的几个关键点：
+对照上图理解几个关键点：
 
-1. **三层密钥结构**：Vault 持久化数据用 **Encryption Key**（在 keyring 里）加密；Encryption Key 用 **Root Key** 加密；Root Key 用 **Unseal Key** 加密。Unseal Key 通过 Shamir 算法切分成 N 份，需要 K 份才能重组（默认 5/3）。
-2. **Sealed 与 Unsealed**：Vault 启动时处于 Sealed 状态——它能读到加密后的字节，但解不开。只有提供足够份数的 Unseal Key 重组出 Root Key 后，Vault 才能解密 keyring 进入 Unsealed 状态对外服务。
-3. **Auto-Unseal** 不是绕过这个机制，而是把"持有 Unseal Key 的人"换成了一个可信的 KMS 服务——Root Key 由 KMS 帮你保管和解密，Vault 启动后直接向 KMS 请求解封。这同时引入了"Recovery Key"概念，用于 root token 重建等少数仍需多人授权的特殊操作。
-4. **请求流转**：每一次 API 请求都依次经过 `认证 → 策略评估 → 路由到 Secrets Engine → 审计`，任何一步失败都会被审计设备完整记录（包括失败本身）。
+1. **请求流转串联了第 6 节的路由表**：每一次 API 请求依次经过 `① 认证 → ② 策略评估（按路径匹配 Policy）→ ③ 路由（按路径前缀查路由表，分发到对应引擎）→ 审计`。任何一步失败都会被审计设备完整记录。
+2. **三层密钥结构**：Vault 持久化数据用 **Encryption Key**（在 keyring 里）加密；Encryption Key 用 **Root Key** 加密；Root Key 用 **Unseal Key** 加密。Unseal Key 通过 Shamir 算法切分成 N 份，需要 K 份才能重组（默认 5/3）。
+3. **Sealed 与 Unsealed**：Vault 启动时处于 Sealed 状态——它能读到加密后的字节，但解不开。提供足够份数的 Unseal Key 重组出 Root Key 后，Vault 才能解密 keyring 进入 Unsealed 状态。**Sealed 状态下，路由表、引擎、Policy 全部不可用**——唯一能响应的只有 `sys/seal-status` 和解封相关的端点。
+4. **Auto-Unseal** 不是绕过这个机制，而是把"持有 Unseal Key 的人"换成了一个可信的 KMS 服务——Root Key 由 KMS 帮你保管和解密，Vault 启动后直接向 KMS 请求解封。这同时引入了"Recovery Key"概念，用于 root token 重建等少数仍需多人授权的特殊操作。
 5. **审计的不可抵赖性**：审计日志在写入前会用 HMAC 对敏感字段哈希处理，既保证了审计完整性，又不会把明文密码二次落盘。
 
 ---

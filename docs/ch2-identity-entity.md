@@ -270,6 +270,11 @@ policy 收回 token 上已经写死的策略。这个非对称很重要：
 组路径必须只授给 platform admin / IdP 同步系统这种少数账户，绝对不
 能给业务应用。
 
+下面这张教学示意图把"alias 写权限被错误开放后会发生什么"分四步画了
+出来，便于在评审 policy 时一眼识别风险点：
+
+![identity/entity-alias 写权限的配置失误演示](/images/ch2-identity-entity/entity-alias-misconfig-demo.png)
+
 ---
 
 ## 6. Identity Group：把策略沿组关系传递

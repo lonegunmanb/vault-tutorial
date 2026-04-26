@@ -1,0 +1,43 @@
+{
+  "title": "引擎挂载点无损热迁移（Mount Migration）",
+  "description": "在一个已解封的 Vault 上，实战演练机密引擎与认证方法的挂载路径热迁移：vault secrets move 与 vault auth move，观察数据、角色、配置的原子迁移过程，验证 Policy 与 Lease 的注意事项",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "挂载点的本质与迁移动机",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "机密引擎的路径迁移：vault secrets move",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "认证方法的路径迁移：vault auth move",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Policy 路径更新与生产注意事项",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

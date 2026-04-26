@@ -159,8 +159,8 @@ echo "调度器用 accessor 查看 wrapping token 是否还存在:"
 vault token lookup -accessor $WRAP_ACC 2>&1 | tail -3
 ```
 
-如果报错说 token 不存在——说明 runner 已经成功 unwrap 了（或者 token
-过期了）。调度器可以据此判断交付是否完成。
+如果报错 `invalid accessor`——说明 wrapping token 已经被消耗（runner
+成功 unwrap 了）或者已过期。调度器可以据此判断交付是否完成。
 
 **这一步的核心结论**：
 

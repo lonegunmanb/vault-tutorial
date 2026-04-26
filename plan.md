@@ -260,10 +260,7 @@ Vault 推出的 **机密同步（Secret Sync）** 功能，提出了一种开源
 * 2.5 身份实体（Identity Entity）：打通多维度认证源的元数据中心  
 * 2.6 细粒度策略（Policies）与合规性密码策略（Password Policies）编写指南  
 * 2.7 响应封装（Response Wrapping）与防篡改一次性数据传递  
-* 2.8 集群高可用模式（HA）的设计哲学及其数据一致性保障  
-* 2.9 **【核心新增】** 工作负载身份联邦（Workload Identity Federation, WIF）机制架构详解  
-* 2.10 **【核心新增】** 底层引擎挂载点无损热迁移（Mount Migration）技术剖析  
-* 2.11 资源配额（Resource Quotas）与大规模并发限流控制
+* 2.8 **【核心新增】** 底层引擎挂载点无损热迁移（Mount Migration）技术剖析
 
 ## **第 3 章：现代命令行工具与高级管理实战 (CLI)**
 
@@ -288,11 +285,13 @@ Vault 推出的 **机密同步（Secret Sync）** 功能，提出了一种开源
 * 5.2 网络监听器（Listener）与最高级别 TLS 协议族强化配置  
 * 5.3 自动化云端解封（Auto-Seal）机制对接（AWS KMS, Azure Key Vault, Transit 代理）  
 * 5.4 **【全面更新】** 现代存储引擎的绝对基石：Integrated Storage (Raft) 协议深度剖析  
-* 5.5 **【核心新增】** 彻底解放人工干预：配置 Raft 自动驾驶仪（Autopilot）  
-  * 5.5.1 服务器观察稳定期（Server Stabilization Time）防抖动设置  
-  * 5.5.2 死节点无痛自动清理（Dead Server Cleanup）与 Quorum 阈值维护  
-* 5.6 分布式服务注册与发现（K8s 原生发现机制与 Consul 集成模式）  
-* 5.7 核心指标遥测（Telemetry）暴露与可视化 UI 界面底层配置
+* 5.5 集群高可用模式（HA）的设计哲学及其数据一致性保障  
+* 5.6 **【核心新增】** 彻底解放人工干预：配置 Raft 自动驾驶仪（Autopilot）  
+  * 5.6.1 服务器观察稳定期（Server Stabilization Time）防抖动设置  
+  * 5.6.2 死节点无痛自动清理（Dead Server Cleanup）与 Quorum 阈值维护  
+* 5.7 分布式服务注册与发现（K8s 原生发现机制与 Consul 集成模式）  
+* 5.8 核心指标遥测（Telemetry）暴露与可视化 UI 界面底层配置  
+* 5.9 资源配额（Resource Quotas）与大规模并发限流控制
 
 ## **第 6 章：面向现代系统的联邦身份验证与治理**
 
@@ -301,8 +300,9 @@ Vault 推出的 **机密同步（Secret Sync）** 功能，提出了一种开源
 * 6.3 面向人员体系的认证：Userpass 与云原生 GitHub 鉴权接入  
 * 6.4 企业组织架构目录集成：现代安全标准下的 LDAP 配置实践  
 * 6.5 **【核心新增】** 原生内核级防暴力破解：User Lockout 防御基线与参数调优实战  
-* 6.6 **【核心新增】** 无密钥云身份联邦：配置 JWT/OIDC 实现跨域 WIF 动态授权访问  
-* 6.7 **【核心新增】** 角色反转，Vault 作为单点登录枢纽：激活内置 OIDC Provider 身份代理服务
+* 6.6 **【核心新增】** 无密钥云身份联邦：工作负载身份联邦（WIF）机制架构详解与全流程免密云资源访问实战  
+* 6.7 **【核心新增】** 角色反转，Vault 作为单点登录枢纽：激活内置 OIDC Provider 身份代理服务  
+* 6.8 **【核心新增】** 破除数据孤岛的微服务联邦通信：利用 Vault 内置 OIDC Provider 为企业内部自研管理后台提供集中式联邦单点登录 (SSO)
 
 ## **第 7 章：应用自动化接入与现代 Kubernetes 云原生集成生态 【架构重大重构】**
 
@@ -331,9 +331,7 @@ Vault 推出的 **机密同步（Secret Sync）** 功能，提出了一种开源
 * 9.1 密码学原语解耦应用：基于 Transit 机密引擎构建“加密即服务（EaaS）”的无密钥应用平台  
 * 9.2 单点事实来源的妥协与扩张：配置 Secret Sync 机制将 Vault 机密单向自动投影至 GitHub CI/CD 与 AWS Secrets Manager  
 * 9.3 核心生产环境极高安全加固基线：从物理部署防线到最低权限最小化原则的系统级核查清单  
-* 9.4 **【核心新增】** 零接触式的公共信任体系闭环：深度整合 Vault PKI 机密引擎与 ACME 自动化协议（集成 Traefik 或 Cert-Manager 演示 TLS 证书静默全自动签发与轮转）  
-* 9.5 **【核心新增】** 破除数据孤岛的微服务联邦通信：利用 Vault 内置 OIDC Provider 为企业内部自研管理后台提供集中式联邦单点登录 (SSO)  
-* 9.6 **【核心新增】** 挥别静态凭据与“第零号机密”陷阱：利用工作负载身份联邦 (WIF) 实现对公有云底层资源的彻底免密级动态安全操控
+* 9.4 **【核心新增】** 零接触式的公共信任体系闭环：深度整合 Vault PKI 机密引擎与 ACME 自动化协议（集成 Traefik 或 Cert-Manager 演示 TLS 证书静默全自动签发与轮转）
 
 ## **第 10 章：技术趋势展望与全课程总结归纳**
 
