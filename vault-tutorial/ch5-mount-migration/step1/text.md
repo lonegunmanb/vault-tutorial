@@ -66,10 +66,6 @@ vault list auth/userpass/users/
 echo ""
 echo "=== old-login 用户 ==="
 vault list auth/old-login/users/
-
-echo ""
-echo "=== 当前 policy ==="
-vault policy read app-team-a-read
 ```
 
 记住此刻的状态——下一步你将把 `legacy-kv/` 整体迁移到 `archive/`。

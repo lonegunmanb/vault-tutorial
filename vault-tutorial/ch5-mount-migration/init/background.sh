@@ -31,15 +31,9 @@ vault write auth/userpass/users/alice password="training" policies="app-team-a-r
 vault auth enable -path=old-login userpass
 vault write auth/old-login/users/bob password="training" policies="default"
 
-# --- Create a policy that references the current paths ---
-vault policy write app-team-a-read - <<'EOF'
-path "secret/data/app-team-a/*" {
-  capabilities = ["read", "list"]
-}
-path "secret/metadata/app-team-a/*" {
-  capabilities = ["read", "list"]
-}
-EOF
+# Note: the app-team-a-read policy is intentionally NOT pre-created here.
+# Step 4 has the learner write it themselves so they understand which
+# paths the policy targets before observing it break after a move.
 
 cd /root
 finish_setup
