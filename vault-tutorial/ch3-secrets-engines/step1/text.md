@@ -4,18 +4,52 @@
 
 ## 1.1 查看 Vault 启动时的内置挂载点
 
+先用 **不带 `-detailed`** 的形式看一眼最常用的 4 列（Path / Type /
+Accessor / Description）：
+
 ```bash
-vault secrets list -detailed
+vault secrets list
+```
+
+输出大约是这样：
+
+```
+Path          Type         Accessor              Description
+----          ----         --------              -----------
+cubbyhole/    cubbyhole    cubbyhole_xxxxxxxx    per-token private secret storage
+identity/     identity     identity_xxxxxxxx     identity store
+secret/       kv           kv_xxxxxxxx           key/value secret storage
+sys/          system       system_xxxxxxxx       system endpoints used for ...
 ```
 
 注意几列：
 
 - `Path`：API 路径前缀
 - `Type`：引擎类型（kv、cubbyhole、system、identity 等）
-- `Accessor`：挂载实例的不可变唯一标识
+- `Accessor`：挂载实例的不可变唯一标识，前缀就是引擎类型（`kv_`、
+  `cubbyhole_` 等）
+
+`secret/` 是 Dev 模式默认挂载的 KV v2，`cubbyhole/`、`sys/`、
+`identity/` 是内置引擎（**不能 disable**）。
+
+接下来切到 `-detailed` 形式——它把 `Type` 这一列换成了更精确的
+`Plugin`（因为同一类型可以被不同 plugin 实现），并额外暴露 **`UUID`**
+这一关键字段：
+
+```bash
+vault secrets list -detailed
+```
+
+挑出我们关心的几列（其余字段后续小节会用到）：
+
+- `Path`：与上面一致
+- `Plugin`：实际承载该挂载的插件名（对内置引擎来说与 `Type` 同名，
+  例如 `kv` / `cubbyhole`）
+- `Accessor`：与上面一致
 - `UUID`：底层存储的根目录 UUID（每个 Accessor 有自己独立的子树）
 
-`secret/` 是 Dev 模式默认挂载的 KV v2，`cubbyhole/`、`sys/`、`identity/` 是内置引擎（**不能 disable**）。
+> **提示**：`-detailed` 一次性输出 14 列，在窄终端里很容易换行错乱。
+> 后续步骤用 `jq` 直接从 `-format=json` 里挑字段更可靠。
 
 ## 1.2 自定义路径挂载第一个 KV 实例：team-dev-kv/
 
