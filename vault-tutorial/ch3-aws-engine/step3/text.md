@@ -56,23 +56,33 @@ vault read aws/roles/s3-assume
 `role_arns` 是一组**已存在**的目标 Role ARN，请求时可以用 `-role_arn=`
 覆盖选其中一个。
 
-## 3.3 取凭据：走 `sts/`，**不是** `creds/`
+## 3.3 取凭据：习惯上走 `sts/`
 
-先故意走错路径感受一下区别：
+先把两条路径都打一下，对比看效果：
 
 ```bash
-echo "=== 错误姿势：走 creds/（assumed_role 不在这里）==="
-vault read aws/creds/s3-assume 2>&1 | tail -3
+echo "=== 走 creds/ ==="
+vault read aws/creds/s3-assume
 
 echo ""
-echo "=== 正确姿势：走 sts/ ==="
+echo "=== 走 sts/ ==="
 vault read aws/sts/s3-assume
 ```
 
-第一条会报 `unknown role: s3-assume on path creds`——`creds/` 路由器
-找不到一个 `iam_user` / `federation_token` 类型的同名 Role。第二条返
-回的输出**比 §2.3 多了一个 `session_token` 字段**，这就是 STS 三件套
-的标志。
+你会发现**两条都成功**，而且都返回了 `session_token`——这是现代 Vault
+（0.11.6+）的实际行为：`creds/` 和 `sts/` 都会路由到这个 Role，最终
+**返回什么样的凭据由 `credential_type` 决定**，不由路径决定。所以
+`assumed_role` 走哪条都是 STS 三件套。
+
+那为什么官方文档让你走 `sts/`？历史包袱 + 阅读约定：
+
+- 老版本 Vault 里 `sts/` 才支持 `assumed_role` / `federation_token`，
+  `creds/` 仅给 `iam_user`，文档至今保留这个写法
+- 团队约定「`sts/` = STS 三件套，`creds/` = 长期 IAM User AK/SK」
+  能让 Code Review 一眼看出意图
+
+> 输出和 §2.3（`iam_user`）相比，最明显的差别是**多出来的
+> `session_token` 字段**——这就是 STS 三件套的标志。
 
 ## 3.4 用 STS 三件套真的去 MiniStack 调 S3
 
