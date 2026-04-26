@@ -266,7 +266,7 @@ Vault 推出的 **机密同步（Secret Sync）** 功能，提出了一种开源
 *(讲师留空：本章先建立"机密引擎 = 挂载在 Vault 路由表上的插件"这一统一心智模型，再深入到具体引擎的动手实践。除 3.1 概览外，下层细节依据后续业务技术栈选型与应用场景针对性填充。)*
 
 * 3.1 机密引擎概览：挂载路由、生命周期 (`enable`/`disable`/`move`/`tune`)、路径约束与 Barrier View 隔离（对标 [Vault Secrets Engines](https://developer.hashicorp.com/vault/docs/secrets) 文档）  
-* 3.2 Key/Value (KV v2) 引擎：带有版本历史控制的现代静态机密存储框架  
+* 3.2 Key/Value (KV v2) 引擎：版本控制、删除三态与按动作分段的 Policy 路径  
 * ... (待选定特定机密引擎内容，例如 Database 等)...  
 * ... (待选定特定机密引擎内容，例如 SSH 等)...
 

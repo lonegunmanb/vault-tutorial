@@ -1,0 +1,43 @@
+{
+  "title": "KV v2：版本控制、软删硬删与 Policy 路径",
+  "description": "在 Dev 模式 Vault 上动手验证 KV v2 的核心机制：data/ vs metadata/ 双层路径、版本历史与 patch / CAS、软删除/硬删除/元数据销毁三态、以及最容易踩坑的 Policy 路径段问题",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 KV v2 并看穿 data/ + metadata/ 双层路径",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "版本历史、patch 局部更新与 CAS 写并发控制",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "删除三态：软删 / undelete / destroy / metadata delete",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Policy 路径踩坑：data/ 段错配 → 403，修复后恢复",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

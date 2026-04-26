@@ -10,6 +10,7 @@
     { "path": "ch2-policies" },
     { "path": "ch2-response-wrapping" },
     { "path": "ch3-secrets-engines" },
+    { "path": "ch3-kv-v2" },
     { "path": "ch5-mount-migration" }
   ]
 }

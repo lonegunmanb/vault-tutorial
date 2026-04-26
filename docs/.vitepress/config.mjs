@@ -43,7 +43,8 @@ export default defineConfig({
            text: '第 3 章：核心机密引擎管理体系 (Secret Engines)',
            collapsed: false,
            items: [
-             { text: '3.1 机密引擎概览：路由、生命周期与 Barrier View', link: '/ch3-secrets-engines' }
+             { text: '3.1 机密引擎概览：路由、生命周期与 Barrier View', link: '/ch3-secrets-engines' },
+             { text: '3.2 Key/Value (KV v2) 引擎：版本控制的现代静态机密存储', link: '/ch3-kv-v2' }
            ]
          },
          {
