@@ -1,17 +1,18 @@
 #!/bin/bash
 source /root/setup-common.sh
 
-install_vault
+# 并行：install_vault（70MB 下载）和 apt 装 jq 同时进行
+install_vault &
+INSTALL_VAULT_PID=$!
 
 if ! command -v jq > /dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq jq > /dev/null 2>&1
 fi
 
-# Start Vault in dev mode
-start_vault_dev
+wait "$INSTALL_VAULT_PID"
 
-# Wait for Vault to be ready
-wait_vault_ready
+# Start Vault in dev mode (start_vault_dev waits internally for readiness).
+start_vault_dev
 
 # --- Seed data: KV engine at default path with several secrets ---
 vault kv put secret/app-team-a/db host="db.prod.internal" port="5432" password="s3cret-A"
