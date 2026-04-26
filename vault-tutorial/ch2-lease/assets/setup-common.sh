@@ -15,6 +15,14 @@
 VAULT_VERSION="${VAULT_VERSION:-1.19.2}"
 
 install_vault() {
+  # Idempotency guard: skip the 70MB download if the requested version is
+  # already installed (saves ~30s on container warm restarts).
+  if command -v vault > /dev/null 2>&1 \
+     && vault version 2>/dev/null | grep -q "v${VAULT_VERSION}"; then
+    echo "vault ${VAULT_VERSION} already installed, skipping download."
+    return 0
+  fi
+
   if ! command -v unzip > /dev/null 2>&1; then
     apt-get update -qq && apt-get install -y -qq unzip > /dev/null 2>&1
   fi
