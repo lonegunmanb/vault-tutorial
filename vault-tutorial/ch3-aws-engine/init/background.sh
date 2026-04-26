@@ -14,16 +14,17 @@ if ! command -v docker > /dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq docker.io > /dev/null 2>&1
 fi
 
-# 装 awscli（用于在 step2/3 直连 ministack 验证 IAM User 的存在与消亡）
-if ! command -v aws > /dev/null 2>&1; then
-  apt-get update -qq && apt-get install -y -qq awscli > /dev/null 2>&1
-fi
+# 装 awscli v2（apt 仓库的 awscli 是 v1，且某些 ubuntu 镜像源里压根没有；
+# 用 setup-common.sh 里的 install_awscli 装官方 v2 二进制 + awslocal 包装器）
+install_awscli &
+INSTALL_AWS_PID=$!
 
 # 提前预热拉 ministack 镜像，让 step1 启动它时秒级响应
 docker pull ministackorg/ministack > /dev/null 2>&1 &
 PULL_PID=$!
 
 wait "$INSTALL_VAULT_PID"
+wait "$INSTALL_AWS_PID" 2>/dev/null
 wait "$PULL_PID" 2>/dev/null
 
 # start_vault_dev 内部已经等到健康才返回

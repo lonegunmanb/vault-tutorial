@@ -104,6 +104,50 @@ start_postgres() {
   docker logs learn-postgres || true
 }
 
+install_awscli() {
+  # Install AWS CLI v2 (official binary). Idempotent.
+  if command -v aws > /dev/null 2>&1; then
+    echo "aws CLI already installed: $(aws --version 2>&1)"
+  else
+    if ! command -v unzip > /dev/null 2>&1; then
+      apt-get update -qq && apt-get install -y -qq unzip > /dev/null 2>&1
+    fi
+    curl --connect-timeout 10 --max-time 120 -fsSL \
+      "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+      -o /tmp/awscliv2.zip \
+      && unzip -o -q /tmp/awscliv2.zip -d /tmp/ \
+      && /tmp/aws/install --update > /dev/null 2>&1 \
+      && rm -rf /tmp/awscliv2.zip /tmp/aws
+
+    aws --version || echo "WARNING: awscli install failed"
+  fi
+
+  # Disable AWS CLI pager globally so output prints directly in Killercoda terminal.
+  mkdir -p /root/.aws
+  cat > /root/.aws/config <<'AWSCFG'
+[default]
+region = us-east-1
+output = json
+cli_pager =
+AWSCFG
+
+  # Install awscli-local (provides the 'awslocal' command pointing at MiniStack/LocalStack on :4566).
+  if ! command -v awslocal > /dev/null 2>&1; then
+    pip3 install --break-system-packages awscli-local > /dev/null 2>&1 \
+      || {
+        # Fallback: shell wrapper if pip is unavailable.
+        cat > /usr/local/bin/awslocal <<'WRAPPER'
+#!/bin/bash
+export AWS_PAGER=""
+exec aws --endpoint-url=http://localhost:4566 --region us-east-1 "$@"
+WRAPPER
+        chmod +x /usr/local/bin/awslocal
+      }
+  fi
+
+  awslocal --version || echo "WARNING: awslocal install failed"
+}
+
 finish_setup() {
   touch /tmp/.setup-done
 }
