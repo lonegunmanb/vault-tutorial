@@ -282,6 +282,32 @@ vault write kv/config max_versions=5 cas_required=false delete_version_after=720
 | `cas_required` | 全局开启 CAS 写：每次 `put` 必须带上 `cas=N`（期望的当前版本号） |
 | `delete_version_after` | 每个版本写入后多久自动软删除（默认 0 = 不自动） |
 
+#### `max_versions` vs `delete_version_after`：方向恰好相反的两把"自动清理"
+
+这两个字段经常被混为一谈，但它们触发的动作类型与可恢复性完全不同：
+
+| 字段 | 触发条件 | 自动执行的动作 | 可恢复性 |
+| --- | --- | --- | --- |
+| `max_versions=N` | 某条 key **累计版本数超过 N** | **destroy** 最旧版本（数据物理擦除） | ❌ 不可恢复 |
+| `delete_version_after=T` | 某个版本**写入后超过 T** | **软删除**（标 `deletion_time`） | ✅ `vault kv undelete` |
+
+也就是说：
+
+- 想要**控制存储占用、保留最近 N 份**——用 `max_versions`（兜底硬删）
+- 想要**让久远的版本变成"软删态"，给一段时间窗口可恢复**——用 `delete_version_after`
+
+#### 不存在的字段：软删之后多久自动 destroy
+
+KV v2 **没有原生**支持"软删之后再过多久自动 destroy"这种策略。如果业
+务真的需要把"软删窗口 → 物理销毁"自动化，目前只有两个选择：
+
+1. **组合配置兜底**：`delete_version_after=720h`（30 天后软删）
+   + `max_versions=10`（再多也只留最近 10 份，超出的会被 destroy）。
+   这样不维护额外脚本就能拿到一个近似的"软删窗口 + 硬上限"效果。
+2. **外部清理任务**：写个 cron / Vault Agent 模板，定期扫
+   `kv/metadata/<path>` 找 `deletion_time` 早于 N 天的版本，调
+   `vault kv destroy -versions=N`。
+
 ### 6.2 单条 key 覆盖全局配置
 
 ```bash
