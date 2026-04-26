@@ -17,9 +17,7 @@ vault kv get kv/app/db | tail -8
 
 输出里 `version 4` 之类——这取决于第一步你在 §1.2 是否也 put 过一
 次。`vault kv get` 显示的 **`version`** 字段表示"你这次读到的是第几
-版"；只有在 `vault kv metadata get`（见下一节）里才能看到引擎层面
-的 **`current_version`**——这条 key 的最新版本号。在没有版本被 destroy
-的情况下，两者数值相等，但字段名不同。
+版"。
 
 无论怎么 destroy / delete，**版本号永不回退**——`put` 永远在最大值
 基础上 +1。
@@ -34,6 +32,13 @@ vault kv metadata get kv/app/db
 `oldest_version`、`current_version`），底部是每个版本的 `Version N`
 块——`created_time`、`deletion_time`、`destroyed` 三个字段告诉你
 每一个历史版本的状态。
+
+> 这里第一次出现的 **`current_version`** 表示这条 key 的最新版本号——
+> 是引擎层面的"最大值"。和 §2.1 里 `vault kv get` 显示的 `version`
+> 字段（"这次读到的是第几版"）数值上通常相等，但字段名和含义不同：
+> 前者是"当前的最大版本号"，后者是"本次响应附带的版本号"。`vault kv
+> get -version=1` 时返回的 `version=1`，但 `current_version` 仍可能
+> 是 4。
 
 ## 2.3 定向读取历史版本
 
