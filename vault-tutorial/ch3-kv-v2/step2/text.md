@@ -36,11 +36,11 @@ vault kv metadata get kv/app/web
 块——`created_time`、`deletion_time`、`destroyed` 三个字段告诉你
 每一个历史版本的状态。
 
-> 这里第一次出现的 **`current_version`** 表示这条 key 的最新版本号——
-> 是引擎层面的"最大值"。和 §2.1 里 `vault kv get` 显示的 `version`
-> 字段（"这次读到的是第几版"）数值上通常相等，但字段名和含义不同：
-> 前者是"当前的最大版本号"，后者是"本次响应附带的版本号"。`vault kv
-> get -version=1` 时返回的 `version=1`，但 `current_version` 仍是 3。
+这里第一次出现的 **`current_version`** 表示这条 key 的最新版本号——
+是引擎层面的"最大值"。和 §2.1 里 `vault kv get` 显示的 `version`
+字段（"这次读到的是第几版"）数值上通常相等，但字段名和含义不同：
+前者是"当前的最大版本号"，后者是"本次响应附带的版本号"。`vault kv
+get -version=1` 时返回的 `version=1`，但 `current_version` 仍是 3。
 
 ## 2.3 定向读取历史版本
 
