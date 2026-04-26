@@ -14,9 +14,11 @@ vault secrets enable -path=Case-Test -version=2 kv
 两条命令**都会成功**，因为 Vault 把它们看成两个不同的挂载点：
 
 ```bash
-vault secrets list -format=json \
-  | jq '. | to_entries | map(select(.key | test("^[Cc]ase-[Tt]est/$"))) \
-       | map({path:.key, accessor:.value.accessor})'
+vault secrets list -format=json | jq '
+  to_entries
+  | map(select(.key | test("^[Cc]ase-[Tt]est/$")))
+  | map({path: .key, accessor: .value.accessor})
+'
 ```
 
 输出两条不同的 Accessor，证明它们是两个独立实例。
