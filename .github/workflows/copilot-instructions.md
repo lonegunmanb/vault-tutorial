@@ -198,3 +198,23 @@ vault status
 - Do NOT edit `vault-tutorial/*/assets/setup-common.sh` directly — it is auto-generated.
 - Do NOT use Vault dev mode in production scenarios — it is for learning only (in-memory, no persistence).
 - Do NOT mention "环境正在初始化，请稍候..." in `init.md` - The student would be confused by two different "initialization" messages (one in foreground.sh, one in init.md). The init.md should be a static introduction to the scenario, without dynamic progress messages.
+
+## Killercoda Sync Pitfall — `index.json` `description` Field
+
+**Empirical finding (2026-04)**: Certain content in the `description` field of `index.json` can put Killercoda into a **stuck sync state** where:
+
+1. The course shows "Error during last sync attempt, check your repository connection." on the creators dashboard, AND
+2. Killercoda **stops pulling new commits entirely** — even byte-identical reverts to a previously known-good commit are ignored, AND
+3. The affected scenario slug becomes **permanently poisoned**: the only way out is to rename the scenario directory to a fresh slug.
+
+The exact trigger is not fully characterized, but it has been reproduced with **a long Chinese description containing inline ASCII technical tokens** (e.g. `iam_user`, `assumed_role`, `credential_type`). The same description rewritten in English **does not** trigger the failure. The `title` field, `step` titles, and the actual step Markdown bodies are NOT affected — they may freely contain Chinese.
+
+### Required guidance when authoring or editing scenarios
+
+- When creating or modifying any `vault-tutorial/<scenario>/index.json`, **warn the user** before pushing if the `description` field contains a long Chinese string mixed with ASCII identifiers.
+- **Recommended pattern**: write the `description` field in **English** (the rich Chinese explanation belongs in `init/init.md` and the per-step `text.md` files, which are unaffected). The `title` field can stay in Chinese.
+- If a sync failure does occur and the scenario slug is locked:
+  1. First try `git mv vault-tutorial/<old-slug> vault-tutorial/<new-slug>`, update `structure.json`, and update the `KillercodaEmbed` URL in the corresponding `docs/*.md`.
+  2. As a fallback, ask the user to manually trigger re-sync or reconnect the GitHub repo in the Killercoda creators dashboard.
+- Do NOT spend many round-trip commits trying to debug a stuck slug — once Killercoda enters this state, no commit (regardless of content) will recover it. Renaming the slug is the reliable fix.
+
