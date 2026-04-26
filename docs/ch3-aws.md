@@ -63,8 +63,9 @@ aws/                           ← 你 enable 时给的路径
 │   ├── lease                  ← 默认 lease TTL / max TTL
 │   └── rotate-root            ← 触发把 root key 在 AWS 上换一对新的
 ├── roles/<name>               ← Role 模板（credential_type + 权限边界）
-├── creds/<role>               ← 应用来要 iam_user / federation_token 凭据走这里
-└── sts/<role>                 ← 应用来要 assumed_role 凭据走这里
+├── creds/<role>               ← 应用来要 iam_user 凭据走这里
+└── sts/<role>                 ← 应用来要 STS 三类凭据走这里
+                                 （assumed_role / federation_token / session_token）
 ```
 
 值得提前点出的几条规律：
@@ -78,16 +79,21 @@ aws/                           ← 你 enable 时给的路径
 
 ---
 
-## 3. 三种 `credential_type`：调的是不同的 AWS API
+## 3. 四种 `credential_type`：调的是不同的 AWS API
 
 写一条 Role 时必须指定 `credential_type`，它决定了 Vault 用哪个 AWS
-API 去铸凭据，以及应用应该走 `creds/` 还是 `sts/` 取：
+API 去铸凭据，以及应用应该走 `creds/` 还是 `sts/` 取（[官方完整列表](https://developer.hashicorp.com/vault/docs/secrets/aws#aws-secrets-engine)）：
 
 | `credential_type` | Vault 调的 AWS API | 凭据是否带 `session_token` | 应用读取路径 | 典型寿命 |
 | --- | --- | --- | --- | --- |
 | `iam_user` | `iam:CreateUser` + `iam:PutUserPolicy` + `iam:CreateAccessKey` | ❌（普通 AK/SK） | `aws/creds/<role>` | 受 Vault lease 控制（默认 768h，可配） |
 | `assumed_role` | `sts:AssumeRole`（需要预先存在的目标 Role ARN） | ✅ | `aws/sts/<role>` | 由 STS 决定，最长 12 小时 |
-| `federation_token` | `sts:GetFederationToken` | ✅ | `aws/creds/<role>` | 由 STS 决定，最长 36 小时 |
+| `federation_token` | `sts:GetFederationToken` | ✅ | `aws/sts/<role>` | 由 STS 决定，最长 36 小时 |
+| `session_token` | `sts:GetSessionToken` | ✅ | `aws/sts/<role>` | 由 STS 决定，默认 1h、最长 36h |
+
+> 注意：所有 STS 类型（`assumed_role` / `federation_token` /
+> `session_token`）的凭据**一颁发即可用**，没有 `iam_user` 那个 5-10
+> 秒的最终一致性窗口（参见 §3.1 的引用说明）。
 
 ### 3.1 `iam_user`：每次都"建一个真的 IAM 用户"
 
@@ -129,9 +135,14 @@ session_token      <nil>
 `DeleteUserPolicy` + `DeleteUser`——AWS 上不会留下任何痕迹（除了
 CloudTrail 审计）。
 
-> **注意 IAM 一致性窗口**：AWS 的 `CreateAccessKey` 是异步生效的，刚
-> 拿到的 AK/SK 立刻去调 AWS 偶尔会报 `InvalidClientTokenId`，等几秒
-> 重试通常就好。生产代码必须有"取到凭据后重试一两次再放弃"的容错。
+> **注意 IAM 一致性窗口（官方文档明示）**：AWS 的 IAM 数据是跨服务
+> [最终一致](https://developer.hashicorp.com/vault/docs/secrets/aws#usage)
+> 的，刚 `CreateAccessKey` 拿到的 AK/SK 立刻去调其他 AWS 服务很可能
+> 报 `InvalidClientTokenId`。HashiCorp 官方文档给的建议是：
+> **在拿到凭据后强制 sleep 5-10 秒（甚至更久）再使用**，CI/CD 流水线
+> 里这一行不能省。如果完全不想等，文档同时建议**改用 STS 类型**
+> （`assumed_role` / `federation_token` / `session_token`）——STS 凭据
+> 一颁发就立即可用，没有这个一致性窗口。
 
 ### 3.2 `assumed_role`：让 Vault 替你 AssumeRole
 
@@ -164,13 +175,13 @@ vault write aws/roles/s3-fed \
   credential_type=federation_token \
   policy_document=@s3-readonly.json
 
-vault read aws/creds/s3-fed
+vault read aws/sts/s3-fed       # 注意：和 assumed_role 一样走 sts/
 ```
 
 调的是 `sts:GetFederationToken`——这个 API 的特点是：
 
 - **必须**用一个 IAM User 的长效凭据去调（即 Vault 的 `config/root`
-  必须是 IAM User，不能是 Role）
+  必须是 IAM User，不能是 Role / EC2 instance profile / WIF token）
 - 返回的 session 权限是 **`config/root` 的策略 ∩ 你传入的
   `policy_document`** 的交集——所以即使你的 policy 写了 `s3:*`，最终
   能不能用还得看 root key 自己有没有 `s3:*`
@@ -178,6 +189,34 @@ vault read aws/creds/s3-fed
 实践中 `federation_token` 用得比 `iam_user` / `assumed_role` 都少——
 因为它没法跨账号、又比 `assumed_role` 多一份"根 user 策略也得对"的
 约束。你只需要知道它存在、并能在文档里认得出它即可。
+
+### 3.4 `session_token`：直接给一份 root 凭据的"短寿命快照"
+
+```bash
+vault write aws/roles/temp_user credential_type=session_token
+vault read aws/sts/temp_user
+```
+
+调的是 [`sts:GetSessionToken`](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetSessionToken.html)。
+特别要点出的是 [官方文档中的警告](https://developer.hashicorp.com/vault/docs/secrets/aws#sts-session-tokens)：
+
+> "STS session tokens inherit any and all permissions granted to the
+> user configured in `aws/config/root`."
+
+——`session_token` **不接受 `policy_document` / `policy_arns` 参数**，
+拿到的临时凭据权限**等于** `config/root` 自己的全部权限。生产里几乎
+不该用这种类型（除非你的 root key 已经被收窄到刚好够某个用途）。它
+存在的主要意义是配合 IAM User 的 MFA：
+
+```bash
+vault write aws/roles/mfa_user \
+  credential_type=session_token \
+  mfa_serial_number="arn:aws:iam::ACCOUNT-ID:mfa/device-name"
+vault read aws/creds/mfa_user mfa_code=123456
+```
+
+也就是"给一个开了 MFA 的 IAM User 通过 Vault 拿一份短期 session"。
+课程后续的 WIF 章节会让这种用法进一步边缘化。
 
 ---
 
@@ -323,8 +362,8 @@ path "aws/config/rotate-root" {
 | 调 lease 默认值 | `aws/config/lease` | `create` / `update` |
 | 写 / 读 Role | `aws/roles/<name>` | `create` / `read` / `update` / `delete` |
 | 列 Role | `aws/roles/` | `list` |
-| 取 `iam_user` / `federation_token` 凭据 | `aws/creds/<role>` | `read` |
-| 取 `assumed_role` 凭据 | `aws/sts/<role>` | `read` |
+| 取 `iam_user` 凭据 | `aws/creds/<role>` | `read` |
+| 取 `assumed_role` / `federation_token` / `session_token` 凭据 | `aws/sts/<role>` | `read` |
 
 > **常见踩坑**：把 `aws/creds/*` 都开放给应用，等于让它能拿到**所有**
 > 已定义 Role 的凭据。生产里要按 Role 名精确写到 `aws/creds/<rolename>`

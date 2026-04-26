@@ -6,8 +6,11 @@
   凭据
 - **三种 `credential_type`**：`iam_user`（建真 User）、`assumed_role`
   （调 STS AssumeRole）、`federation_token`（调 STS GetFederationToken）
-- **路径分离**：取 `iam_user` / `federation_token` 走 `aws/creds/<role>`，
-  取 `assumed_role` 走 `aws/sts/<role>`
+  ——还有一种 `session_token`（调 `sts:GetSessionToken`）官方文档把它
+  归为"权限完全继承 root key"的特殊类型，本实验不演示
+- **路径分离**：取 `iam_user` 走 `aws/creds/<role>`；取所有 STS 类
+  （`assumed_role` / `federation_token` / `session_token`）都走
+  `aws/sts/<role>`
 - **Lease 即生命周期**：`vault lease revoke` 真的会去 AWS 调
   `DeleteUser` / 让 Session 失效
 
