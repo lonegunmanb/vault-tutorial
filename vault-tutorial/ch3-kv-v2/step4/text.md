@@ -102,10 +102,12 @@ export VAULT_TOKEN='root'
 
 ```bash
 vault policy write kv-app-read - <<'EOF'
-path "kv/data/app/*"     { capabilities = ["read"] }
+path "kv/data/app/*"     { capabilities = ["read", "delete"] }
 path "kv/metadata/app/*" { capabilities = ["list", "read"] }
 
 # 允许软删除 + 撤销软删
+# - kv/data/<path> 的 delete   覆盖 `vault kv delete <path>`（软删最新版，DELETE kv/data/...）
+# - kv/delete/<path> 的 update 覆盖 `vault kv delete -versions=N <path>`（POST kv/delete/...）
 path "kv/delete/app/*"   { capabilities = ["update"] }
 path "kv/undelete/app/*" { capabilities = ["update"] }
 
