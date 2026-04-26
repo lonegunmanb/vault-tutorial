@@ -84,15 +84,22 @@ export VAULT_TOKEN='root'
 
 第二条返回 `permission denied`——按 Role 名精确授权才是正确姿势。
 
-## 4.4 路径段错配踩坑：`creds/` 写成 `sts/`
+## 4.4 路径段错配踩坑：Policy 写 `creds/`，应用调 `sts/`
 
-如果给 alice 的 Role 改成 `assumed_role` 类型，她就得走 `sts/`。
-现在故意只给她 `creds/` 的权限：
+§3.3 里我们刚说过 `creds/` 和 `sts/` 在 AWS 引擎**内部**会路由到同一
+个 handler，所以两条路径取 `assumed_role` 都能成功。
+
+但 Policy **不看** handler——它只匹配 HTTP 请求 URL 上的字面路径。
+也就是说，对 Vault 的鉴权层而言，`aws/creds/s3-assume` 和
+`aws/sts/s3-assume` 是**两条完全不同的路径**，Policy 给一条不等于给
+另一条。
+
+下面故意把 Policy 写在 `creds/s3-assume` 上，但让 alice 去调 `sts/`：
 
 ```bash
 vault policy write aws-s3-app - <<'EOF'
-path "aws/creds/s3-app"   { capabilities = ["read"] }
-path "aws/creds/s3-assume" { capabilities = ["read"] }   # ← 路径段写错
+path "aws/creds/s3-app"    { capabilities = ["read"] }
+path "aws/creds/s3-assume" { capabilities = ["read"] }   # ← 路径段没对上
 EOF
 
 echo "=== alice 走 sts/ 取 s3-assume（应被拒）==="
@@ -100,8 +107,12 @@ VAULT_TOKEN=$ALICE_TOKEN vault read aws/sts/s3-assume 2>&1 | tail -3
 export VAULT_TOKEN='root'
 ```
 
-返回 403——policy 写的是 `aws/creds/s3-assume`，但 `assumed_role` 的
-HTTP 端点是 `aws/sts/s3-assume`，**完全没匹配上**。修正：
+返回 `permission denied`——Policy 列出的是 `aws/creds/s3-assume`，
+请求 URL 是 `aws/sts/s3-assume`，**鉴权阶段就被字面路径不匹配挡掉
+了**，根本没机会进到 handler 里去 AssumeRole。
+
+修正：让 Policy 写的路径和应用真正调的 URL 完全一致。`assumed_role`
+的约定 URL 是 `sts/<role>`，所以 Policy 也要写 `sts/`：
 
 ```bash
 vault policy write aws-s3-app - <<'EOF'
@@ -113,6 +124,11 @@ echo "=== 修正后 alice 走 sts/ 取 s3-assume（应成功）==="
 VAULT_TOKEN=$ALICE_TOKEN vault read aws/sts/s3-assume | head -5
 export VAULT_TOKEN='root'
 ```
+
+> **一句话记住**：handler 不区分 `creds/` 与 `sts/`，但 Policy
+> **严格按字面 URL** 区分。所以**应用走哪条路径，Policy 就写哪条
+> 路径**——这也是为什么 §3.3 强调团队约定 `assumed_role` 走 `sts/`：
+> 一旦约定，Policy 写起来就只有一种正确写法，没有二义性。
 
 ## 4.5 防止应用碰配置面：明示拒绝 `config/*`
 
