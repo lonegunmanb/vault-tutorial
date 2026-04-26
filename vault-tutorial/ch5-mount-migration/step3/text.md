@@ -24,12 +24,17 @@ echo "迁移前 Auth Accessor = $AUTH_BEFORE"
 
 ## 3.2 执行迁移：old-login/ → corp-userpass/
 
+> ⚠️ 不同于 `vault secrets move`，`vault auth move` **必须**把路径写成
+> 完整的 `auth/<name>/` 形式（这是 Auth Method 在 API 路由表里的
+> 真实前缀）。写成 `vault auth move old-login/ ...` 会报
+> `no matching mount at "old-login/"`。
+
 ```bash
-vault auth move old-login/ corp-userpass/
+vault auth move auth/old-login/ auth/corp-userpass/
 ```
 
 ```
-Success! Finished moving auth method old-login/ to corp-userpass/, with migration ID ...
+Success! Finished moving auth method auth/old-login/ to auth/corp-userpass/, with migration ID ...
 ```
 
 ## 3.3 验证：用户数据跟着走
