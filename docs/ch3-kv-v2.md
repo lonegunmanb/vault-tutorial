@@ -100,8 +100,10 @@ vault secrets enable -path=kv kv-v2
 ```
 
 注意 `vault secrets list` 看到的 Type 列是 `kv`、Options 列里写
-`version:2`——**没有 `kv-v2` 这种类型名**。这一点和 3.1 §3.1 里强调
-过的"Type 名 ≠ 别名"一致。
+`version:2`——**没有 `kv-v2` 这种类型名**。`kv-v2` 只是 CLI 接受的
+一个便利别名，等价于 `-version=2 kv`；底层引擎类型始终是 `kv`，是不是
+v2 由 `Options.version` 决定。在 3.1 §3.1 列出的两种等价写法背后正是
+这一点。
 
 ### 3.2 写入
 
