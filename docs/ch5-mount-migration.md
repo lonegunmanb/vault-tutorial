@@ -214,4 +214,4 @@ AFTER=$(vault secrets list -format=json | jq -r '.["archive/"].accessor')
 - **Step 4**：演示 Policy 断裂与修复——迁移后旧路径 Policy 导致 403，
   手动更新后恢复
 
-> 实验路径：`ch5-mount-migration`
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch5-mount-migration" title="实验：挂载点无损热迁移（vault secrets move / auth move）" />
