@@ -43,17 +43,22 @@ vault kv metadata get kv/app/db
 ## 2.3 定向读取历史版本
 
 ```bash
-echo "=== 当前版本 ==="
+echo "=== 当前版本（最新一次写入）==="
 vault kv get kv/app/db | grep password
 
 echo ""
-echo "=== 第 1 版（应该是 v1）==="
+echo "=== 第 1 版 ==="
 vault kv get -version=1 kv/app/db | grep password
 
 echo ""
-echo "=== 第 2 版（应该是 v2）==="
+echo "=== 第 2 版 ==="
 vault kv get -version=2 kv/app/db | grep password
 ```
+
+注意第 1 版的 `password` 不一定是字面 `v1`——如果你在 step1 §1.2 已经
+写过一次（比如 `password=s3cret`），那条就是 v1，本节 §2.1 的三次写入
+依次是 v2 / v3 / v4。**版本号永远只反映"第几次写入"，和你随手起的
+value 字面值无关**。
 
 任意未被 `destroy` 的历史版本都能定向回读——这是 KV v2 相对 v1 最
 关键的能力。
