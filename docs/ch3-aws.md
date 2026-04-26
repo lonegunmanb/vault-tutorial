@@ -406,8 +406,7 @@ path "aws/config/rotate-root" {
 
 ## 9. 互动实验
 
-本节配套了一个完整的 Killercoda 实验。考虑到学员手里没有真实的 AWS 账号
-（免费层也要绑卡、且会真的产生 IAM 改动），实验环境用
+本节配套了一个完整的 Killercoda 实验。实验环境用
 [**MiniStack**](https://ministack.org/)——一个 MIT 协议、单端口 4566
 的本地 AWS API 模拟器（LocalStack 的免费替代），让你**不花一分钱**就
 能跑通：
@@ -428,4 +427,4 @@ path "aws/config/rotate-root" {
 > 想看它在真 AWS 上的行为，把 `iam_endpoint` / `sts_endpoint` 删掉、
 > 配上真账号的 root key 就能直接跑。
 
-<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch3-aws" title="实验：AWS 机密引擎动态凭据全流程（MiniStack 模拟）" />
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch3-aws-engine" title="实验：AWS 机密引擎动态凭据全流程（MiniStack 模拟）" />
