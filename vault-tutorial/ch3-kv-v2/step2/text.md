@@ -96,6 +96,15 @@ vault kv get kv/app/web | tail -8
 
 ## 2.5 开启全局 CAS 要求
 
+**CAS（Check-And-Set，检查并设置）** 是并发控制里的经典套路：写入时
+带上"我看到的当前版本号是 N"这个声明，由服务端原子比较——只有当真
+实的最新版本仍是 N 时才允许写入并产出 N+1，否则拒绝。这样可以防止
+"两个客户端同时拿到 v=N、各自做了不同修改、后写的覆盖先写的" 这种
+**丢失更新（lost update）** 问题。
+
+KV v2 的 `cas_required` 开关把这个要求强制到引擎级别——开启后所有
+`put` 都必须带 `-cas=N`：
+
 ```bash
 vault write kv/config cas_required=true
 vault read kv/config
