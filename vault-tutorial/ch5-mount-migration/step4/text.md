@@ -32,7 +32,7 @@ ALICE_TOKEN=$(vault login -method=userpass -path=userpass \
   username=alice password=training -format=json | jq -r .auth.client_token)
 
 echo "=== 迁移前：alice 读取 secret/app-team-a/db ==="
-VAULT_TOKEN=$ALICE_TOKEN vault kv get secret/app-team-a/db 2>&1 | head -8
+VAULT_TOKEN=$ALICE_TOKEN vault kv get secret/app-team-a/db 2>&1 | tail -8
 
 export VAULT_TOKEN='root'
 ```
@@ -81,7 +81,7 @@ EOF
 
 ```bash
 echo "=== Policy 更新后：alice 再次读取 ==="
-VAULT_TOKEN=$ALICE_TOKEN vault kv get kv-prod/app-team-a/db 2>&1 | head -8
+VAULT_TOKEN=$ALICE_TOKEN vault kv get kv-prod/app-team-a/db 2>&1 | tail -8
 export VAULT_TOKEN='root'
 ```
 
