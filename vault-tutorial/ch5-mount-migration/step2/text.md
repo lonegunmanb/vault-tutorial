@@ -13,26 +13,27 @@ echo "迁移前 Accessor = $BEFORE_ACC"
 
 ## 2.2 执行迁移：legacy-kv/ → archive/
 
-`vault secrets move` 的输出里包含一个 `migration_id`（迁移作业的 ID）。
+`vault secrets move` 的输出里包含一个 `migration ID`（迁移作业的 ID）。
 注意这个子命令**不支持 `-format=json`**（只有 `vault read/write/list`
-这类通用子命令支持），所以我们用 `awk` 从表格输出里抓取，并且**只能执
-行一次**——再 move 一次同一个旧路径就会报"路径不存在"。
+这类通用子命令支持），输出也不是 Key/Value 表格，而是两行人类可读
+消息。我们用 `grep + awk` 从里面抓最后一段 UUID，并且**只能执行一
+次**——再 move 一次同一个旧路径就会报"路径不存在"。
 
 ```bash
 MIG_ID=$(vault secrets move legacy-kv/ archive/ \
-  | awk '/^migration_id/ {print $2}')
+  | grep -oE 'migration ID [0-9a-f-]+' | head -1 | awk '{print $3}')
 echo "migration_id = $MIG_ID"
 ```
 
 `vault secrets move` 原始输出大致是：
 
 ```
-Key             Value
----             -----
-migration_id    abcdef12-3456-7890-...
+Started moving secrets engine legacy-kv/ to archive/, with migration ID abcdef12-...
+Success! Finished moving secrets engine legacy-kv/ to archive/, with migration ID abcdef12-...
 ```
 
-迁移是**异步**执行的，但对小引擎来说几乎瞬间完成。
+迁移是**异步**执行的（`Started ...` 立刻返回，`Success! Finished ...`
+是同步等到完成的提示），但对小引擎来说几乎瞬间完成。
 
 ## 2.3 查询迁移状态
 
