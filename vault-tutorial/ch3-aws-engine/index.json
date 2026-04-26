@@ -1,5 +1,5 @@
 {
-  "title": "AWS placeholder",
+  "title": "AWS 机密引擎：动态 IAM 凭据全流程 - MiniStack 模拟",
   "description": "Mount the AWS secrets engine on a dev-mode Vault and pair it with MiniStack as a local AWS API. Walk through two of the three credential_type variants end to end: iam_user (Vault really creates and deletes IAM users) and assumed_role (Vault calls STS for short-lived sessions). Observe the equivalence between Vault lease lifecycle and the IAM User lifecycle, then tighten access by Role with Policy.",
   "details": {
     "intro": {
