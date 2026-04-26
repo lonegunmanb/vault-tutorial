@@ -11,7 +11,26 @@ vault secrets list -detailed -format=json \
   | jq '."team-dev-kv/" | {default_lease_ttl, max_lease_ttl, options}'
 ```
 
-`default_lease_ttl: 0` 表示"使用 Vault 全局默认值"，`max_lease_ttl: 0` 同理。
+输出大致是：
+
+```json
+{
+  "default_lease_ttl": null,
+  "max_lease_ttl": null,
+  "options": {
+    "version": "2"
+  }
+}
+```
+
+两个 TTL 字段的值是 **`null`**——这是 `-format=json` 表达"该挂载点没
+有自己设置 TTL，沿用 Vault 全局默认值"的方式。`options.version: "2"`
+是上一步 `-version=2` 的真正落点（也印证了 step1 里那条提示：区分
+KV v1/v2 不是看 `Type`，而是看这里的 `options.version`）。
+
+> **小贴士**：同样的命令换成默认表格形式
+> `vault secrets list -detailed | grep team-dev-kv`，TTL 这两列就会
+> 显示成字符串 `system`——含义和 `null` 一致，都是"沿用全局默认"。
 
 ## 3.2 用 `tune` 修改 TTL
 
@@ -33,6 +52,8 @@ vault secrets list -detailed -format=json \
   "max_lease_ttl":     86400
 }
 ```
+
+之前的 `null` 现在变成了具体的秒数，说明这个挂载点已经覆盖了全局默认。
 
 **关键观察**：刚才写入的 `team-dev-kv/db` 与 `team-dev-kv/api` 数据完全不受影响：
 
