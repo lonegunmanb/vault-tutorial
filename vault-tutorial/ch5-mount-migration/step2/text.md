@@ -13,17 +13,18 @@ echo "迁移前 Accessor = $BEFORE_ACC"
 
 ## 2.2 执行迁移：legacy-kv/ → archive/
 
-`vault secrets move` 默认输出里包含一个 `migration_id`（迁移作业的
-ID）。我们用 `-format=json` 把它直接捕获到 shell 变量里，**关键是这
-一步只能执行一次**——再 move 一次同一个旧路径就会报"路径不存在"。
+`vault secrets move` 的输出里包含一个 `migration_id`（迁移作业的 ID）。
+注意这个子命令**不支持 `-format=json`**（只有 `vault read/write/list`
+这类通用子命令支持），所以我们用 `awk` 从表格输出里抓取，并且**只能执
+行一次**——再 move 一次同一个旧路径就会报"路径不存在"。
 
 ```bash
-MIG_ID=$(vault secrets move -format=json legacy-kv/ archive/ \
-  | jq -r .migration_id)
+MIG_ID=$(vault secrets move legacy-kv/ archive/ \
+  | awk '/^migration_id/ {print $2}')
 echo "migration_id = $MIG_ID"
 ```
 
-输出大致是：
+`vault secrets move` 原始输出大致是：
 
 ```
 Key             Value
