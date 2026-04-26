@@ -45,7 +45,8 @@ export default defineConfig({
            items: [
              { text: '3.1 机密引擎概览：路由、生命周期与 Barrier View', link: '/ch3-secrets-engines' },
              { text: '3.2 Key/Value (KV v2) 引擎：版本控制的现代静态机密存储', link: '/ch3-kv-v2' },
-             { text: '3.3 AWS 机密引擎：动态 IAM 凭据与租约即生命周期', link: '/ch3-aws' }
+             { text: '3.3 AWS 机密引擎：动态 IAM 凭据与租约即生命周期', link: '/ch3-aws' },
+             { text: '3.4 Cubbyhole 机密引擎：每个 Token 一个私人储物柜', link: '/ch3-cubbyhole' }
            ]
          },
          {

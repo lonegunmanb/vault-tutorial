@@ -1,0 +1,43 @@
+{
+  "title": "Cubbyhole 引擎与 Token 隔离全流程",
+  "description": "在 Dev 模式 Vault 上动手验证 Cubbyhole 的核心机制：默认挂载且不可禁用/迁移/二次启用、按 Token 隔离的命名空间（root 也看不见别人的 cubbyhole）、Token 寿命即数据寿命，以及它如何作为 Response Wrapping 的底层载体——直接 vault read cubbyhole/response 把 wrap/unwrap 的黑箱拆开",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "默认挂载与三不允许：disable / move / 二次 enable 全部失败",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "Token 隔离：root 看不见子 token 的 cubbyhole",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Token 寿命即数据寿命：TTL 到期 / revoke 时同步销毁",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "拆开 Response Wrapping 黑箱：vault read cubbyhole/response",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
