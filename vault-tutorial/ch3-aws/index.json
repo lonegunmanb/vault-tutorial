@@ -7,7 +7,24 @@
       "background": "init/background.sh",
       "foreground": "init/foreground.sh"
     },
-    "steps": [],
+    "steps": [
+      {
+        "title": "启动 MiniStack、enable AWS 引擎并指向本地端点",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "iam_user：每次取凭据 = AWS 上多一个真 IAM User",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "assumed_role：让 Vault 替你 AssumeRole 拿 STS 三件套",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Policy 路径踩坑：creds/ vs sts/ vs config/",
+        "text": "step4/text.md"
+      }
+    ],
     "finish": {
       "text": "finish/finish.md"
     },
