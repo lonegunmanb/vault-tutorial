@@ -269,6 +269,7 @@ Vault 推出的 **机密同步（Secret Sync）** 功能，提出了一种开源
 * 3.2 Key/Value (KV v2) 引擎：版本控制、删除三态与按动作分段的 Policy 路径  
 * 3.3 AWS 机密引擎：动态 IAM 凭据、`iam_user` / `assumed_role` / `federation_token` 三种 credential_type 与租约即生命周期  
 * 3.4 Cubbyhole 机密引擎：每个 Token 一个"私人储物柜"——不可禁用 / 不可迁移 / 不可重复挂载的特殊内置引擎，与 Response Wrapping 的底层支撑关系  
+* 3.5 SSH
 * ... (待选定特定机密引擎内容，例如 SSH 等)...
 
 ## **第 4 章：身份认证方法 (Auth Methods) 入门与挂载实践**

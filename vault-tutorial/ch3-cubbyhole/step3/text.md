@@ -32,12 +32,11 @@ sleep 35
 期满后用同一个 token 再读：
 
 ```bash
-VAULT_TOKEN=$SHORT vault read cubbyhole/timer 2>&1 | head -5
+VAULT_TOKEN=$SHORT vault read cubbyhole/timer 2>&1 | head -6
 ```
 
-会拿到 `Code: 403`——`permission denied`。这不是因为"权限被收回了"，
-而是 token 本身已经不存在了，所有它能做的事（包括读自己的 cubbyhole）
-全部连根失效。
+会拿到 `Code: 403`——token 已经不存在，连同它名下的 cubbyhole 数据
+一起被删掉了。
 
 > 即使**别人**这一刻知道了路径名 `cubbyhole/timer`，也没有任何 token
 > 能读到那份内容——它在 token 过期的同时被 Vault 物理清掉了。
