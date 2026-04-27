@@ -347,7 +347,7 @@ CA 模式的前提是"目标主机的 sshd 我能改配置（加 `TrustedUserCAK
 
 要让这条链路成立，目标主机端必须做三件事：
 
-1. **装 `vault-ssh-helper` 二进制**（[GitHub
+1. **安装 `vault-ssh-helper` 二进制程序**（[GitHub
    releases](https://github.com/hashicorp/vault-ssh-helper)）
 2. **写 helper 配置**：`vault_addr` 指向 Vault，`tls_skip_verify`
    或 CA 文件，`ssh_mount_point` 指向你挂的那个 SSH 引擎路径
@@ -427,7 +427,7 @@ vault write ssh/roles/otp_key_role \
 （**全程不动宿主机的 sshd**），把 CA 模式 + Host Key Signing + OTP
 模式三条路径全部跑一次。
 
-<KillercodaEmbed src="https://killercoda.com/lonegunmanb/scenario/ch3-ssh" />
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch3-ssh" title="实验：SSH 机密引擎 CA + Host Key Signing + OTP 全流程" />
 
 ---
 
