@@ -415,7 +415,7 @@ vault write ssh/roles/otp_key_role \
 | :--- | :--- | :--- |
 | 签发时报 `empty valid principals not allowed by role`（1.15+） | role 没设 `default_user`，请求也没传 `valid_principals` | role 加 `default_user=ubuntu`，或签发时显式 `valid_principals=...` |
 | `Permission denied (publickey)`，sshd 日志里 `name is not a listed principal`（老版 Vault 才会走到这一步） | 同上，但签出来的证书 principals 是空的 | 同上 |
-| 登入瞬间立刻断连，看不到 shell | role 没设 `default_extensions={permit-pty:""}`，证书没有 PTY 权限 | 加上 `default_extensions` |
+| 登入后看到 `PTY allocation request failed on channel 0`，会话卡住 | role 没设 `default_extensions={permit-pty:""}`，证书没有 PTY 权限 | 加上 `default_extensions`；按 `Ctrl-D` 退出卡住会话 |
 | OpenSSH 8.2+ 报 `no mutual signature algorithm` | 客户端 / 服务端默认禁用了 `ssh-rsa` 签名算法 | role 加 `algorithm_signer=rsa-sha2-256`；或目标 sshd 加 `CASignatureAlgorithms ^ssh-rsa` |
 | OTP 登录密码总是被拒 | sshd 没开 `ChallengeResponseAuthentication yes`，或 PAM 里 helper 行写错 | 检查 `/etc/ssh/sshd_config` 与 `/etc/pam.d/sshd`；用 `vault-ssh-helper -verify-only` 自检 |
 | `ip is not part of the allowed cidr_list` | OTP role 的 `cidr_list` 没覆盖目标主机的 IP | `vault write ssh/roles/<role> cidr_list=...` 把目标段加进去 |

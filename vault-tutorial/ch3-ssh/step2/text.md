@@ -159,14 +159,21 @@ ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
 
 ## 2.5 修复 2：加上 permit-pty，再试交互式登录
 
+`default_extensions` 是个 map 类型，**不能**用 `default_extensions='{"permit-pty":""}'`
+这种内联字符串写法（CLI 不会把它解析成 map，会报
+`expected a map, got 'string'`）。官方推荐用 heredoc JSON：
+
 ```bash
-vault write ssh-client-signer/roles/my-role \
-    key_type=ca \
-    allow_user_certificates=true \
-    allowed_users="*" \
-    default_user=ubuntu \
-    default_extensions='{"permit-pty":""}' \
-    ttl=5m
+vault write ssh-client-signer/roles/my-role - <<EOF
+{
+  "key_type": "ca",
+  "allow_user_certificates": true,
+  "allowed_users": "*",
+  "default_user": "ubuntu",
+  "default_extensions": { "permit-pty": "" },
+  "ttl": "5m0s"
+}
+EOF
 
 vault write -field=signed_key ssh-client-signer/sign/my-role \
     public_key=@/root/.ssh/id_rsa.pub > /root/.ssh/id_rsa-cert.pub
@@ -174,6 +181,10 @@ vault write -field=signed_key ssh-client-signer/sign/my-role \
 # 看一眼证书的 Extensions，应该出现 permit-pty
 ssh-keygen -L -f /root/.ssh/id_rsa-cert.pub | grep -A4 Extensions
 ```
+
+> `vault write <path> -` 是 Vault CLI 的语法：用 `-` 作末尾参数表示
+> "请求体从 stdin 读"，再用 heredoc 把 JSON 喂进去。涉及 map / 嵌套
+> 结构的 role 配置都建议这么写。
 
 现在交互式登录应该工作了：
 
