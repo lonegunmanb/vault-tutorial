@@ -166,8 +166,15 @@ sshpass -p "$OTP" ssh \
 ubuntu
 <容器 ID>
 --- helper log ---
-... vault-ssh-helper: ... successful ...
+*** <时间戳> ***
+... ==> WARNING: Dev mode is enabled!
+... [INFO] using SSH mount point: ssh
+... [INFO] using namespace:
+... [INFO] ubuntu@172.17.0.2 authenticated!
 ```
+
+最后那行 `[INFO] ubuntu@<IP> authenticated!` 就是 helper 把 OTP
+交给 Vault、Vault 验过后销毁、helper 返回 PAM_SUCCESS 的成功标志。
 
 > 想"必须从 127.0.0.1:2223 端口映射进"也行，但要让 helper 信
 > 任来自 `172.17.0.1`（docker 网关）这条 source IP，得在
@@ -182,12 +189,41 @@ sshpass -p "$OTP" ssh \
     -o StrictHostKeyChecking=no \
     -o PreferredAuthentications=keyboard-interactive,password \
     -o PubkeyAuthentication=no \
+    -o NumberOfPasswordPrompts=1 \
     ubuntu@$TARGET_IP "whoami"
+echo "ssh exit code: $?"
 ```
 
-会失败：`Permission denied, please try again.` 然后掉到下一次提示。
-Vault 在第一次验证时已经把这个 OTP **从 storage 里删掉了**，所以
-helper 第二次去问 Vault 得到的是 `OTP not found`，PAM 直接拒。
+会失败：
+
+```
+ubuntu@172.17.0.2: Permission denied (keyboard-interactive).
+ssh exit code: 255
+```
+
+> 加 `NumberOfPasswordPrompts=1` 是关键——`sshpass` 只会自动喂
+> 第一次密码提示，sshd 第一次拒绝后还会再 prompt 一次让你重试，
+> 这时 sshpass 没东西可填，ssh 就会**默默断开**、什么都不打印。
+> 限定"只能 prompt 一次"后失败信息才会按时打到 stderr。
+
+容器里看一眼 helper 日志，能看到这次的拒绝痕迹：
+
+```bash
+docker exec ssh-target-otp tail -5 /tmp/vault-ssh.log
+```
+
+会看到类似：
+
+```
+URL: PUT http://172.17.0.1:8200/v1/ssh/verify
+Code: 400. Errors:
+
+* OTP not found
+```
+
+Vault 在 4.4 第一次验证时已经把这个 OTP **从 storage 里删掉了**，
+所以 helper 第二次去 `/v1/ssh/verify` 问 Vault，Vault 直接返回 400
++ `OTP not found`，PAM 那条 `auth requisite` 立刻拒。
 
 > 这就是"One-Time" 这个词的字面意义——每次 SSH 登录都必须先回到
 > Vault 走一次"申请新 OTP → 用完即焚"的流程。**Vault 是在线验证
