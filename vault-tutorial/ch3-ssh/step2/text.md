@@ -67,39 +67,49 @@ vault write ssh-client-signer/roles/my-role \
 [3.5 章 §4.3](/ch3-ssh) 提示过这两个是新手最容易漏的，下面就让你看
 看漏了会发生什么。
 
-## 2.3 第一次签证书 + ssh：撞上 "name is not a listed principal"
+## 2.3 第一次签证书：撞上 "empty valid principals not allowed by role"
 
 ```bash
 vault write -field=signed_key ssh-client-signer/sign/my-role \
     public_key=@/root/.ssh/id_rsa.pub > /root/.ssh/id_rsa-cert.pub
-
-# 看一眼证书内容
-ssh-keygen -L -f /root/.ssh/id_rsa-cert.pub | head -25
 ```
 
-注意输出里 `Principals:` 那一行——**是空的**！因为 role 没设
-`default_user`，签发请求又没传 `valid_principals`，所以证书里没有任
-何允许的 principal。
+立刻就报错了，**连证书都没签出来**：
 
-试着登录：
+```
+Error writing data to ssh-client-signer/sign/my-role: Error making API request.
 
-```bash
-ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
-    -p 2222 ubuntu@127.0.0.1 echo hello
+URL: PUT http://127.0.0.1:8200/v1/ssh-client-signer/sign/my-role
+Code: 400. Errors:
+
+* empty valid principals not allowed by role
 ```
 
-会看到 `Permission denied (publickey)`。看一眼容器里的 sshd 日志，找
-真正原因：
+这是 Vault SSH 引擎的一道前置防线，[官方 API 文档](https://developer.hashicorp.com/vault/api-docs/secret/ssh#sign-ssh-key)
+里 `valid_principals` 参数原文是这么写的：
 
-```bash
-docker logs --tail 20 ssh-target-ca | grep -iE "principal|cert"
-```
+> **Required unless the role has specified `allow_empty_principals`
+> or a value has been set for either the `default_user` or
+> `default_user_template` role parameters.**
 
-会看到关键的一行：`key_cert_check_authority: invalid certificate` 或
-`Certificate invalid: name is not a listed principal`——sshd 在证
-书的 principals 列表里找不到 `ubuntu` 这个用户名，所以拒收。
+也就是说：**只要 role 既没设 `default_user`、签发请求又没传
+`valid_principals`，签出来的证书 principals 列表就会是空的——这种证
+书 sshd 必然拒收**（[官方 troubleshooting "Name is not a listed
+principal"](https://developer.hashicorp.com/vault/docs/secrets/ssh/signed-ssh-certificates#name-is-not-a-listed-principal)
+专门讲过这条 OpenSSH 行为）。Vault 干脆在签发时就把这种"注定签出来
+也用不了"的情况堵掉，给出更清楚的错误信息。
 
-## 2.4 修复 1：补上 default_user，重新签
+> 同一份 API 文档里还列了一个 role 参数：
+> [`allow_empty_principals (bool: false)`](https://developer.hashicorp.com/vault/api-docs/secret/ssh#allow_empty_principals)，
+> 说明文字是 _"Allow signing certificates with no valid principals
+> (e.g. any valid principal). **For backwards compatibility only. The
+> default of false is highly recommended.**"_——这就是上面那条防线的
+> "总开关"。**生产环境永远不要把它设成 true**。
+
+不管怎样，根本原因都一样：**没人告诉证书"它能登哪个 Linux 用
+户"**。下一小节修。
+
+## 2.4 修复 1：补上 default_user，签发成功
 
 ```bash
 vault write ssh-client-signer/roles/my-role \
@@ -109,11 +119,11 @@ vault write ssh-client-signer/roles/my-role \
     default_user=ubuntu \
     ttl=5m
 
-# 重要：role 改了，已经签出去的证书不会自动更新——必须重新签
+# 这次能签出来了
 vault write -field=signed_key ssh-client-signer/sign/my-role \
     public_key=@/root/.ssh/id_rsa.pub > /root/.ssh/id_rsa-cert.pub
 
-# 再看一眼，Principals 这次应该有 "ubuntu"
+# 看一眼证书，Principals 这次应该有 "ubuntu"
 ssh-keygen -L -f /root/.ssh/id_rsa-cert.pub | grep -A1 Principals
 ```
 
