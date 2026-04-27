@@ -47,7 +47,8 @@ export default defineConfig({
              { text: '3.2 Key/Value (KV v2) 引擎：版本控制的现代静态机密存储', link: '/ch3-kv-v2' },
              { text: '3.3 AWS 机密引擎：动态 IAM 凭据与租约即生命周期', link: '/ch3-aws' },
              { text: '3.4 Cubbyhole 机密引擎：每个 Token 一个私人储物柜', link: '/ch3-cubbyhole' },
-             { text: '3.5 SSH 机密引擎：从静态密钥到 CA 签发与一次性密码', link: '/ch3-ssh' }
+             { text: '3.5 SSH 机密引擎：从静态密钥到 CA 签发与一次性密码', link: '/ch3-ssh' },
+             { text: '3.6 Identity 机密引擎：Vault 的身份中枢与 OIDC 提供商', link: '/ch3-identity' }
            ]
          },
          {

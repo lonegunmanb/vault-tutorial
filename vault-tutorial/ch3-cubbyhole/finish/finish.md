@@ -43,9 +43,10 @@ Step 4: 这两条性质合在一起 → Response Wrapping 的安全性保证
 ## 与下一节的衔接
 
 Cubbyhole 是 [3.1 章](/ch3-secrets-engines)那个"挂载 = 插件"通用心
-智模型的**唯一例外**——记住这一个例外比记住通用规则更重要，因为它
-影响着 Vault 一系列基础机制（Response Wrapping、Token 派生等）的安
-全保证。
+智模型的两个例外之一（另一个是 [3.6 Identity 引擎](/ch3-identity)）
+——记住这两个例外比记住通用规则更重要，因为它们影响着 Vault 一系列
+基础机制（Response Wrapping、Token 派生、身份与 OIDC 体系等）的安全
+保证。
 
 后续小节会继续在"机密引擎光谱"里挑选有代表性的引擎深入。每遇到一个
 新引擎都可以用这两个问题对照本节内容来理解它：

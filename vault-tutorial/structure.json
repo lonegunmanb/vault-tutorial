@@ -14,6 +14,7 @@
     { "path": "ch3-aws-engine" },
     { "path": "ch3-cubbyhole" },
     { "path": "ch3-ssh" },
+    { "path": "ch3-identity" },
     { "path": "ch5-mount-migration" }
   ]
 }

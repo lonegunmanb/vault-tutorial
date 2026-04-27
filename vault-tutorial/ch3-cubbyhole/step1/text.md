@@ -89,9 +89,10 @@ vault secrets enable -path=cb cubbyhole
 * mount type of "cubbyhole" is not mountable
 ```
 
-**Cubbyhole 是 Vault 里唯一的"单例引擎"**——它的"按 Token 隔离"
-语义在内部是单实现，多挂一份既无意义也会与现有路径冲突，所以 Vault
-直接把这个类型从"可被用户挂载"的清单里去掉了。
+**Cubbyhole 是 Vault 里两个"单例引擎"之一**（另一个是 `identity/`，
+详见 [3.6](/ch3-identity)）——它的"按 Token 隔离"语义在内部是单实
+现，多挂一份既无意义也会与现有路径冲突，所以 Vault 直接把这个类型从
+"可被用户挂载"的清单里去掉了。
 
 ## 1.6 顺手验证：连 `tune` 也被堵
 
