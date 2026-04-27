@@ -51,11 +51,15 @@ exec` 执行。
 docker rm -f ssh-target-otp > /dev/null 2>&1 || true
 
 docker run -d --name ssh-target-otp \
-  -p 2223:22 \
   ubuntu:24.04 sleep infinity
 ```
 
-> 这里先 `sleep infinity` 把容器 hold 住——下一小节先把 helper 装
+> 这里**不映射端口**——后面 §4.4 我们会用容器的内部 IP 直接 ssh
+> 进去（vault-ssh-helper 校验 OTP 时是用"目标主机本机网卡 IP"
+> 做匹配，所以走 docker 内部 IP 比走 `127.0.0.1:2223` 端口映射
+> 简单得多）。
+>
+> 同时先 `sleep infinity` 把容器 hold 住——下一小节先把 helper 装
 > 进去、改完配置，再手动起 sshd。这样可以避免"sshd 已经在跑、PAM
 > 还没改好"的中间态。
 
@@ -103,19 +107,29 @@ docker exec ssh-target-otp ss -ltnp 2>/dev/null | grep :22
 
 ## 4.3 申请一次 OTP
 
-OTP 跟特定**目标 IP** 绑定。容器里的 sshd 看到的客户端 IP 是 docker
-网关 `172.17.0.1`（因为我们是从宿主机走端口映射进去的），所以申请时
-也要指定这个 IP：
+OTP 跟特定**目标主机 IP** 绑定——这里的"目标 IP"指的是 **sshd
+（也就是 helper）所在主机的本机 IP**，不是客户端的 source IP。
+helper 在容器里跑，会拿 OTP 里的 IP 去对**自己本地网卡**，对不上
+就拒：
+
+```
+[ERROR]: IP did not match any of the network interface addresses.
+```
+
+所以要先拿到容器自己的 IP（典型是 `172.17.0.2`），再用它申请 OTP：
 
 ```bash
-vault write ssh/creds/otp_key_role ip=172.17.0.1
+TARGET_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ssh-target-otp)
+echo "目标容器 IP: $TARGET_IP"
+
+vault write ssh/creds/otp_key_role ip=$TARGET_IP
 ```
 
 返回里会有：
 
 ```
 key            <一长串字符串——这就是一次性密码>
-ip             172.17.0.1
+ip             172.17.0.2
 username       ubuntu
 key_type       otp
 port           22
@@ -124,23 +138,25 @@ port           22
 把 `key` 单独抓出来：
 
 ```bash
-OTP=$(vault write -field=key ssh/creds/otp_key_role ip=172.17.0.1)
+OTP=$(vault write -field=key ssh/creds/otp_key_role ip=$TARGET_IP)
 echo "申请到的 OTP: $OTP"
 ```
 
+> ⚠️ 别用 `ip=127.0.0.1` 或 `ip=172.17.0.1`（docker 网关）——那是
+> 客户端到达容器的"路径"，不是容器的接口地址。helper 校验的是
+> "OTP IP ∈ 我自己的网卡地址集合"，所以必须用容器本机 IP。
+
 ## 4.4 用 OTP 登录
 
-正常人手输密码就行——`ssh -p 2223 ubuntu@127.0.0.1`，看到 `Password:`
-提示时把 `$OTP` 粘进去。
-
-为了脚本化，用 `sshpass`：
+直连容器 IP 走 SSH（不走 127.0.0.1:2223 那条端口映射，因为
+helper 已经认了 `$TARGET_IP`）：
 
 ```bash
 sshpass -p "$OTP" ssh \
     -o StrictHostKeyChecking=no \
     -o PreferredAuthentications=keyboard-interactive,password \
     -o PubkeyAuthentication=no \
-    -p 2223 ubuntu@127.0.0.1 \
+    ubuntu@$TARGET_IP \
     "whoami; hostname; echo --- helper log ---; cat /tmp/vault-ssh.log 2>/dev/null | tail -10"
 ```
 
@@ -153,6 +169,12 @@ ubuntu
 ... vault-ssh-helper: ... successful ...
 ```
 
+> 想"必须从 127.0.0.1:2223 端口映射进"也行，但要让 helper 信
+> 任来自 `172.17.0.1`（docker 网关）这条 source IP，得在
+> `/etc/vault-ssh-helper.d/config.hcl` 里加
+> `allowed_cidr_list = "172.17.0.0/16"` 并申请 OTP 时用网关 IP。
+> 实验里走容器 IP 直连最简单。
+
 ## 4.5 验证"一次性"——用同一个 OTP 再登一次
 
 ```bash
@@ -160,7 +182,7 @@ sshpass -p "$OTP" ssh \
     -o StrictHostKeyChecking=no \
     -o PreferredAuthentications=keyboard-interactive,password \
     -o PubkeyAuthentication=no \
-    -p 2223 ubuntu@127.0.0.1 "whoami"
+    ubuntu@$TARGET_IP "whoami"
 ```
 
 会失败：`Permission denied, please try again.` 然后掉到下一次提示。
