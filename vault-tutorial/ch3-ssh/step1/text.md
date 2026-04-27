@@ -29,12 +29,15 @@ vault secrets list | grep ssh-client-signer
 vault write ssh-client-signer/config/ca generate_signing_key=true
 ```
 
-返回里有两个字段：
+返回只有一个字段：
 
 - `public_key`：**SSH CA 公钥**，接下来要分发给所有目标主机的
   `TrustedUserCAKeys` 文件
-- 私钥：**不返回**，永远留在 Vault 内部。即使是 root 也没有任何 API
-  能 export 出来——这是 SSH 引擎设计的安全保证
+
+私钥呢？**根本不在响应里**——它生成后直接落进 Vault 的加密 storage，
+即使是 root 也没有任何 API 能 export 出来。这是 SSH 引擎设计的安全
+保证：CA 私钥一旦泄露，所有"信任这把 CA"的目标主机都会被攻陷，所以
+Vault 在 API 层就堵掉了"读私钥"这条路。
 
 把公钥单独捞出来存到本地（Step 2 要把它喂给容器里的 sshd）：
 
