@@ -1,0 +1,43 @@
+{
+  "title": "LDAP 机密引擎：Static / Dynamic / Library 三种模式",
+  "description": "在 OpenLDAP + Dev 模式 Vault (1.19.2) 上动手验证 ldap/ 引擎：启用与连接配置、Static Role 周期轮转密码、Dynamic Role 用 LDIF 现场创建与销毁账号、Library Set 服务账号池借出/归还时自动换密——三种模式都用 ldapsearch 从 OpenLDAP 端反向验证。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 ldap/ 引擎并连接 OpenLDAP",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "Static Role：周期轮转固定账号的密码",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Dynamic Role：按 LDIF 现场创建与销毁账号",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Library Set：服务账号池借出 / 归还时自动换密码",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

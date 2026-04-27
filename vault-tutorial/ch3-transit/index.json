@@ -1,0 +1,43 @@
+{
+  "title": "Transit 机密引擎：加密即服务全流程",
+  "description": "在 Dev 模式 Vault (1.19.2) 上动手验证 transit/ 引擎：加解密 + base64 双向、密钥版本化与无中断 rotate/rewrap、min_decryption_version 一刀关旧版、derived 派生密钥实现租户隔离、datakey/plaintext 信封加密大数据、ed25519 签名/验签、HMAC、deletion_allowed 双保险。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 transit/ 与第一次加解密",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "密钥版本化：rotate + rewrap + min_decryption_version",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "派生密钥与信封加密 (DEK) 加密大文件",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "签名 / 验签 / HMAC + 删除 key 的双保险",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

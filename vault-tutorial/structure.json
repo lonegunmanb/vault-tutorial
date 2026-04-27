@@ -15,6 +15,10 @@
     { "path": "ch3-cubbyhole" },
     { "path": "ch3-ssh" },
     { "path": "ch3-identity" },
+    { "path": "ch3-ldap" },
+    { "path": "ch3-k8s" },
+    { "path": "ch3-totp" },
+    { "path": "ch3-transit" },
     { "path": "ch5-mount-migration" }
   ]
 }

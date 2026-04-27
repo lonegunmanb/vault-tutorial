@@ -48,7 +48,11 @@ export default defineConfig({
              { text: '3.3 AWS 机密引擎：动态 IAM 凭据与租约即生命周期', link: '/ch3-aws' },
              { text: '3.4 Cubbyhole 机密引擎：每个 Token 一个私人储物柜', link: '/ch3-cubbyhole' },
              { text: '3.5 SSH 机密引擎：从静态密钥到 CA 签发与一次性密码', link: '/ch3-ssh' },
-             { text: '3.6 Identity 机密引擎：Vault 的身份中枢与 OIDC 提供商', link: '/ch3-identity' }
+             { text: '3.6 Identity 机密引擎：Vault 的身份中枢与 OIDC 提供商', link: '/ch3-identity' },
+             { text: '3.10 LDAP 机密引擎：托管目录账号的密码轮转、动态创建与借出归还', link: '/ch3-ldap' },
+             { text: '3.11 Kubernetes 机密引擎：让 Vault 为 K8s 集群签发动态 ServiceAccount Token', link: '/ch3-k8s' },
+             { text: '3.12 TOTP 机密引擎：让 Vault 同时充当验证器与认证器', link: '/ch3-totp' },
+             { text: '3.13 Transit 机密引擎：加密即服务 (Encryption as a Service)', link: '/ch3-transit' }
            ]
          },
          {

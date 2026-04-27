@@ -1,0 +1,43 @@
+{
+  "title": "TOTP 机密引擎：Generator 与 Provider 双角色全验证",
+  "description": "在 Dev 模式 Vault (1.19.2) 上动手验证 totp/ 引擎：以 Generator 模式让 Vault 自己生码 + 用 oathtool 独立验证算法一致；以 Provider 模式让 Vault 校验外部 oathtool 生成的码；演示 ±30s 时钟容忍 (skew)、过期码被拒绝、exported=false 锁死 secret 等关键行为。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 totp/ 并复习 RFC 6238 算法",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "Generator 模式：让 Vault 替你做 Authenticator",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Provider 模式：让 Vault 替你校验外部码",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "exported=false 锁死 + 时钟容忍 + 过期码",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

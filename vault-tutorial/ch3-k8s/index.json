@@ -1,0 +1,43 @@
+{
+  "title": "Kubernetes 机密引擎：三种动态 SA Token 签发模式",
+  "description": "在 k3s 单节点集群上运行 Vault 1.19.2 (Dev 模式)，亲手验证 kubernetes/ 引擎的三种 Role 模式：service_account_name (借用现有 SA)、kubernetes_role_name (动态 RoleBinding + 临时 SA)、generated_role_rules (Role+RoleBinding+SA 全量现场生成)，并观察 Lease 到期时三种模式的不同清理行为。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 kubernetes/ 引擎并验证 manager SA 连接",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "模式 A：service_account_name 借用现有 SA",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "模式 B：kubernetes_role_name 动态 RoleBinding + 临时 SA",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "模式 C：generated_role_rules 全量现场生成",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
