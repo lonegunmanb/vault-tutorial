@@ -37,6 +37,11 @@ Step 3 反过来解决 **"客户端怎么信任服务器"**：客户端的 `know
 > 一台记），现在改成"凡是公安局盖章的身份证我都信"
 > （`@cert-authority` 一行管所有机器）。
 
+下面这张图把整个过程类比成"机场登机口验票"，结合 §3.6 一起看更直
+观：
+
+![SSH host certificate verification, airport boarding-gate analogy](./assets/host-cert-airport.png)
+
 下面分两件事来做：
 
 1. **服务器侧**：让 Vault 给容器的 host key 签一张证书，sshd 启动时
