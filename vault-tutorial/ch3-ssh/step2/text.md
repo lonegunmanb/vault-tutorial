@@ -219,7 +219,7 @@ ssh-keygen -L -f /root/.ssh/id_rsa-cert.pub
 | `Type: ssh-rsa-cert-v01@openssh.com user certificate` | 用户证书（区别于 host 证书，Step 3 见） |
 | `Public key: RSA-CERT SHA256:...` | 客户端 id_rsa.pub 的指纹 |
 | `Signing CA: RSA SHA256:...` | 签发 CA 的指纹——sshd 用 TrustedUserCAKeys 文件里的公钥来核对这个 |
-| `Key ID: "vault-root-..."` | Vault 自动写入，里面带 token displayname，可在审计日志里追溯 |
+| `Key ID: "vault-token-<token accessor 的 hash>"` | Vault 自动写入，对应**签发这张证书的 token**——在审计日志里能直接定位到是谁签的 |
 | `Serial: <数字>` | Vault 自增，用于撤销与对账 |
 | `Valid: from ... to ...` | TTL 决定的窗口（5 分钟） |
 | `Principals: ubuntu` | sshd 用它来匹配登录用户名 |
@@ -227,15 +227,22 @@ ssh-keygen -L -f /root/.ssh/id_rsa-cert.pub
 
 ## 2.7 sshd 完全没看到客户端公钥
 
-最关键的一条认知闭环：
+最关键的一条认知闭环——**故意保留 stderr**，让"目录不存在"这条错
+误亲自打到你眼前：
 
 ```bash
-docker exec ssh-target-ca ls -la /home/ubuntu/.ssh 2>/dev/null
+docker exec ssh-target-ca ls -la /home/ubuntu/.ssh
 ```
 
-返回 `No such file or directory`——容器里 `ubuntu` 用户的
-`authorized_keys` **彻底没东西**。它对"哪些客户端能登"一无所知，全
-靠 `TrustedUserCAKeys` 那一行配置 + Vault 签出来的证书。
+会看到：
+
+```
+ls: cannot access '/home/ubuntu/.ssh': No such file or directory
+```
+
+容器里 `ubuntu` 用户的 `authorized_keys` **根本不存在**。它对"哪
+些客户端能登"一无所知，全靠 `TrustedUserCAKeys` 那一行配置 + Vault
+签出来的证书。
 
 > 这就是 [3.5 章 §3](/ch3-ssh) 那张架构图里"零账户态"的字面意义：加
 > 新用户、撤旧用户全在 Vault 里做，目标主机是哑的。
