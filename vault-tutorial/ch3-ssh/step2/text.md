@@ -134,11 +134,18 @@ ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
     -p 2222 ubuntu@127.0.0.1
 ```
 
-可能的两种现象之一：
+会看到这样的输出，然后**会话就卡在那里不动**：
 
-- 提示成功握手但 `PTY allocation request failed`，紧接着会话立刻断
-  开
-- 没有任何报错就立刻退出，根本看不到 shell
+```
+PTY allocation request failed on channel 0
+```
+
+**这是预期现象**——sshd 拒绝分配伪终端（PTY）后，OpenSSH 客户端不会
+自动断开，而是停在那里等你输命令（因为通道本身是开着的，stdin/stdout
+还能用）。
+
+**按 `Ctrl-D`（或者 `Ctrl-C` 也行）退出**这个卡住的会话，回到宿主
+机的 shell。
 
 跑个**带命令的非交互式**登录验证一下基本通道是通的：
 
