@@ -71,14 +71,20 @@ docker exec \
   bash /root/setup-otp-target.sh
 ```
 
-正常会看到：
+正常会看到（**没有 `[ERROR]`**）：
 
 ```
 --- vault-ssh-helper -verify-only ---
 ==> WARNING: Dev mode is enabled!
-[some output] ... helper successful
+[some output] ... vault-ssh-helper verified successfully!
 OTP target ready. Start sshd with: /usr/sbin/sshd -D
 ```
+
+> 如果看到 `[ERROR]: unsupported scheme. use 'dev' mode`，说明
+> helper 没启用 dev 模式——`vault-ssh-helper` 默认拒绝
+> `http://` 的 Vault 地址（防止 OTP 明文上传），必须给它加 `-dev`
+> 才行。脚本里 `-verify-only` 和 PAM 那条 `pam_exec.so` 调用 helper
+> 都已经带上了 `-dev`。
 
 > `-verify-only` 让 helper 自检 Vault 可达 + ssh 引擎挂载存在。如果
 > 这里失败（`connection refused` 之类），多半是容器看不到宿主机

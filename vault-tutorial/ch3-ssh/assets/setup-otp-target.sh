@@ -42,7 +42,7 @@ EOF
 # 3) PAM: hand "auth" to vault-ssh-helper
 #    requisite + expose_authtok 让 helper 收到 sshd 收到的密码
 cat > /etc/pam.d/sshd <<'EOF'
-auth requisite pam_exec.so quiet expose_authtok log=/tmp/vault-ssh.log /usr/local/bin/vault-ssh-helper -config=/etc/vault-ssh-helper.d/config.hcl
+auth requisite pam_exec.so quiet expose_authtok log=/tmp/vault-ssh.log /usr/local/bin/vault-ssh-helper -dev -config=/etc/vault-ssh-helper.d/config.hcl
 auth optional  pam_unix.so not_set_pass use_first_pass nodelay
 account required pam_unix.so
 session required pam_unix.so
@@ -69,7 +69,7 @@ ssh-keygen -A > /dev/null 2>&1
 
 # 7) Self-check
 echo "--- vault-ssh-helper -verify-only ---"
-/usr/local/bin/vault-ssh-helper -verify-only \
+/usr/local/bin/vault-ssh-helper -dev -verify-only \
   -config=/etc/vault-ssh-helper.d/config.hcl || true
 
 # 8) Start sshd in foreground (script is meant to be exec'd then sshd run separately)
