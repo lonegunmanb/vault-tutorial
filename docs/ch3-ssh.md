@@ -175,28 +175,92 @@ EOF
 
 ## 5. CA 模式客户端流程：sign → ssh
 
-签发用一行：
+### 5.1 先把 SSH 登录的"三件套"理清楚
+
+CA 模式下，客户端 SSH 一次需要**三样东西**同时在场，缺一不可：
+
+| 文件 | 谁生成的 | 作用 |
+| :--- | :--- | :--- |
+| `~/.ssh/id_rsa` | 客户端自己 `ssh-keygen` 生成的**私钥**（机密，永远不外传） | ssh 用它来"签字"证明"我就是这把公钥的主人" |
+| `~/.ssh/id_rsa.pub` | 上面那条命令同时生成的**公钥**（可公开） | 拿去给 Vault 签——签完就成了下一行的"证书" |
+| `~/.ssh/id_rsa-cert.pub` | **Vault 签发的证书**（公开但 5 分钟过期） | 告诉 sshd："这把公钥已经被你信任的 CA 背书过，且我有权登录 ubuntu 用户" |
+
+类比一张表能更直观：
+
+| SSH 文件 | 类比 |
+| :--- | :--- |
+| `id_rsa`（私钥） | 你的**身份证原件** + 签名笔——只在自己手里 |
+| `id_rsa.pub`（公钥） | 身份证上**那张照片**——给谁看都行 |
+| `id_rsa-cert.pub`（证书） | 一张**贴着这张照片、由派出所盖章、5 分钟内有效的临时通行证**——派出所就是 Vault CA |
+
+> 关键一点：**Vault 从头到尾都没碰过你的私钥**。你拿公钥去签，签出
+> 来的证书也是公开的——私钥仍然安静地躺在你 `~/.ssh/id_rsa` 里，没
+> 离开过本机。这是 CA 模式安全性的基石。
+
+### 5.2 签发：让 Vault 给公钥"盖章"
 
 ```bash
 vault write -field=signed_key ssh-client-signer/sign/my-role \
     public_key=@$HOME/.ssh/id_rsa.pub > $HOME/.ssh/id_rsa-cert.pub
 ```
 
-输出文件的命名很关键——**`<原私钥名>-cert.pub` 是 OpenSSH 的硬编码约
-定**：当 ssh 发现 `id_rsa` 同目录下有个 `id_rsa-cert.pub`，会自动把
-它作为证书带上，无需 `-i` 重复指定。
+逐段拆解这条命令：
 
-然后就是普通 SSH：
+- `vault write ssh-client-signer/sign/my-role`：调用 Vault 的"签发"
+  端点，使用我们在 §4.3 创建的 `my-role`
+- `public_key=@$HOME/.ssh/id_rsa.pub`：把客户端公钥**作为请求体**
+  发上去（`@文件名` 是 Vault CLI 的语法糖，等价于"读这个文件的内容
+  当参数")
+- `-field=signed_key`：Vault 返回是个 JSON，里面有很多字段；我们只
+  要其中的 `signed_key` 字段（也就是签好的证书内容）
+- `> $HOME/.ssh/id_rsa-cert.pub`：把这串证书内容写到一个文件里
+
+签完之后用 `cat` 看一眼，会发现它就是一行 base64 字符串——本质上
+就是"你的公钥 + Vault 的签名 + principals 列表 + 过期时间"打包在
+一起。
+
+### 5.3 登录：为什么 ssh 命令看起来"少了点东西"
 
 ```bash
 ssh -i $HOME/.ssh/id_rsa ubuntu@target-host
 ```
 
-> 如果不愿意走"自动配对"那条路（比如不想动 `~/.ssh/`），就显式两个
-> `-i`：`ssh -i id_rsa-cert.pub -i id_rsa ubuntu@target-host`。两种
-> 写法等价。
+第一次看见会觉得奇怪——**命令里只指定了私钥 `id_rsa`，证书
+`id_rsa-cert.pub` 在哪儿？**
 
-### 5.1 还有一种"反向证书"：Host Key Signing（可选）
+答案：**OpenSSH 自动找到了它**。OpenSSH 客户端有一条硬编码规则：
+
+> 当用 `-i <某个私钥文件>` 时，如果它**同目录**下有一个**同名加
+> `-cert.pub` 后缀**的文件，自动把它当作配套证书带上。
+
+也就是说：
+
+```
+-i ~/.ssh/id_rsa     ← 你只写了这个
+                     ↓ ssh 客户端自动顺手挂上：
+                     ~/.ssh/id_rsa-cert.pub
+```
+
+所以 §5.2 的输出文件**必须**叫 `id_rsa-cert.pub`，命名错了（比如
+存成 `mycert.pub`）这条自动机制就失效，登录会失败。
+
+### 5.4 不想用"自动配对"？也行——显式两个 -i
+
+如果你不愿意把证书放在 `~/.ssh/` 下（比如想存到别的目录、不想用
+`-cert.pub` 这个固定后缀），就**显式两个 `-i`**，把证书路径明确告
+诉 ssh：
+
+```bash
+ssh -i ~/some-dir/mycert.pub \
+    -i ~/.ssh/id_rsa \
+    ubuntu@target-host
+```
+
+两种写法的最终效果完全一样——sshd 都收到"私钥签的字 + 证书"两份
+材料，验证过程也一模一样。**自动配对只是"少打一个 `-i`"的便利**，
+不是必须的。
+
+### 5.5 还有一种"反向证书"：Host Key Signing（可选）
 
 对应 [§Host Key Signing](https://developer.hashicorp.com/vault/docs/secrets/ssh/signed-ssh-certificates#host-key-signing)。
 默认情况下 SSH 客户端是用 `~/.ssh/known_hosts` 来认目标主机指纹的
