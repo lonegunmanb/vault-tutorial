@@ -58,21 +58,7 @@ Vault 在目标 K8s 集群里需要一个 ServiceAccount（一般叫 `vault-mana
 
 ### 2.2 一次申领的内部流程
 
-```
-应用 ─[vault read kubernetes/creds/<role>]─▶ Vault
-                                                │
-        Vault 用 manager SA token 调 K8s API   │
-        ┌──────────────────────────────────────┘
-        ▼
-        ① (按模式) 创建临时 SA / Role / RoleBinding
-        ② 调 TokenRequest API 为目标 SA 签发短期 Token
-        ▼
-应用  ◀─[lease + service_account_token (JWT)]─ Vault
-                                                │
-        ── Lease 到期 / 主动 revoke ───────────▶│
-        ▼
-        ③ (按模式) 删除步骤①创建的临时对象
-```
+![k8s-credential-flow](/images/ch3-k8s/k8s-credential-flow.png)
 
 ---
 
