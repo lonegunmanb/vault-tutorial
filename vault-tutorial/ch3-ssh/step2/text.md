@@ -204,6 +204,10 @@ exit
 
 ## 2.6 看一下证书的完整结构
 
+> ⚠️ 上一步 `ssh ... ubuntu@127.0.0.1` 让你**进了容器**——容器里没有
+> `/root/.ssh/id_rsa-cert.pub`（那个文件在宿主机上）。先 `exit` 退出
+> 容器回到宿主机 shell，再执行下面的命令。
+
 ```bash
 ssh-keygen -L -f /root/.ssh/id_rsa-cert.pub
 ```
