@@ -40,7 +40,7 @@ Step 3 反过来解决 **"客户端怎么信任服务器"**：客户端的 `know
 下面这张图把整个过程类比成"机场登机口验票"，结合 §3.6 一起看更直
 观：
 
-![SSH host certificate verification, airport boarding-gate analogy](./assets/host-cert-airport.png)
+![SSH host certificate verification, airport boarding-gate analogy](../assets/host-cert-airport.png)
 
 下面分两件事来做：
 
@@ -203,6 +203,16 @@ cat /root/.ssh/known_hosts
 
 ## 3.6 验证：再 ssh，没有 yes/no 了
 
+> ⚠️ Step 2 那张 user 证书 `ttl=15m`，如果你在这一步停留较久，证书
+> 可能已经过期。**先重新签一份**，否则 sshd 会因证书过期回落到普通
+> publickey，又因为容器里没有 `authorized_keys` 而报
+> `Permission denied (publickey,...)`：
+>
+> ```bash
+> vault write -field=signed_key ssh-client-signer/sign/my-role \
+>     public_key=@/root/.ssh/id_rsa.pub > /root/.ssh/id_rsa-cert.pub
+> ```
+
 注意这次**完全不带 `StrictHostKeyChecking=no`**——也就是不再"强行
 跳过检查"，让 ssh 真正去走 host key 校验：
 
@@ -230,13 +240,25 @@ ssh -o StrictHostKeyChecking=yes -i /root/.ssh/id_rsa \
     -p 2222 ubuntu@127.0.0.1 "hostname"
 ```
 
-立刻退回经典提示：
+立刻被拒：
 
 ```
-The authenticity of host '[127.0.0.1]:2222' can't be established.
+No RSA host key is known for [127.0.0.1]:2222 and you have requested strict checking.
+Host key verification failed.
 ```
 
-——客户端没了那行 `@cert-authority`，又被禁止自动 yes
+> 之所以不是"经典"的 `The authenticity of host ... can't be
+> established. ... (yes/no)` 提示——是因为 §3.5 已经先用
+> `ssh-keygen -R` 把老指纹也清掉了，`known_hosts` 里关于
+> `[127.0.0.1]:2222` 一条记录都没有；又叠加了
+> `StrictHostKeyChecking=yes`（**禁止**自动 yes），ssh 干脆连询问
+> 都不询问，直接拒绝。
+>
+> 如果当时只删 `@cert-authority` 那一行、保留之前的指纹，看到的就
+> 会是 `WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!`——因为
+> sshd 现在递的 host key 跟 `known_hosts` 里记的不一样了。
+
+——总之，客户端没了那行 `@cert-authority`，又被禁止自动 yes
 （`StrictHostKeyChecking=yes`），只能拒绝。
 
 把它加回来，准备进入 Step 4：

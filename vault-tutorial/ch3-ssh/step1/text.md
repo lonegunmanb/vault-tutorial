@@ -54,7 +54,7 @@ cat /root/trusted-user-ca-keys.pem
 ssh-keygen -lf /root/trusted-user-ca-keys.pem
 ```
 
-输出形如 `4096 SHA256:... vault-ssh-host-signer (RSA-CERT)`——说明
+输出形如 `4096 SHA256:... vault-ssh-host-signer (RSA)`——说明
 Vault 给我们生成的是 4096 位 RSA。
 
 ## 1.3 试一下：能不能再 generate 一次？

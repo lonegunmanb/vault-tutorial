@@ -9,7 +9,7 @@
 | 阶段 | 你亲手验证的事实 |
 | :--- | :--- |
 | **CA 信任根** | Vault 生成的 CA 私钥永远不出 Vault；公钥就是要分发到目标主机的 `TrustedUserCAKeys` |
-| **CA 签发流程** | role 控制 principals / extensions / TTL；证书一签出来 5 分钟就过期 |
+| **CA 签发流程** | role 控制 principals / extensions / TTL；证书一签出来 15 分钟就过期 |
 | **典型故障 1** | role 漏 `default_user` → 证书没 principal → sshd 报 "name is not a listed principal" |
 | **典型故障 2** | role 漏 `default_extensions={permit-pty:""}` → 命令能跑，交互式 shell 起不来 |
 | **零账户态** | 目标主机 `~ubuntu/.ssh/authorized_keys` 完全不存在——CA 模式下目标机器对"谁能登"一无所知 |
