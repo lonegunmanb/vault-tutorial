@@ -38,15 +38,22 @@ vault write ssh-host-signer/roles/hostrole \
     key_type=ca \
     allow_host_certificates=true \
     allowed_domains="localhost,127.0.0.1" \
+    allow_bare_domains=true \
     allow_subdomains=true \
     ttl=24h
 ```
 
-注意三个跟 §2 不同的字段：
+注意几个跟 §2 不同的字段：
 
 - `allow_host_certificates=true`（不是 `allow_user_certificates`）
-- `allowed_domains` + `allow_subdomains`：限制能签哪些主机名／域名的
-  证书
+- `allowed_domains`：限制能签哪些主机名／域名的证书
+- `allow_bare_domains=true`：放行**裸域名本身**（`localhost`、
+  `127.0.0.1`）。**不加这条**就会撞上
+  `* 127.0.0.1 is not a valid value for valid_principals`——因为
+  `allow_subdomains` 只放行 `foo.localhost` 这种子域名，不放行裸的
+  `localhost` 自己。
+- `allow_subdomains=true`：再放行子域名，方便后续给真实集群里的
+  `node1.localhost` 之类签证书
 - `ttl=24h`：主机证书一般给得宽，因为主机不会"撤权"那样频繁
 
 ## 3.3 签 Step 2 容器的 host key
