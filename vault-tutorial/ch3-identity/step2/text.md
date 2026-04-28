@@ -2,17 +2,19 @@
 
 [3.6 §3](/ch3-identity) 给的链路是：
 
-```
-key (RSA/EC 私钥) ←─ role (template + ttl + key + client_id) ←─ token (Entity 请求签发)
-                                          │
-                                          ▼
-                              签出符合 OIDC 规范的 JWT
-                                          │
-                          ┌───────────────┴───────────────┐
-                          ▼                               ▼
-                JWKS / Discovery 验证             Vault introspect 验证
-                  （脱离 Vault）                   （需要 Vault Token）
-```
+key 是"长期公章"，role 是"开介绍信的模板"，token 是某次实际签出的
+那一张 JWT——三者**不是同时生成**，是 key/role 各建一次后，**每次**
+`vault read .../oidc/token/<role>` 都用 role 的模板 + key 的私钥**临
+时**签一张新的出来。签出后的 JWT 有两种验证姿势：拿公钥**脱机验**
+（JWKS），或在线问 Vault（introspect）。
+
+![identity-token-flow](../assets/identity-token-flow.png)
+
+
+参考链接：
+- [Vault Identity Tokens 概念](https://developer.hashicorp.com/vault/docs/secrets/identity/identity-token)
+- [OIDC ID Token 规范](https://openid.net/specs/openid-connect-core-1_0.html#IDToken)
+- [JSON Web Key Set (JWKS) 规范 RFC 7517](https://www.rfc-editor.org/rfc/rfc7517)
 
 我们一条命令一条命令把它跑通。
 
@@ -34,10 +36,24 @@ vault write identity/oidc/key/my-key \
 ## 2.2 准备一个 alice 用户来"持有 Entity"
 
 我们要让一个真实的 Vault Token 持有 alice 的 Entity 才能为她签 JWT。
-直接用 step 1 已经开好的 userpass：
+直接用 step 1 已经开好的 userpass。先写一个允许签 OIDC token 的最小
+策略——光有 `default` 是不够的，`identity/oidc/token/<role>` 必须显
+式授权：
 
 ```bash
-vault write auth/userpass/users/alice password="alice-pwd" policies="default"
+vault policy write oidc-signer - <<EOF
+path "identity/oidc/token/my-role" {
+  capabilities = ["read"]
+}
+EOF
+```
+
+把这个策略和 `default` 一起挂到 alice 用户上：
+
+```bash
+vault write auth/userpass/users/alice \
+  password="alice-pwd" \
+  policies="default,oidc-signer"
 ```
 
 登录拿一条 alice 的 Vault Token（保存到环境变量）：
@@ -60,6 +76,9 @@ vault write -format=json identity/lookup/entity \
   alias_name="alice" \
   alias_mount_accessor="$USERPASS_ACCESSOR" \
   | jq '.data | {id, name}'
+
+# 同屏打印 ALICE_EID 方便肉眼比对
+echo "ALICE_EID=$ALICE_EID"
 ```
 
 如果返回的 `id` 和 step 1 的 `$ALICE_EID` 一致（应该一致——因为 step

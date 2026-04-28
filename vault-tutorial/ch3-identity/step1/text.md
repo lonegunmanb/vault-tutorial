@@ -1,4 +1,4 @@
-# 第一步：默认挂载 + 四不允许 + Entity / Alias / Group CRUD
+# 第一步：默认挂载 + 三不允许 + Entity / Alias / Group CRUD
 
 文档对 `identity/` 引擎的定位是：
 
@@ -6,7 +6,8 @@
 > cannot be disabled or moved.
 
 我们先把这条"内置且锁死"亲手撞一遍——和 [3.4 Cubbyhole](/ch3-cubbyhole)
-那一节是同一个套路。然后立刻进入它的真正用途：**身份对象 CRUD**。
+那一节是同一个套路（不过 identity 比 cubbyhole 略松一点：tune 是
+允许的）。然后立刻进入它的真正用途：**身份对象 CRUD**。
 
 ## 1.1 它已经在那儿了
 
@@ -25,7 +26,7 @@ vault read sys/mounts/identity
 
 留意 `local` / `seal_wrap` / `uuid`——和 cubbyhole 一样是内置单例。
 
-## 1.2 撞一遍"四不允许"
+## 1.2 撞一遍"三不允许"
 
 **禁令一：不能 disable**
 
@@ -55,14 +56,11 @@ vault secrets enable -path=id identity
 `mount type of "identity" is not mountable`——和 cubbyhole 一样，
 identity 是单例引擎，多挂一份既无意义也会冲突。
 
-**禁令四：不能 tune**
-
-```bash
-vault secrets tune -default-lease-ttl=10m identity/
-```
-
-`cannot tune "identity/"`——挂载点级别的所有操作全部锁死，你能做的
-**全部**操作都在子路径下。
+> 顺带一提：`vault secrets tune identity/` 是**允许**的（这一点和
+> cubbyhole 不同）。比如 `vault secrets tune -default-lease-ttl=10m identity/`
+> 会成功——只是 identity 自己几乎不签发带 TTL 的 lease，所以调它的
+> 默认 lease TTL 实际意义不大。真正不能动的是 disable / move /
+> 再挂一份这三件事。
 
 ## 1.3 Entity CRUD
 
@@ -184,6 +182,9 @@ vault write identity/lookup/entity \
   alias_name="alice" \
   alias_mount_accessor="$USERPASS_ACCESSOR" \
   | grep -E "id|name "
+
+# 同屏打印 ALICE_EID 方便肉眼比对
+echo "ALICE_EID=$ALICE_EID"
 ```
 
 返回的 `id` 和 `$ALICE_EID` 一致——证明 §1.4 的归并真的生效了。

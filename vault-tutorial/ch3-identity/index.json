@@ -9,7 +9,7 @@
     },
     "steps": [
       {
-        "title": "默认挂载、四不允许 + Entity / Alias / Group CRUD 与跨 mount 归并",
+        "title": "默认挂载、三不允许 + Entity / Alias / Group CRUD 与跨 mount 归并",
         "text": "step1/text.md"
       },
       {

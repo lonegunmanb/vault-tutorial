@@ -7,7 +7,7 @@
 
 | 阶段 | 你亲手验证的事实 |
 | :--- | :--- |
-| **默认挂载 + 四不允许** | `identity/` 与 `cubbyhole/` 同属"内置不可拆"家族——`disable` / `move` / 二次 `enable` / `tune` 全部硬拒 |
+| **默认挂载 + 三不允许** | `identity/` 属"内置不可拆"家族——`disable` / `move` / 二次 `enable` 全部硬拒；`tune` 倒是允许（这点比 cubbyhole 略松） |
 | **Entity / Alias / Group CRUD** | Alias 必须用 `mount_accessor`（不是 path）；同一 Entity 跨 mount 的归并要**显式**做；internal vs external group 的成员模型截然不同 |
 | **Identity Tokens 三件套** | `key`（带 `rotation_period` / `verification_ttl`） + `role`（带 template / ttl / client_id / key 引用） + `token`（只能为请求者自己的 Entity 签）= OIDC 规范的 JWT |
 | **双重验证姿势** | JWKS / Discovery 完全脱离 Vault；introspect 能感知 Entity 撤销但要 Vault Token——绝大多数场景用前者 |

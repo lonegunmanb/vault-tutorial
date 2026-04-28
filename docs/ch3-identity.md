@@ -508,10 +508,10 @@ vault write identity/oidc/client/admin-portal \
 本节配套的实验在一个 Dev 模式 Vault（1.19.2）上把上述要点全部跑过一
 遍：
 
-- **Step 1**：观察 `identity/` 默认挂载、亲手撞它的"四不允许"
-  （disable / move / 二次 enable / tune），并用 API 把 Entity / Alias
-  / Group 三类对象的 CRUD 走一遍——含同一 Entity 跨两个 auth mount
-  的归并演示。
+- **Step 1**：观察 `identity/` 默认挂载、亲手撞它的"三不允许"
+  （disable / move / 二次 enable；tune 是允许的），并用 API 把
+  Entity / Alias / Group 三类对象的 CRUD 走一遍——含同一 Entity
+  跨两个 auth mount 的归并演示。
 - **Step 2**：搭出 Identity Tokens 的最小可工作链路：建一把 named key、
   建一个带 template 的 role、签出一条 JWT，用 `jq` 解 payload 看
   `iss/sub/aud` 与你自定义的字段，再分别用 JWKS 端点和
