@@ -112,6 +112,9 @@ echo "CLIENT_ID=$CLIENT_ID"
 ```bash
 JWT=$(VAULT_TOKEN=$ALICE_TOKEN vault read -format=json identity/oidc/token/my-role | jq -r .data.token)
 echo "JWT=$JWT"
+
+# 导出给后续 python 子进程用
+export JWT CLIENT_ID
 ```
 
 肉眼可读地解一下 payload（JWT 第二段是 base64 编码的 JSON）：
@@ -147,22 +150,35 @@ echo "$JWT" | cut -d. -f2 | base64 -d 2>/dev/null | jq
 ## 2.5 验证姿势 A：JWKS / Discovery（脱离 Vault）
 
 Vault 把 OIDC 标准的 `.well-known` 端点**无需鉴权**地暴露在
-`/v1/identity/oidc/`：
+`/v1/identity/oidc/`，任何标准 JWT 库拿 discovery + JWKS 就能离线验
+签——**完全不需要 Vault Token**。下面用 Python `PyJWT` 真正验一遍：
 
 ```bash
-curl -s http://127.0.0.1:8200/v1/identity/oidc/.well-known/openid-configuration | jq
+pip install --quiet --break-system-packages pyjwt cryptography requests
 ```
-
-公钥 JWKS：
 
 ```bash
-curl -s http://127.0.0.1:8200/v1/identity/oidc/.well-known/keys | jq
+python3 - <<'PY'
+import os, jwt, requests
+from jwt import PyJWKClient
+
+token = os.environ["JWT"]
+aud   = os.environ["CLIENT_ID"]
+cfg   = requests.get("http://127.0.0.1:8200/v1/identity/oidc/.well-known/openid-configuration").json()
+key   = PyJWKClient(cfg["jwks_uri"]).get_signing_key_from_jwt(token).key
+
+claims = jwt.decode(token, key, algorithms=["RS256"], audience=aud, issuer=cfg["issuer"])
+print("OK 签名有效；关键 claim:",
+      {k: claims[k] for k in ("sub", "aud", "iss", "exp", "username", "department")})
+PY
 ```
 
-任何标准 JWT/OIDC 库（Go `go-jose`、Python `python-jose`、Node `jose`
-等）拿到这两个 URL 就能完整验证签名 + claim——**完全不需要 Vault
-Token**。这就是 Identity Tokens 最大的工程价值：把"Vault 不在请求路
-径上"做实。
+> 把 `audience=aud` 改成 `audience="wrong-aud"` 再跑一次，会拿到
+> `InvalidAudienceError`——证明这是真验证，不是空跑。
+>
+> 注意 `issuer` 直接从 discovery 端点读，不要写死 `127.0.0.1`：dev
+> server 监听 `0.0.0.0`，JWT 的 `iss` 就是 `http://0.0.0.0:8200/...`，
+> 写死会被 `InvalidIssuerError` 拒掉。
 
 ## 2.6 验证姿势 B：introspect（在线、要 Vault Token）
 

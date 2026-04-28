@@ -11,7 +11,19 @@
 我们的 Dev 模式 Vault 是干净的（没有任何旧版本残留的重复），所以这
 一步主要演示**流程与不可逆语义**——而不是真的去清理重复数据。
 
-## 4.1 看 unseal 日志确认没有 `DUPLICATES DETECTED`
+## 4.0 这个开关到底解决了什么问题？
+
+先用一张图把"问题 → 解决方案 → 新保障"全讲清楚——后面 §4.1 ~ §4.5
+就是亲手跑这张图里的每一格：
+
+![dedup-upgrade](../assets/dedup-upgrade.png)
+
+> **两层不可逆一句话总结**：启用新打印机 = "最终出售、不退不换"
+> （**开关不可逆**）；新打印机开机那一刻把两张证合并成一张，碎掉
+> 的那张再也拼不回来（**合并不可逆**）。所以文档反复强调：推开关
+> 之前先确认每一组重复确实该合并——合错了也没有"撤销 merge"。
+
+下面 §4.1 ~ §4.5 就是亲手把图里每一格跑一遍。
 
 Dev 模式 Vault 的日志在 `/var/log/vault-dev.log`：
 
@@ -36,13 +48,13 @@ vault read sys/activation-flags
 
 应该看到 `force-identity-deduplication` 在 **unactivated** 列表里。
 
-## 4.3 激活——这一步**永远不能回退**
+## 4.3 激活——启用新打印机（最终出售、不退不换）
 
 ```bash
 vault write -f sys/activation-flags/force-identity-deduplication/activate
 ```
 
-激活成功。再看一次状态：
+激活成功——相当于把旧打印机退役、换上了新的。再看一次状态：
 
 ```bash
 vault read sys/activation-flags
@@ -65,7 +77,7 @@ INFO core: force-identity-deduplication activated, reloading identity store
 INFO core: force-identity-deduplication activated, reloading identity store complete
 ```
 
-## 4.4 验证"不可逆"语义
+## 4.4 验证"不退不换"
 
 再激活一次：
 
@@ -73,11 +85,17 @@ INFO core: force-identity-deduplication activated, reloading identity store comp
 vault write -f sys/activation-flags/force-identity-deduplication/activate
 ```
 
-Vault 不会报错，但后台不再做任何事情——已经激活的 flag 不会"再激活
-一次"，更不能"取消激活"。**这就是文档反复强调的 one-way 语义**：决
-策一旦做出，该集群从此每次 unseal 都会强制去重检查。
+Vault 不会报错，但后台不再做任何事情——新打印机已经在位，再按一
+次按钮只是 no-op。更重要的是**不存在 `deactivate` 接口**——吊牌
+上写的"最终出售、不退不换"名副其实。
 
-## 4.5 副作用观察：unseal 时多了一道去重检查
+这就是**两层不可逆**：
+1. **开关不可逆**——新打印机回不去老的，该集群从此 unseal 都跑查重
+2. **合并不可逆**——激活那一刻碎掉的重复 entity 再也拼不回来，想拆
+   只能手动新建 entity + 重绑 alias（新 ID 和历史审计/token 全对不
+   上号）
+
+## 4.5 副作用观察：每次开机（unseal）新打印机都自动查重
 
 模拟一次"重启 Vault 看 unseal 流程"。Dev 模式 Vault 不能优雅 seal，
 我们直接 SIGINT 重启：
@@ -114,14 +132,14 @@ check**——这就是激活后**每次 unseal 都会做**的那一步。Dev 模
 干净，所以耗时几乎为 0。生产集群带百万级 Entity 时，这道检查也通常
 比一次正常 unseal 还快（因为 1.19+ 把它做成了纯校验、不再扫描全表）。
 
-## 4.6 总结：激活前 / 激活后
+## 4.6 总结：老打印机 vs 新打印机
 
-| 维度 | 激活前 | 激活后 |
+| 维度 | 老打印机（激活前） | 新打印机（激活后） |
 | --- | --- | --- |
-| 重复 entity / alias / group | 可能存在（来自旧版 bug） | 一次 reload 全部清掉 |
-| 未来出现新重复 | 可能（取决于 client 行为 + 残留 bug） | Vault 在 unseal 时强制校验 + 记录 |
-| 关闭这个特性 | — | **不行，永不可逆** |
-| 每次 unseal 时间 | 含旧 dedup 检查（带 DUPLICATES 日志） | 含纯校验（无 DUPLICATES 日志，更快） |
+| 重复 entity / alias / group | 可能存在（旧版 bug 造成） | 第一次开机就合并清掉 |
+| 未来出现新重复 | 可能（并发竞态 + 残留 bug） | 每次开机自动查重，发现即拒绝 |
+| 退回老打印机 | — | **不行，最终出售、不退不换** |
+| 拆开已合并的 entity | — | **不行，碎纸篓里的 UUID 拼不回来** |
 
 ---
 

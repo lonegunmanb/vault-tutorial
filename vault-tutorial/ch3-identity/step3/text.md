@@ -7,6 +7,14 @@ Step 2 我们用 `identity/oidc/token/<role>` 让 Vault 给 alice 签了一
 通过 `authorization_endpoint` → `token_endpoint` 这条链路从 Vault 拿
 ID Token。
 
+整个实验的全景如下——下面 §3.1 ~ §3.7 就是把这张图里每一步亲手跑一遍：
+
+![oidc-auth-code-flow](../assets/oidc-auth-code-flow.png)
+
+参考链接：
+- [Vault OIDC Provider 文档](https://developer.hashicorp.com/vault/docs/secrets/identity/oidc-provider)
+- [OIDC Core 1.0 — Authorization Code Flow](https://openid.net/specs/openid-connect-core-1_0.html#CodeFlowAuth)
+
 ## 3.1 看默认 Provider 与 Discovery
 
 Vault 每个 namespace 自带一个名为 `default` 的 OIDC provider 和一把
@@ -79,20 +87,23 @@ ALICE_TOKEN=$(vault login -format=json -method=userpass username=alice password=
 export VAULT_TOKEN=root  # 立刻切回避免污染
 ```
 
-请求 authorize 端点拿 `code`：
+请求 authorize 端点拿 `code`。**注意它是 `GET` + query string**（OIDC
+规范要求），不能用 `vault write`，得直接 `curl`；用户身份通过
+`X-Vault-Token` header 携带：
 
 ```bash
 STATE="state-$RANDOM"
 NONCE="nonce-$RANDOM"
 
-CODE_RESP=$(VAULT_TOKEN=$ALICE_TOKEN vault write -format=json \
-  identity/oidc/provider/default/authorize \
-  client_id="$CLIENT_ID" \
-  redirect_uri="http://localhost:9999/callback" \
-  response_type="code" \
-  scope="openid" \
-  state="$STATE" \
-  nonce="$NONCE")
+CODE_RESP=$(curl -s -G \
+  -H "X-Vault-Token: $ALICE_TOKEN" \
+  --data-urlencode "client_id=$CLIENT_ID" \
+  --data-urlencode "redirect_uri=http://localhost:9999/callback" \
+  --data-urlencode "response_type=code" \
+  --data-urlencode "scope=openid" \
+  --data-urlencode "state=$STATE" \
+  --data-urlencode "nonce=$NONCE" \
+  "$ISSUER/authorize")
 
 echo "$CODE_RESP" | jq
 ```
@@ -122,17 +133,18 @@ vault write identity/oidc/client/my-webapp \
 再来一遍 authorize：
 
 ```bash
-CODE_RESP=$(VAULT_TOKEN=$ALICE_TOKEN vault write -format=json \
-  identity/oidc/provider/default/authorize \
-  client_id="$CLIENT_ID" \
-  redirect_uri="http://localhost:9999/callback" \
-  response_type="code" \
-  scope="openid" \
-  state="$STATE" \
-  nonce="$NONCE")
+CODE_RESP=$(curl -s -G \
+  -H "X-Vault-Token: $ALICE_TOKEN" \
+  --data-urlencode "client_id=$CLIENT_ID" \
+  --data-urlencode "redirect_uri=http://localhost:9999/callback" \
+  --data-urlencode "response_type=code" \
+  --data-urlencode "scope=openid" \
+  --data-urlencode "state=$STATE" \
+  --data-urlencode "nonce=$NONCE" \
+  "$ISSUER/authorize")
 
 echo "$CODE_RESP" | jq
-CODE=$(echo "$CODE_RESP" | jq -r .data.code)
+CODE=$(echo "$CODE_RESP" | jq -r .code)
 echo "CODE=$CODE"
 ```
 
