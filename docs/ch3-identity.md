@@ -34,6 +34,41 @@ group_order: 30
 
 ---
 
+## 0. 一句话定位与三种用法
+
+把 `identity/` 引擎想成 Vault 自带的一间**"户政公证处"**：
+
+- 它有一本**户籍册**（`identity/entity` `…/group` `…/entity-alias`）——
+  集群里"谁是谁、谁属于哪个组、同一个人在不同窗口下挂的小名是哪些"
+  全在这本册子上。这本册子在 [2.5 身份实体](/ch2-identity-entity) 里
+  讲过概念，本节给"册子的窗口办事 API"。
+- 它会按申请**出具盖章证明书**（`identity/oidc/token/<role>`）——
+  你（一个已经登录 Vault 的 Entity）走到柜台，柜台按你提交的 role
+  模板，从册子里抄出"你叫什么、属于哪个组、metadata 写了啥"，签好
+  公章交给你，让你拿去给**任何不认识 Vault 的第三方**看。
+- 它还能**直接当登录大厅**（`identity/oidc/provider/...`）——
+  其他机构（下游应用）干脆把来访者**指路**到这间公证处："你先去那
+  边登记，登记完拿一张盖了章的入门证回来给我看就行。" 来访者在公证
+  处走完登录流程，公证处签一张同样格式的盖章证明书塞给来访者，让他
+  带回去。
+
+后两种用法用的**都是同一种"盖章证明书"——一条符合 OIDC 规范的 JWT**，
+公章（公钥）通过标准 `.well-known` 端点公开发布，谁都能离线验签
+（细节见 [§3](#_3-identity-tokens-让-vault-变成-jwt-签发机)）。区别只在
+"谁去申请"和"在哪一步交付"：
+
+| 用法 | 类比 | 谁主动 | 用户与 Vault 是否要交互 | 典型场景 |
+| --- | --- | --- | --- | --- |
+| **身份对象 CRUD**（[§2](#_2-身份对象-crud-entity-group-alias-的-工程视角)） | 户籍册的**填册子 / 查册子** | 管理员 / 自动归并 | — | 多 auth method 归并到同一个人；建项目组；做权限策略基础 |
+| **Identity Tokens**（[§3](#_3-identity-tokens-让-vault-变成-jwt-签发机)） | 申请人**亲自上柜台**领一份盖章公证书带走 | 已登录的 Entity（往往是工作负载） | ❌ 无 UI、纯 API | 服务 A 拿着 Vault 签的 JWT 去访问不信任 Vault 的服务 B |
+| **OIDC Identity Provider**（[§4](#_4-oidc-identity-provider-把-vault-反向变成-idp)） | 公证处兼营的**登录大厅** | 下游应用把用户**重定向**过来 | ✅ 必经 Vault Web UI | 给内部后台 / Boundary / Consul 加 SSO 登录 |
+
+读完整章后再回头看这张表——后面 §1–§5 都是在把这三件事一件件展开。
+
+![identity-overview](/images/ch3-identity/identity-overview.png)
+
+---
+
 ## 1. 把 `identity/` 当成机密引擎重新审视
 
 [3.4 Cubbyhole](/ch3-cubbyhole) 那一节我们提到："`cubbyhole/` 是
@@ -372,36 +407,6 @@ vault write identity/oidc/client/admin-portal \
 的能签出来"跑通。
 
 ![oidc-provider-flow](/images/ch3-identity/oidc-provider-flow.png)
-
-> TODO 绘图提示词：
-> ```
-> 手绘卡通风格，三种淡彩，类似儿童绘本的线条。
-> 主题：Vault 作为 OIDC Identity Provider 的 Authorization Code Flow。
->
-> 画三个角色排成一条横线：
->   左：一只戴着背包、表情困惑的小猫（代表 End User，浏览器）
->   中：一栋小木屋上挂着 "Internal Admin Portal" 牌子（代表 Relying Party）
->   右：那只胸前挂 "Identity Engine" 工牌的章鱼（同上一张图，
->       代表 Vault OIDC Provider），手里拿着一个登记本
->
-> 画 6 条带编号的箭头形成往返：
->   ① 小猫 → 木屋："我要进来"
->   ② 木屋 → 小猫："去找章鱼，告诉它你是为我来的（client_id, redirect_uri）"
->     —— 用一张写着这些字段的纸条形象化
->   ③ 小猫 → 章鱼：递上纸条
->   ④ 章鱼让小猫在登记本上签名（代表 Vault UI 里完成 userpass/LDAP 登录）
->     然后给小猫一个一次性印章 "code"
->   ⑤ 小猫拿 code 跑回木屋，把 code 交给木屋
->   ⑥ 木屋用一根绳直接拉到章鱼那里（后端通信）：
->     "用 code + client_secret 换 id_token"
->     章鱼递回一张盖了 §3 那种印章的火车票（id_token）
->
-> 木屋上方加一个想法气泡："✅ 知道你是谁了"。
-> 章鱼脚边那本登记本封面写 "assignments"，并画一个名单——
-> 名单里没有的小动物会被章鱼用爪子挡在门外（隐喻 default 全拒）。
->
-> 整体可爱、清晰，避免写实细节，文字一律英文短词。
-> ```
 
 ---
 
