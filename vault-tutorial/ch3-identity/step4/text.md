@@ -47,7 +47,13 @@ grep -E "post-unseal setup starting|post-unseal setup complete|DUPLICATES DETECT
 vault read sys/activation-flags
 ```
 
-应该看到 `force-identity-deduplication` 在 **unactivated** 列表里。
+应该看到 `activated` 列表为空：
+
+```
+Key          Value
+---          -----
+activated    []
+```
 
 ## 4.3 激活——启用新打印机（最终出售、不退不换）
 
@@ -61,21 +67,12 @@ vault write -f sys/activation-flags/force-identity-deduplication/activate
 vault read sys/activation-flags
 ```
 
-`force-identity-deduplication` 应该已经从 unactivated 移到 activated
-列表。
-
-观察日志里的两行（这两行之间的耗时就是"全集群身份缓存重载"的实际时
-长，生产里要拿来评估容量）：
-
-```bash
-grep "force-identity-deduplication activated" /var/log/vault-dev.log
-```
-
-应该有：
+`force-identity-deduplication` 应该已经出现在 `activated` 列表里：
 
 ```
-INFO core: force-identity-deduplication activated, reloading identity store
-INFO core: force-identity-deduplication activated, reloading identity store complete
+Key          Value
+---          -----
+activated    [force-identity-deduplication]
 ```
 
 ## 4.4 验证"不退不换"
