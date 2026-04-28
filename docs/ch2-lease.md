@@ -15,6 +15,8 @@ group_order: 20
 
 参考：[Lease, renew, and revoke](https://developer.hashicorp.com/vault/docs/concepts/lease)
 
+![lease-overview](/images/ch2-lease/lease-overview.png)
+
 ---
 
 ## 1. 租约存在的根本理由：把"过期"做成一等公民
