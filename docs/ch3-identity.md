@@ -453,8 +453,10 @@ vault write identity/oidc/client/admin-portal \
 
 - 升级到 1.19+ **当天**先看日志、判断是否有 `DUPLICATES DETECTED`，
   **不要急着激活**。
-- 有重复时**先按 §5.1 第 3 步彻底解决**，再激活——激活前已存在的
-  重复不会被自动 merge，只有"未来出现"会被校验拒绝。
+- 有重复时**先按 §5.1 第 3 步尽量手工解决**，再激活——激活后下次
+  unseal 会自动处理残留的重复：同名 entity / group 会被**重命名**为
+  `name-<uuid>`，同名 alias（同 mount_accessor + name）会触发 entity
+  **合并**。两种操作都**不可逆**，所以激活前务必确认每组重复确实该处理。
 - 维护窗口里激活；激活后看每个节点日志里的两行：
   ```
   INFO core: force-identity-deduplication activated, reloading identity store
@@ -521,9 +523,11 @@ vault write identity/oidc/client/admin-portal \
   认全拒"，再加 `allow_all` 修复），拿 Discovery 文档，并用 curl 模
   拟 RP 调用 token 端点跑一次 Authorization Code Flow（用 Vault CLI
   辅助拿 `code`）。
-- **Step 4**：体验 `force-identity-deduplication` 激活流程——看一遍
-  当前 unseal 日志确认没有 `DUPLICATES DETECTED`，再调用激活 API、
-  观察日志里 `reloading identity store` 的 start/complete 两行，并验
-  证激活后的"不可逆"语义（再调一次会被告知已激活）。
+- **Step 4**：体验 `force-identity-deduplication` 激活流程——先在干净
+  集群上演示激活 API 与不可逆语义；然后重启 Vault 启用
+  `raw_storage_endpoint`，用 `sys/raw` + Python 脚本往存储里**故意注入
+  一个同名 entity**（绕过 API 层的去重校验），通过 seal/unseal 分两个
+  阶段观察：flag 未激活时只打 `DUPLICATES DETECTED` 警告，激活后自动
+  重命名重复 entity 为 `bob-<uuid>`。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch3-identity" title="实验：Identity 机密引擎与 OIDC Provider 全流程" />

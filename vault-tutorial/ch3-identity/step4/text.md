@@ -8,8 +8,9 @@
   `sys/activation-flags/force-identity-deduplication/activate` 来彻
   底强制去重
 
-我们的 Dev 模式 Vault 是干净的（没有任何旧版本残留的重复），所以这
-一步主要演示**流程与不可逆语义**——而不是真的去清理重复数据。
+我们的 Dev 模式 Vault 是干净的（没有任何旧版本残留的重复），但在
+§4.5 的 Hands-on 实验里我们会**故意用 `sys/raw` 往存储层注入一个
+重复 entity**，亲眼观察检测与去重的完整流程。
 
 ## 4.0 这个开关到底解决了什么问题？
 
