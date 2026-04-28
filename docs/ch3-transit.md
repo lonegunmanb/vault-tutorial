@@ -10,7 +10,7 @@ group_order: 30
 > **核心结论**：Transit 机密引擎（`transit/`）颠覆了 Vault 一贯的"我替你存机密"模型，
 > 转而提供**纯密码学服务**："**应用持密文，Vault 持钥匙**"——Vault **不存任何业务数据**，
 > 只在调用时按命名密钥执行加密 / 解密 / 签名 / 验签 / HMAC / 派生 / 数据密钥（DEK）生成等操作。
-> 它是 KV 引擎的**镜像**：KV 是 Vault 替应用存机密，Transit 是 Vault 替应用守钥匙。
+> 可以把它理解成 KV 引擎的**分工反转**：KV 是 Vault 替应用存机密，Transit 是应用自己存数据、只让 Vault 替它守钥匙。
 > 关键的运维特性是**无中断密钥轮转**：`rotate` 在密钥下增加新版本，旧版本仍能解密老密文，新加密自动用新版本，
 > 配合 `rewrap` 可逐步把存量密文升级到新版本。
 
@@ -22,28 +22,15 @@ group_order: 30
 
 ---
 
-## 1. 心智模型：EaaS 与 KV 镜像对照
+## 1. 心智模型：寄存处 vs 锁匠柜台
 
 ![transit-eaas-vs-kv](/images/ch3-transit/transit-eaas-vs-kv.png)
 
-> TODO 绘图提示词:
-> ```
-> 手绘卡通风格，画面分成左右两半，中间用一面镜子隔开（强调"互为镜像"）。
->
-> 左半边（KV 引擎）：画一座小型档案馆，墙上贴着"KV ENGINE"的牌匾。
-> 一位穿西装的图书管理员（代表 Vault）站在柜台后，手里抱着一摞密封的牛皮纸文件袋（代表 secrets）。
-> 一位手提空公文包的访客（代表 Application）正伸手向管理员要文件，管理员递给他一份。
-> 文件袋上写着 "DB_PASSWORD"。
->
-> 右半边（Transit 引擎）：画一座古老的银行金库门口，墙上挂着 "TRANSIT ENGINE" 的牌匾。
-> 同一位管理员（Vault）这次站在金库门内，手里只攥着一把锃亮的金钥匙串（代表 keys）。
-> 同一位访客这次反过来——手里抱着一个加锁的金属保险箱（代表 ciphertext），递给管理员，
-> 让管理员用钥匙开锁，再把里面的东西原样还回去。
-> 保险箱表面用马克笔写着 "vault:v3:abc123..."。
->
-> 镜子上方写大字 "KV: Vault keeps secrets    |    Transit: Vault keeps keys"。
-> 整体颜色温暖明亮（米黄、淡橙、淡蓝），手绘线条感强，关键英文短词写在画面上。
-> ```
+如果“KV / Transit 互为镜像”还是偏抽象，可以直接换成一个更生活化的比喻：
+
+- **KV 像寄存处**：你把行李交给前台保管，之后再回来取。**前台真的持有你的东西。**
+- **Transit 像锁匠柜台**：箱子始终在你手里，锁匠只保管钥匙；你把箱子拿来，请他上锁或开锁，他做完就把箱子还给你。**锁匠从不替你保存箱子里的东西。**
+- 所以 **KV 的关键词是“存 / 取机密”**，而 **Transit 的关键词是“拿你的数据来做加密 / 解密”**。
 
 | 维度 | KV 引擎 (3.2/3.4) | Transit 引擎 (本章) |
 | --- | --- | --- |
@@ -231,21 +218,6 @@ vault write -f transit/keys/searchable derived=true convergent_encryption=true
 ## 7. 数据密钥 (DEK) 模式：信封加密
 
 ![transit-dek-envelope](/images/ch3-transit/transit-dek-envelope.png)
-
-> TODO 绘图提示词:
-> ```
-> 手绘卡通风格，画一个洋葱式分层加密图。
->
-> 中心：一颗大大的明文圆球，写着 "PLAINTEXT (10 GB)"。
-> 围绕中心：一个金色的盒子（代表 Data Key / DEK），盒盖上写 "DEK (32 bytes)"，盒子里装着那颗明文。
-> 再外层：一个银色的更大保险箱（代表 KEK / master key in Vault），保险箱里装着金盒子。
-> 保险箱外侧贴着标签 "vault:v1:WRAPPED-DEK..."。
-> 一位卡通管理员（Vault）站在保险箱旁边，手里举着一把金钥匙（master key），正在锁保险箱外层。
-> 旁边一个应用程序角色（戴 hard-hat 的工程师）拿着两样东西：右手是装满数据的硬盘，左手是被 Vault 包好的金属包裹（写着 "Encrypted DEK"）。
->
-> 画面下方一行说明文字："Encrypt big data with random DEK locally → Wrap DEK with Vault KEK → Store both"
-> 整体颜色温暖明亮（米黄、淡橙、淡蓝），手绘线条感强，关键英文短词写在画面元素上。
-> ```
 
 加密大文件 / 大对象时，每次都把 GB 级数据送给 Vault 不现实。**信封加密** 解法：
 

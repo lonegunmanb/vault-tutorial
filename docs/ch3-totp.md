@@ -65,27 +65,6 @@ otpauth://totp/<Issuer>:<Account>?secret=<base32>&issuer=<Issuer>&algorithm=SHA1
 
 ![totp-two-modes](/images/ch3-totp/totp-two-modes.png)
 
-> TODO 绘图提示词:
-> ```
-> 手绘卡通风格，画面分成左右两半，中间用一根扭转的箭头分隔两个对照场景。
->
-> 左半边（Generator 模式）：画一位站在火车站检票口的售票员（代表 "Vault as Authenticator"），
-> 手里拿着一摞票，每张票上都写着大大的 6 位数字。售票员手腕上戴一个老式怀表，
-> 表盘指针正好指在 12 点的位置（代表 30 秒一变的时间窗口）。
-> 一位旅客（代表 "External System / Login Portal"）伸手接过一张票（写着 "654321"），
-> 准备拿去外面的检票闸机（代表外部登录系统）刷卡进站。
-> 售票窗台上贴一张小卡片：generate=true → vault read totp/code/<name>。
->
-> 右半边（Provider 模式）：画一位戴学士帽的考场监考老师（代表 "Vault as Verifier"），
-> 桌上摆着一本厚厚的标准答案册（代表 Vault 持有的 secret + 算法）。
-> 一位戴眼镜的考生（代表 "User with Authenticator App"）从手机里抄出一个 6 位数字（"432198"），
-> 把答题卡递给监考老师，监考老师用红笔在卡片上画了一个大大的 ✓。
-> 旁边的小卡片：generate=false → vault write totp/code/<name> code=...
->
-> 整体颜色温暖明亮（米黄、淡橙、淡蓝），手绘线条感强。
-> 关键英文短词（GENERATE / VERIFY / 30s）写在画面元素上，中文不出现在画面里。
-> ```
-
 | 维度 | Generator (`generate=true`) | Provider (`generate=false`) |
 | --- | --- | --- |
 | Vault 持有 secret | ✅ 自己生成 / 接管 | ✅ 由调用者写入（含 secret 或 url） |

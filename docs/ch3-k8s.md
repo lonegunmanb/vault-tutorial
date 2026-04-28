@@ -19,7 +19,7 @@ group_order: 30
 参考：
 - [Kubernetes Secrets Engine — Vault Docs](https://developer.hashicorp.com/vault/docs/secrets/kubernetes)
 - [Kubernetes Secrets Engine API](https://developer.hashicorp.com/vault/api-docs/secret/kubernetes)
-- 同模型对照：[3.3 AWS 引擎](/ch3-aws-engine)、[3.10 LDAP 引擎](/ch3-ldap)
+- 同模型对照：[3.3 AWS 引擎](/ch3-aws)、[3.10 LDAP 引擎](/ch3-ldap)
 - 反向参考：未来 7.X Kubernetes 认证方法
 
 ---
