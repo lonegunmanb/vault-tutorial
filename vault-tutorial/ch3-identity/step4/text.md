@@ -122,13 +122,20 @@ done
 看新的 unseal 日志：
 
 ```bash
-grep -E "post-unseal setup starting|post-unseal setup complete|force-identity-deduplication|DUPLICATES" /var/log/vault-dev.log
+grep -E "post-unseal setup starting|post-unseal setup complete" /var/log/vault-dev.log
 ```
 
-你会看到 unseal 流程里**自动跑了一次 force-identity-deduplication
-check**——这就是激活后**每次 unseal 都会做**的那一步。Dev 模式数据
-干净，所以耗时几乎为 0。生产集群带百万级 Entity 时，这道检查也通常
-比一次正常 unseal 还快（因为 1.19+ 把它做成了纯校验、不再扫描全表）。
+你会看到 post-unseal 流程正常完成：
+
+```
+core: post-unseal setup starting
+core: post-unseal setup complete
+```
+
+激活 `force-identity-deduplication` 后，Vault 每次 unseal 都会在
+post-unseal 阶段**静默地**跑一次查重——Dev 模式数据干净、没有重复，
+所以不会有额外日志输出。生产集群如果存在重复 entity，日志里才会出现
+相关的 deduplication 信息。
 
 ## 4.6 总结：老打印机 vs 新打印机
 
