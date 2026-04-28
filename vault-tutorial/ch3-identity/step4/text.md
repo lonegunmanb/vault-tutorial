@@ -355,8 +355,13 @@ vault list identity/entity/name
 vault read identity/entity/name/bob
 ```
 
-被重命名的 entity 的 metadata 里会有 `duplicate_of_canonical_id`，
-指向保留下来的那个 `bob` 的 ID。
+被重命名的 entity 名字会变成 `bob-<uuid>` 格式。根据
+[官方文档](https://developer.hashicorp.com/vault/docs/secrets/identity/deduplication/entity-group)，
+rename 操作**不删数据、不新增权限**，保留原 entity 的所有关联。
+
+> 源码层面（`identity_store_conflicts.go`）还会给被重命名的 entity
+> 写入 `duplicate_of_canonical_id` 之类的内部元数据，但这属于实现细节，
+> 官方文档未承诺其稳定性，不建议依赖。
 
 这就是**新打印机**的完整工作流程：
 1. **检测**（unseal 时扫描存储）
