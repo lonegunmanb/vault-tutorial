@@ -61,12 +61,10 @@ vault write auth/userpass/users/alice \
 ```bash
 ALICE_TOKEN=$(vault login -format=json -method=userpass username=alice password=alice-pwd | jq -r .auth.client_token)
 echo "ALICE_TOKEN=${ALICE_TOKEN:0:20}..."
-```
 
-> ⚠️ 这一步登录会**临时切换** `VAULT_TOKEN`。把它切回 root 以免影响后续命令：
-> ```bash
-> export VAULT_TOKEN=root
-> ```
+# ⚠️ 上面的 vault login 会临时切换 VAULT_TOKEN，必须切回 root，否则后续命令全部会失败
+export VAULT_TOKEN=root
+```
 
 userpass 登录的副作用：Vault 自动为 alice 在 userpass mount 上创建
 了一个 alias。但她**还没绑到 step 1 的 `$ALICE_EID`**——验证一下：
