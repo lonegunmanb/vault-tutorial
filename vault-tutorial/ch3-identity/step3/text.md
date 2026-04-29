@@ -169,17 +169,29 @@ echo "$TOKEN_RESP" | jq
 
 ```bash
 ID_TOKEN=$(echo "$TOKEN_RESP" | jq -r .id_token)
-echo "$ID_TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq
+PAYLOAD=$(echo "$ID_TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null)
+echo "$PAYLOAD" | jq
+
+# 把 §3.1 拿到的几个变量和 JWT claim 直接并排比对
+echo
+echo "ISSUER (§3.1)        = $ISSUER"
+echo "iss     (in JWT)     = $(echo "$PAYLOAD" | jq -r .iss)"
+echo "CLIENT_ID (§3.2)     = $CLIENT_ID"
+echo "aud     (in JWT)     = $(echo "$PAYLOAD" | jq -r '.aud | if type=="array" then join(",") else . end')"
+echo "ALICE_EID (§3.5)     = $ALICE_EID"
+echo "sub     (in JWT)     = $(echo "$PAYLOAD" | jq -r .sub)"
+echo "NONCE   (§3.4)       = $NONCE"
+echo "nonce   (in JWT)     = $(echo "$PAYLOAD" | jq -r .nonce)"
 ```
 
-留意：
+对应关系一目了然：
 
-- `iss` 等于 §3.1 看到的 `issuer`，**带 `/provider/default`**
-  ——这是 Provider 派的 token，与 step 2 那条"裸"identity token 的
-  `iss`（`/identity/oidc`）不一样
-- `sub` 还是 alice 的 Entity ID
-- `aud` 等于 `$CLIENT_ID`
-- `nonce` 原样回填（OIDC 防重放设计）
+- `iss` ≡ `$ISSUER`，**带 `/provider/default`**——这是 Provider 派
+  的 token，与 step 2 那条"裸"identity token 的 `iss`
+  （`/identity/oidc`）不一样
+- `sub` ≡ `$ALICE_EID`，alice 的 Entity ID
+- `aud` ≡ `$CLIENT_ID`
+- `nonce` ≡ `$NONCE`，原样回填（OIDC 防重放设计）
 
 **至此 Vault 作为 OIDC Provider 的端到端最小链路已经跑通。** 真实 RP
 就是把 §3.4 那一段重定向交互换成浏览器、§3.6 这一段换成后端 HTTP

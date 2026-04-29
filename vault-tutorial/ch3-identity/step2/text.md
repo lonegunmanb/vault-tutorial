@@ -153,9 +153,6 @@ Vault 把 OIDC 标准的 `.well-known` 端点**无需鉴权**地暴露在
 
 ```bash
 pip install --quiet --break-system-packages pyjwt cryptography requests
-```
-
-```bash
 python3 - <<'PY'
 import os, jwt, requests
 from jwt import PyJWKClient
