@@ -71,6 +71,11 @@ Vault 启用 `ldap/` 引擎后必须先 `vault write ldap/config` 写入：
 > 任何 API 都**不能再把它读出来**（官方原话：*will only be known to Vault and will not be retrievable once rotated*）——
 > 后续所有目录操作都由 Vault 在内部代为完成。强烈建议在 `ldap/config` 写入后立刻执行一次。
 
+> **Self-managed vs Root-managed（两种 Static Role 托管模型）**：上表默认描述的是 **Root-managed** 模型——
+> Vault 拿高权 `binddn` 代改别人的密码；另一种 **Self-managed** 模型下每个 static role 用自己的凭证修改自己的密码，
+> `ldap/config` 不需填 `bindpass`，但创建 role 时必须填 `password` 字段。Self-managed **限 Vault Enterprise**，
+> 本章实验只覆盖 Root-managed。
+
 ### 2.2 三种模式同框对比
 
 | 模式 | Vault 干什么 | 谁创建账号 | 密码动作 | 账号生命周期 |
@@ -103,8 +108,8 @@ vault write ldap/static-role/etl-app1 \
 **注意 2**：Static Role 不签发 Lease——读到的密码不会"过期"，只会被下一次轮转覆盖。
 和 [2.3 Lease](/ch2-lease) 的动态凭据语义完全不同。
 
-**注意 3**：`vault delete ldap/static-role/etl-app1` **不会顺手轮转**那个 LDAP 账号的密码。
-官方建议要么先 `vault write -f ldap/rotate-role/etl-app1` 把密码换成只有 Vault 才知道的随机串再删，
+**注意 3**：`vault delete ldap/static-role/etl-app1` 删除的是 Vault 里的 static role 配置，
+不要假设它会顺手轮转那个 LDAP 账号的密码。以下为**本文提出的实践建议（非官方原文）**：要么先 `vault write -f ldap/rotate-role/etl-app1` 把密码换成只有 Vault 才知道的随机串再删，
 要么在 LDAP 端立即收回该账号的访问权限——否则删 role 那一刻，最后一次发放的密码就成了
 "任何拿到过它的人都能继续用"的孤儿凭据。
 
@@ -159,9 +164,13 @@ vault read ldap/creds/web-api
 # ---                   -----
 # lease_id              ldap/creds/web-api/abc...
 # lease_duration        1h
+# lease_renewable       true
+# distinguished_names   [cn=v_web-api_1714125600,ou=users,dc=example,dc=org]
 # username              v_web-api_1714125600
 # password              <随机 64 位>
 ```
+
+`distinguished_names` 是与 `creation_ldif` 中每条 LDIF 语句一一对应的 DN 数组，供下游做反查或审计定位。
 
 应用使用完后调 `vault lease revoke <lease_id>`，Vault 立刻按 `deletion_ldif` 删账号；
 如果忘记 revoke，Lease TTL 到达时也会自动清理。
@@ -173,86 +182,6 @@ vault read ldap/creds/web-api
 ## 5. Library Sets：服务账号池"借书还书"
 
 ![library-checkout-flow](/images/ch3-ldap/library-checkout-flow.png)
-
-> TODO 绘图提示词:
-> ```
-> 手绘卡通风格，类似儿童绘本插画。整张图是一条 5 格分镜漫画，按 "上 3 格 + 下 2 格" 排版：
->   ┌─── 第1格 ───┬─── 第2格 ───┬─── 第3格 ───┐
->   │             │             │             │
->   ├─────────────┴─────────────┼─────────────┤
->   │                           │             │
->   │      第5格        ◄────   │   第4格     │
->   └───────────────────────────┴─────────────┘
-> 上排从左到右阅读 (1→2→3)，下排从右到左阅读 (4→5)，整体是一个 "U 形" 故事流。
-> 用细黑墨线勾边、暖色填充（米黄、淡橙、淡蓝、奶白）。每两个相邻格之间留出窄窄的 gutter，
-> 但 "相邻两格必须有同一个角色横跨 gutter"——同一个人物的身体一半画在前格、一半画在后格，
-> 让读者一眼看出 "这就是同一个人继续走到下一幕"。共边角色对应关系：
->   1↔2 共边：VAULT (横跨 gutter)
->   2↔3 共边：READER A (横跨 gutter)
->   3↔4 共边：READER A (纵向跨 gutter，3 在上、4 在下)
->   4↔5 共边：VAULT (横跨 gutter，4 在右、5 在左)
->
-> **分格之间的方向箭头**（与 U 形阅读流一致，画在 gutter 中央、用粗黑墨线 + 黄色描边的卡通箭头，
-> 箭头上写英文 "NEXT"，避免读者把方向看反）：
->   1→2 箭头：水平向右，画在格 1 与格 2 之间的竖向 gutter 中央
->   2→3 箭头：水平向右，画在格 2 与格 3 之间的竖向 gutter 中央
->   3→4 箭头：竖直向下，画在格 3 与格 4 之间的横向 gutter 中央 (上排到下排的转折，弯成 ⤵ 形 90° 拐角)
->   4→5 箭头：水平向左 (反方向！)，画在格 4 与格 5 之间的竖向 gutter 中央，箭头羽尾朝右、箭尖朝左
-> 所有箭头要明显比共边角色的躯干更靠后 (画在角色背景层)，避免遮挡跨 gutter 的人物身体。
-> 箭头颜色统一用同一种暖橙色，让读者一扫即知 "这是阅读路径"，与红色 LEASE 绳区分开。
->
-> 出场角色（每一格里都画得一致、可辨认）：
-> - VAULT：戴圆框眼镜、围着围裙、袖套套到肘部的图书管理员；柜台后立着写有 "Library Set: break-glass-team" 的木牌
-> - READER A：戴鸭舌帽、背双肩包的工程师，"借用人 A"
-> - READER B：扎马尾、抱平板电脑的工程师，"下一位借用人"
-> - READER C：戴毛线帽的小个子工程师 (仅作背景排队人员)
-> - BOOK：三本一模一样的硬皮书，书脊贴标 svc-ops-1 / svc-ops-2 / svc-ops-3，封面上有钥匙孔
-> - KEY：金色锻造钥匙，每次新打造的钥匙齿形不同 (用以区分 "旧密码 vs 新密码")
->
-> 5 格内容：
->
-> 第 1 格 [READER A ─── VAULT] —— 申领请求
->   READER A 在左，VAULT 在右。A 递出一张写着 "check-out" 的小卡片给 VAULT。
->   VAULT 身后货架上立着三本书 svc-ops-1/2/3，全部贴着绿色 "AVAILABLE" 小标签。
->   VAULT 站在 1↔2 共边线上，身体一半在格 1 右、一半在格 2 左。
->
-> 第 2 格 [VAULT ─── READER A] —— 现场打造钥匙 #1 + 系上 Lease
->   VAULT 在左 (与第 1 格共享)，READER A 在右。VAULT 站在小铁砧前刚锻好一把齿形为 "锯齿型" 的金钥匙 KEY#1，
->   把 svc-ops-1 + KEY#1 一并递给 A。A 的手腕上系一根红色绳子 (标签 "LEASE")，
->   绳子另一头绑在柜台旁的老式沙漏 (标签 "TTL") 上。沙漏正在缓缓漏沙。
->   柜台木牌新挂出 "svc-ops-1 = CHECKED OUT" 红字小卡。
->   READER A 站在 2↔3 共边线上。
->
-> 第 3 格 [READER A ─── READER B] —— 借出期间排他独占
->   READER A 在左 (与第 2 格共享)，READER B 在右，READER C 在 B 身后做背景。
->   A 抱着 svc-ops-1 + KEY#1 向画面外走，A 手腕上的红绳仍延伸回左侧 (暗示 Lease 还连着 Vault)。
->   B 伸手想从远处货架上取 svc-ops-1，但货架上 svc-ops-1 的位置只剩一个空缺 + 红色 "TAKEN" 牌；
->   B 只能干瞪眼看着，C 在后面叹气。剩下的 svc-ops-2/3 仍贴 "AVAILABLE"。
->   READER A 整个身体跨 3↔4 共边线 (3 在上、4 在下)——3 格里画 A 的上半身，4 格里画 A 的下半身/转身回头。
->
-> 第 4 格 [READER A ─── VAULT] —— 归还，旧钥匙作废
->   位于下排右侧。READER A 在右 (与第 3 格上方共享)，VAULT 在左。
->   A 把 svc-ops-1 + KEY#1 放回柜台。手腕上的红绳 "啪" 地断开 (画一道闪电+断绳特效)，沙漏被拿下。
->   VAULT 把 KEY#1 丢进旁边一个标 "INVALIDATED" 的小铁桶，桶上盖着 "OLD PASSWORD" 戳印。
->   VAULT 站在 4↔5 共边线上 (横向)，身体一半在格 4 左、一半在格 5 右。
->
-> 第 5 格 [VAULT ─── READER B] —— 现场打造钥匙 #2 给下一位
->   位于下排左侧 (画面最左)。VAULT 在右 (与第 4 格共享)，READER B 在左。
->   VAULT 在同一个铁砧上刚锻好另一把齿形完全不同 (例如 "波浪型") 的金钥匙 KEY#2，
->   把 svc-ops-1 + KEY#2 递给 B。B 的手腕上被系上一根新的红色 LEASE 绳，绑到一只重新翻转开始计时的新沙漏上。
->   柜台木牌上原来的 "svc-ops-1 = CHECKED OUT" 红卡换成了新的 "CHECKED OUT (B)" 卡。
->   背景虚线小框里画 KEY#1 和 KEY#2 并排对比，KEY#1 上盖一个红色 "X" 戳——强调
->   "同一本书，每次借出都是一把全新钥匙"。
->
-> 关键英文短词写在画面元素上 (不出现中文)：
->   "check-out" (格1 卡片) / "LEASE" (格2/格5 红绳标签) / "TTL" (格2/格5 沙漏)
->   "AVAILABLE" / "TAKEN" (货架标签) / "CHECKED OUT" (柜台木牌)
->   "INVALIDATED" / "OLD PASSWORD" (格4 铁桶) / "NEW PASSWORD" (格5 KEY#2 上方小气泡)
->   顶部横幅大字标题 "Library Set: break-glass-team"
->
-> 整体气氛活泼幽默；每一格里 "共边角色" 务必画成同一个姿势/服装/颜色，
-> 让读者扫一眼就读懂 "A→Vault→A→B (排队失败) →A→Vault→B" 这个借出—独占—归还—换钥匙的接力。
-> ```
 
 适合场景：**Break-Glass / 应急运维 / SRE on-call**——一个固定账号池子（如 `svc-ops-1/2/3`），
 任何时刻只有少数人"持有"，借出期间其他人借不到，还回来时密码自动改掉。
@@ -279,7 +208,7 @@ vault write -f ldap/library/break-glass-team/check-out
 借出（check-out）动作的不变量：
 
 1. **挑一个 `available=true` 的账号**，标记为 `available=false`
-2. **把该账号当前的密码**（也就是上一次 check-in 时新轮转出来的那串）作为 Lease 的 `data` 返回给借用人
+2. **把该账号当前的密码**（也就是上一次 check-in 时新轮转出的那串）作为 Lease 的 `data` 返回给借用人
 3. 与借用人的 Vault Token / Entity 绑定——**只有同一个 Token / Entity 能 check-in**（`disable_check_in_enforcement=false` 时）
 4. 起 Lease 计时（受 set 上的 `ttl` / `max_ttl` 约束）
 
@@ -361,8 +290,9 @@ vault write -f ldap/library/manage/break-glass-team/check-in \
 
 ## 9. 四个最容易踩的坑
 
-1. **AD 改密必须走 LDAPS** —— Active Directory 服务端规则：`unicodePwd` 只接受加密通道上的修改。
-   `ldap://` 上的"我改密总是失败" 99% 是这个问题。这与 Vault 无关，是 AD 端的硬约束。
+1. **AD 改密必须走加密连接** —— Active Directory 服务端规则：`unicodePwd` 只接受受保护通道上的修改。
+  在 Vault 使用 simple bind 的常见场景里，优先用 `ldaps://`；如果环境走 389 端口，也要配置 StartTLS 这类 TLS 保护。
+  纯明文 `ldap://` 上的"我改密总是失败"大概率是这个问题。这与 Vault 无关，是 AD 端的硬约束。
 
 2. **多行 `creation_ldif` 不要直接 inline** —— 多行 LDIF 直接拼进 `vault write` 命令行容易被换行符切断。
    建议用 `@/tmp/creation.ldif` 让 Vault 读文件，或先 `base64 -w0` 编码后传入（API/CLI 都支持 base64 形式）。
