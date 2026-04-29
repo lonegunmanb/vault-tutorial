@@ -1,6 +1,6 @@
 {
   "title": "Identity 机密引擎与 OIDC Provider 全流程",
-  "description": "在 Dev 模式 Vault (1.19.2) 上动手验证 identity/ 引擎：默认挂载且不可禁用/迁移/二次启用、Entity/Alias/Group CRUD 与跨 mount 身份归并、用 named key + role 签发 OIDC ID Token 并通过 JWKS / introspect 两种姿势验证、把 Vault 启用为 OIDC Identity Provider 并跑一遍 Authorization Code Flow，最后体验 1.19+ force-identity-deduplication 激活流程的不可逆语义。",
+  "description": "在 Dev 模式 Vault (1.19.2) 上动手验证 identity/ 引擎：默认挂载且不可禁用/迁移/二次启用、Entity/Alias/Group CRUD 与跨 mount 身份归并、用 named key + role 签发 OIDC ID Token 并通过 JWKS / introspect 两种姿势验证、把 Vault 启用为 OIDC Identity Provider 并跑一遍 Authorization Code Flow。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -19,10 +19,6 @@
       {
         "title": "把 Vault 启用为 OIDC Provider 并跑一遍 Authorization Code Flow",
         "text": "step3/text.md"
-      },
-      {
-        "title": "force-identity-deduplication 激活与不可逆语义",
-        "text": "step4/text.md"
       }
     ],
     "finish": {

@@ -20,16 +20,11 @@ group_order: 30
 > 3. **OIDC Identity Provider**：在 Identity Tokens 之上再封一层完整
 >    的 Authorization Code Flow + Discovery，让 Vault 反向变成下游应
 >    用的**单点登录服务器**——这是 [7.11 / 7.12](/) 的底层支撑。
->
-> 此外，Vault 1.19 引入了 **identity 去重（deduplication）激活机制**，
-> 用来一次性清理历史 bug 留下的重复 entity / alias / group——这是
-> 运营老 Vault 集群升级到 1.19+ 后必做的一道作业。
 
 参考：
 - [Identity Secrets Engine — Overview](https://developer.hashicorp.com/vault/docs/secrets/identity)
 - [Identity Tokens](https://developer.hashicorp.com/vault/docs/secrets/identity/identity-token)
 - [OIDC Identity Provider](https://developer.hashicorp.com/vault/docs/secrets/identity/oidc-provider)
-- [Find and resolve duplicate Vault identities](https://developer.hashicorp.com/vault/docs/secrets/identity/deduplication)
 - 已学概念：[2.5 身份实体](/ch2-identity-entity)、[2.4 Token](/ch2-auth-tokens)、[3.4 Cubbyhole](/ch3-cubbyhole)（"内置不可拆"模型的同类）
 
 ---
@@ -63,7 +58,7 @@ group_order: 30
 | **Identity Tokens**（[§3](#_3-identity-tokens-让-vault-变成-jwt-签发机)） | 申请人**亲自上柜台**领一份盖章公证书带走 | 已登录的 Entity（往往是工作负载） | ❌ 无 UI、纯 API | 服务 A 拿着 Vault 签的 JWT 去访问不信任 Vault 的服务 B |
 | **OIDC Identity Provider**（[§4](#_4-oidc-identity-provider-把-vault-反向变成-idp)） | 公证处兼营的**登录大厅** | 下游应用把用户**重定向**过来 | ✅ 必经 Vault Web UI | 给内部后台 / Boundary / Consul 加 SSO 登录 |
 
-读完整章后再回头看这张表——后面 §1–§5 都是在把这三件事一件件展开。
+读完整章后再回头看这张表——后面 §1–§4 都是在把这三件事一件件展开。
 
 ![identity-overview](/images/ch3-identity/identity-overview.png)
 
@@ -410,64 +405,7 @@ vault write identity/oidc/client/admin-portal \
 
 ---
 
-## 5. 解决重复身份（Identity Deduplication，1.19+）
-
-> **背景**：Vault 1.19 之前的若干旧版本存在 bug，可能在持久化存储里
-> 留下**重复**的 entity / alias / group——比如同一个 alias 名因大小
-> 写差异被存成两条。这些重复在日常使用中可能不引发明显症状，但会让
-> "按身份计费 / 审计 / 策略归并"全部失真。
->
-> Vault 1.19 起，启动时的 unseal 阶段会**主动检测并日志告警**重复，
-> 并提供一个**一次性、不可回滚**的激活开关 `force-identity-deduplication`，
-> 用来把重复彻底去掉。
-
-### 5.1 五步标准流程（[官方流程](https://developer.hashicorp.com/vault/docs/secrets/identity/deduplication)）
-
-1. **看日志**：在 active 节点系统日志里找 `core: post-unseal setup
-   starting` … `setup complete` 之间的 `DUPLICATES DETECTED` 行。如
-   果一条都没有 → 直接跳到第 5 步。
-2. **梳理目标**：用官方给的 Bash 片段把日志切成
-   `merge-details.txt`（自动合并的同名 alias）+ `rename-targets.txt`
-   （需要被改名的 entity / group）。
-3. **逐项处理**：根据"不同大小写 alias 重复"还是"entity / group 重
-   复"两类问题，分别按 [different-case](https://developer.hashicorp.com/vault/docs/secrets/identity/deduplication/different-case)
-   / [entity-group](https://developer.hashicorp.com/vault/docs/secrets/identity/deduplication/entity-group)
-   两份子文档操作。**PR 副本集群要分别检查**——本地 alias 重复只在
-   secondary 上能看到。
-4. **评估延迟影响**：激活时所有节点会**重载内存身份缓存**——大集群
-   可能阻塞请求十几秒甚至超过 30s。提前安排维护窗口。
-5. **激活去重**：在 primary 上执行：
-   ```bash
-   vault write -f sys/activation-flags/force-identity-deduplication/activate
-   ```
-
-### 5.2 三个不可逆的事实
-
-| 事实 | 含义 |
-| --- | --- |
-| **激活是单向操作** | 一旦点亮就**永远**回不去。该集群此后每次 unseal 都会强制再跑一遍去重检查。 |
-| **未来 unseal 会更快** | 因为重复早已清零，去重检查变成纯校验、几乎零耗时——这是上线 1.19+ 之后的小红利。 |
-| **DR 副本不需单独检查** | DR 副本不处理客户端写入 → 不会产生本地重复；只检查 primary 与 PR secondary 即可。 |
-
-### 5.3 实战建议
-
-- 升级到 1.19+ **当天**先看日志、判断是否有 `DUPLICATES DETECTED`，
-  **不要急着激活**。
-- 有重复时**先按 §5.1 第 3 步尽量手工解决**，再激活——激活后下次
-  unseal 会自动处理残留的重复：同名 entity / group 会被**重命名**为
-  `name-<uuid>`，同名 alias（同 mount_accessor + name）会触发 entity
-  **合并**。两种操作都**不可逆**，所以激活前务必确认每组重复确实该处理。
-- 维护窗口里激活；激活后看每个节点日志里的两行：
-  ```
-  INFO core: force-identity-deduplication activated, reloading identity store
-  INFO core: force-identity-deduplication activated, reloading identity store complete
-  ```
-  之间的耗时就是这次"全集群身份缓存重载"的实际时长，作为下次容量
-  评估的基准。
-
----
-
-## 6. 路径与权限速查
+## 5. 路径与权限速查
 
 | 想做的事 | 路径 | 备注 |
 | --- | --- | --- |
@@ -483,11 +421,10 @@ vault write identity/oidc/client/admin-portal \
 | 创建 OIDC client（RP） | `identity/oidc/client/<name>` | 默认 `assignments=[]` → 谁都进不来 |
 | 把白名单装上 | `identity/oidc/assignment/<name>` | `entity_ids` + `group_ids` |
 | 看 Provider Discovery | `identity/oidc/provider/<name>/.well-known/openid-configuration` | 无需鉴权 |
-| 激活去重（1.19+，**不可逆**） | `sys/activation-flags/force-identity-deduplication/activate` | 只在 primary 执行 |
 
 ---
 
-## 7. 与其它章节的衔接
+## 6. 与其它章节的衔接
 
 - **[2.5 身份实体](/ch2-identity-entity)**：本节是它的"引擎入口与
   API 视角"补全。概念在那一节，操作在这一节。
@@ -498,14 +435,14 @@ vault write identity/oidc/client/admin-portal \
   Vault 自动写到 `identity/` 的 entity-alias 就是本节 §2 那张表里的
   操作；理解本节有助于诊断"为什么我同一个人登录两次拿到了两个
   Entity"。
-- **[7.11 / 7.12 Vault 作为 OIDC Provider](/)**：本节 §4 给的"引擎
+- **[7.11 / 7.12 Vault 作为 OIDC Provider](/)**：本节 §3–4 给的"引擎
   侧基础"，那两节给"端到端 SSO 实战"。
 - **[5.7 Mount Migration](/ch5-mount-migration)**：迁移 auth mount
   时身份归并不会断的原因（accessor 不变）就是本节 §2.1 那条规律。
 
 ---
 
-## 8. 互动实验
+## 7. 互动实验
 
 本节配套的实验在一个 Dev 模式 Vault（1.19.2）上把上述要点全部跑过一
 遍：
@@ -523,11 +460,5 @@ vault write identity/oidc/client/admin-portal \
   认全拒"，再加 `allow_all` 修复），拿 Discovery 文档，并用 curl 模
   拟 RP 调用 token 端点跑一次 Authorization Code Flow（用 Vault CLI
   辅助拿 `code`）。
-- **Step 4**：体验 `force-identity-deduplication` 激活流程——先在干净
-  集群上演示激活 API 与不可逆语义；然后重启 Vault 启用
-  `raw_storage_endpoint`，用 `sys/raw` + Python 脚本往存储里**故意注入
-  一个同名 entity**（绕过 API 层的去重校验），通过 seal/unseal 分两个
-  阶段观察：flag 未激活时只打 `DUPLICATES DETECTED` 警告，激活后自动
-  重命名重复 entity 为 `bob-<uuid>`。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch3-identity" title="实验：Identity 机密引擎与 OIDC Provider 全流程" />

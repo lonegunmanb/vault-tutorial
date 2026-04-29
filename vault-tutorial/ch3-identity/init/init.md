@@ -9,10 +9,9 @@
   让 Vault 变成**符合 OIDC 规范的 JWT 签发机**
 - 通过 `identity/oidc/provider` + `client` + `assignment` 让 Vault
   反向变成下游应用的 **OIDC Identity Provider**
-- 1.19+ 提供 `force-identity-deduplication` 激活机制清理历史重复身份
 
-本实验在一个 Dev 模式 Vault（1.19.2，含 dedup 能力）上把这些要点全
-部亲手跑一遍。每一步都设计成**可以独立重入**，做错了重新跑就行。
+本实验在一个 Dev 模式 Vault（1.19.2）上把这些要点全部亲手跑一遍。
+每一步都设计成**可以独立重入**，做错了重新跑就行。
 
 实验环境会预先：
 

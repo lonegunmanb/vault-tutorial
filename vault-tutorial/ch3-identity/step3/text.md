@@ -196,7 +196,3 @@ curl -s "$ISSUER/.well-known/keys" | jq
 任何 OIDC 库拿这把公钥就能验 §3.6 那条 `id_token`。**这就是为什么
 说"启用 OIDC Provider = 启用一个完整的 IdP"**——你已经具备了 Auth0 /
 Keycloak 的最小可用功能集。
-
----
-
-> Step 4 体验 1.19+ 的 dedup 激活机制——一个**永不可逆**的开关。
