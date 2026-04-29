@@ -58,15 +58,18 @@ Vault 启用 `ldap/` 引擎后必须先 `vault write ldap/config` 写入：
 
 | 字段 | 含义 |
 | --- | --- |
-| `url` | LDAP 服务器地址，如 `ldap://host:389` 或 `ldaps://host:636` |
+| `url` | LDAP 服务器地址，如 `ldap://host:389` 或 `ldaps://host:636`；可传逗号分隔的多个 URL，Vault 会按顺序尝试实现 failover |
 | `binddn` | Vault 操作目录时使用的管理员 DN（如 `cn=admin,dc=example,dc=org`） |
 | `bindpass` | 该 DN 的密码 |
 | `userdn` | 搜索/修改账号的 base DN（一般是放服务账号的 OU） |
-| `schema` | `openldap`/`ad`/`racf`，影响改密时调用的 LDAP 属性 |
+| `userattr` | 搜账号时匹配的属性；不填时默认值随 `schema` 变：`openldap` → `cn`、`ad` → `userPrincipalName`、`racf` → `racfid` |
+| `schema` | `openldap`/`ad`/`racf`，影响改密时操作的目标属性 |
+| `starttls` | 在只开放 389 端口、又要求加密的环境设为 `true`：Vault 先明文连接再发送 StartTLS 指令升级为加密信道 |
 
 > **轮转 binddn 自身的密码**：调用 `vault write -f ldap/rotate-root` 让 Vault 生成一个新随机密码、
-> 写回 LDAP、并把 `bindpass` 在 Vault 内更新——之后**连 Vault 自己都不知道原密码是什么**。
-> 强烈建议在 `ldap/config` 写入后立刻执行一次。
+> 写回 LDAP，并在 Vault 内部存储里同步更新。完成后这个新密码**只存在于 Vault 内部**，
+> 任何 API 都**不能再把它读出来**（官方原话：*will only be known to Vault and will not be retrievable once rotated*）——
+> 后续所有目录操作都由 Vault 在内部代为完成。强烈建议在 `ldap/config` 写入后立刻执行一次。
 
 ### 2.2 三种模式同框对比
 
@@ -104,6 +107,24 @@ vault write ldap/static-role/etl-app1 \
 官方建议要么先 `vault write -f ldap/rotate-role/etl-app1` 把密码换成只有 Vault 才知道的随机串再删，
 要么在 LDAP 端立即收回该账号的访问权限——否则删 role 那一刻，最后一次发放的密码就成了
 "任何拿到过它的人都能继续用"的孤儿凭据。
+
+**注意 4 / 存量账号接管：`skip_import_rotation`**。上面那条 `vault write` 默认会在创建 role 的那一瞬间
+立刻把 `app1` 在 LDAP 里的**现有密码**轮成 Vault 生成的随机串。应用如果还没改造成从 Vault 读密码，
+在 role 创建之后下一次认证就会被拒。存量迁移场景必须联同 `skip_import_rotation=true` 一起下发：
+
+```bash
+vault write ldap/static-role/etl-app1 \
+  username="app1" dn="cn=app1,ou=ServiceAccounts,dc=example,dc=org" \
+  rotation_period="24h" skip_import_rotation=true
+```
+
+这样 Vault 建立了管理关系但不动现有密码；等应用上线从 `ldap/static-cred/etl-app1` 读密码后，
+再 `vault write -f ldap/rotate-role/etl-app1` 手动踢一脚、切断旧密码生命周期。可在 `ldap/config` 上
+用 `skip_static_role_import_rotation=true` 把这个默认值反转为全局不覆写。
+
+**AD 业主请多注意**：Active Directory 服务器有个叫“lifetime period of an old password”的设置——
+密码被 Vault 轮转后的一段宽限期内，旧密码仍然可以登录。这主要是为了容忍多域控之间的密码复制延迟，
+**是 AD 的特性，不是 Vault 轮转失败**；审计看到"旧密码仍能认证成功"之前先去 AD 端查这个设置。
 
 ---
 
@@ -271,6 +292,20 @@ vault write -f ldap/library/break-glass-team/check-out
 > Library 与 Static Role 的差异：Static 是"一个账号长期一个密码、定时轮转"；Library 是
 > "一个账号被一个人**短期独占**，每次易主都换密码"。前者关心"过去是否泄露"，后者关心"借出期间是否唯一"。
 
+### 5.1 池子卡死怎么救：管理员强制归还
+
+如果开了 `disable_check_in_enforcement=false`（默认），但借用人的 Token 意外失效、机器崩了，
+该账号在 Lease 超时前谁都 `check-in` 不了。这时走管理员专用路径强制归还：
+
+```bash
+# 需要在 ldap/library/manage/break-glass-team/check-in 上有 update 权限
+vault write -f ldap/library/manage/break-glass-team/check-in \
+  service_account_names="svc-ops-1"
+```
+
+官方定义：the `manage` endpoint 绕过身份一致性校验，并同样会触发一次密码轮转——
+这条路径只应给 highly privileged Vault users（Vault operator）开。
+
 ---
 
 ## 6. 一表速查：三种模式如何选
@@ -299,6 +334,7 @@ vault write -f ldap/library/break-glass-team/check-out
 | 申领 Dynamic 凭据 | `ldap/creds/<name>` | `capabilities = ["read"]` |
 | Library Set CRUD | `ldap/library/<name>` | `capabilities = ["create","read","update","delete","list"]` |
 | Library 借/还 | `ldap/library/<name>/check-out` `check-in` `status` | `capabilities = ["update","read"]` |
+| Library 管理员强制归还 | `ldap/library/manage/<name>/check-in` | `capabilities = ["update"]` |
 
 **Vault binddn 在 LDAP 端需要的权限**：
 
