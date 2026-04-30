@@ -88,6 +88,8 @@ Vault 启用 `ldap/` 引擎后必须先 `vault write ldap/config` 写入：
 
 ## 3. Static Roles：长寿账号 + 周期轮转
 
+![static-role-rotation](/images/ch3-ldap/static-role-rotation.png)
+
 适合场景：**应用配置里只能配一个固定的服务账号**（很多老旧 ETL、备份脚本、CI/CD agent），
 但安全要求密码必须定期轮转。
 
@@ -134,6 +136,8 @@ vault write ldap/static-role/etl-app1 \
 ---
 
 ## 4. Dynamic Roles：用完即删
+
+![dynamic-role-lifecycle](/images/ch3-ldap/dynamic-role-lifecycle.png)
 
 适合场景：**应用每次启动都能动态读凭据**、并且需要"使用完毕、痕迹彻底消失"。
 
