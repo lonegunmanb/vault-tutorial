@@ -27,20 +27,21 @@ vault read kubernetes/roles/mode-c
 ## 4.2 申领 + 看 K8s 三件套
 
 ```bash
-CRED=$(vault read -format=json kubernetes/creds/mode-c kubernetes_namespace=default)
+CRED=$(vault write -format=json kubernetes/creds/mode-c kubernetes_namespace=default)
 TOKEN=$(echo "$CRED" | jq -r .data.service_account_token)
 SA=$(echo "$CRED" | jq -r .data.service_account_name)
 LEASE=$(echo "$CRED" | jq -r .lease_id)
 
 echo "临时 SA: $SA"
-kubectl get role,rolebinding,sa -n default | grep -E "^role.*v-role|^rolebinding.*v-binding|^serviceaccount/v-token"
+kubectl get role/"$SA" rolebinding/"$SA" sa/"$SA" -n default
 ```
 
-应同时看到三个临时对象：`v-role-mode-c-*`、`v-binding-mode-c-*`、`v-token-mode-c-*`。
+应同时看到三个同名临时对象：Role、RoleBinding、ServiceAccount。
+Vault 默认会用同一个生成名创建这三件套，名称形如 `v-<调用者>-mode-c-<时间戳>-<随机串>`。
 
 ```bash
 # 看现场生成的 Role 的具体规则
-kubectl describe role -n default | awk '/^Name:.*v-role/,/^Events:/'
+kubectl describe role "$SA" -n default
 ```
 
 ## 4.3 验证权限严格符合声明
@@ -57,16 +58,16 @@ kubectl --token="$TOKEN" -n default auth can-i list pods         # no  (resource
 ```bash
 vault lease revoke "$LEASE"
 sleep 1
-kubectl get role,rolebinding,sa -n default | grep -E "v-role|v-binding|v-token" || echo "(三件套已全部清理)"
+kubectl get role/"$SA" rolebinding/"$SA" sa/"$SA" -n default 2>/dev/null || echo "(三件套已全部清理)"
 ```
 
 ## 4.5 三种模式的清理边界对照实验
 
 ```bash
 # 同时持有 A / B / C 三个 lease
-LA=$(vault read -format=json kubernetes/creds/mode-a | jq -r .lease_id)
-LB=$(vault read -format=json kubernetes/creds/mode-b kubernetes_namespace=default | jq -r .lease_id)
-LC=$(vault read -format=json kubernetes/creds/mode-c kubernetes_namespace=default | jq -r .lease_id)
+LA=$(vault write -format=json kubernetes/creds/mode-a kubernetes_namespace=default | jq -r .lease_id)
+LB=$(vault write -format=json kubernetes/creds/mode-b kubernetes_namespace=default | jq -r .lease_id)
+LC=$(vault write -format=json kubernetes/creds/mode-c kubernetes_namespace=default | jq -r .lease_id)
 
 count() { kubectl get sa,role,rolebinding -n default --no-headers 2>/dev/null | wc -l; }
 echo "三个 lease 全活: $(count) 个对象"
@@ -85,7 +86,7 @@ echo "revoke C 后  : $(count)  (C 删 Role + RoleBinding + SA，应少 3)"
 
 ## ✅ 验收
 
-- [ ] 申领后 `default` ns 同时多了 `v-role-mode-c-*` Role、`v-binding-mode-c-*` RB、`v-token-mode-c-*` SA
+- [ ] 申领后 `default` ns 同时多了同名临时 Role、RoleBinding、SA（名称包含 `mode-c`）
 - [ ] `kubectl --token` 验证权限严格匹配 rules：can secrets/configmaps get/list；不能 delete/list pods
 - [ ] revoke 后三件套**全部消失**
 - [ ] 对照实验显示：A 不删任何对象；B 删 2 个（SA + RB）；C 删 3 个（Role + RB + SA）

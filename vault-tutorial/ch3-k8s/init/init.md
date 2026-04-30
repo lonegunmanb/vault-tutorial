@@ -1,7 +1,7 @@
 # 实验：Kubernetes 机密引擎的三种 SA Token 签发模式
 
 [3.11 Kubernetes 机密引擎](/ch3-k8s) 讲清楚了 manager SA + 三种 Role 模式的全部模型。
-本实验在一个真实的 **k3s 单节点集群** 上把三种模式跑一遍，并用 `kubectl auth can-i`
+本实验在 Killercoda 预置的 **kubeadm 单节点 Kubernetes 集群** 上把三种模式跑一遍，并用 `kubectl auth can-i`
 验证每次签出的 token 权限符合预期、用 `kubectl get role,rolebinding,sa` 观察 Lease 到期时的清理行为。
 
 ---
@@ -10,8 +10,8 @@
 
 后台脚本会自动准备好：
 
-- **k3s** 单节点集群（默认 v1.27+，已禁 traefik / metrics-server 节省资源）
-  - kubeconfig: `/etc/rancher/k3s/k3s.yaml`（已 `chmod 644`，全 shell 可用）
+- **Killercoda 预置 kubeadm 单节点集群**（`kubernetes-kubeadm-1node` 后端镜像，当前随 Killercoda 更新到受支持版本）
+  - kubeconfig: 使用镜像预置的 `/root/.kube/config` 或 `/etc/kubernetes/admin.conf`
 - **Vault 1.19.2** Dev 模式，`VAULT_ADDR=http://127.0.0.1:8200`、`VAULT_TOKEN=root`
 - **Manager SA**：`vault-manager` (在 `vault-system` namespace)
   - ClusterRole `vault-kubernetes-secrets` 已绑定，包含模式 A/B/C 全部所需权限
@@ -32,4 +32,4 @@
 3. **Lease 隔离**：多次申领产生独立的临时对象集合，分别 revoke 时只清各自那一组
 4. **K8s 1.24+ 的 SA Secret 必须显式创建**——这是配 Vault manager token 的关键技巧
 
-预期耗时：15 ~ 25 分钟（含 k3s 启动 ~30s）。
+预期耗时：15 ~ 25 分钟；Kubernetes 环境由 Killercoda 预置，不需要在场景中再安装集群。

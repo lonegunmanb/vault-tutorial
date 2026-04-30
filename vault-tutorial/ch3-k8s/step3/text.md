@@ -21,13 +21,13 @@ vault write kubernetes/roles/mode-b \
 ## 3.2 申领前快照
 
 ```bash
-kubectl get sa,rolebinding -n default | grep -E "^v-token|^v-binding|NAME" || echo "(目前无 v- 前缀对象)"
+kubectl get sa,rolebinding -n default | grep -E "mode-b|NAME" || echo "(目前无 mode-b 临时对象)"
 ```
 
 ## 3.3 申领
 
 ```bash
-CRED=$(vault read -format=json kubernetes/creds/mode-b kubernetes_namespace=default)
+CRED=$(vault write -format=json kubernetes/creds/mode-b kubernetes_namespace=default)
 TOKEN=$(echo "$CRED" | jq -r .data.service_account_token)
 SA=$(echo "$CRED" | jq -r .data.service_account_name)
 LEASE=$(echo "$CRED" | jq -r .lease_id)
@@ -39,14 +39,15 @@ echo "Lease : $LEASE"
 ## 3.4 申领后快照 —— 多了两个对象
 
 ```bash
-kubectl get sa,rolebinding -n default | grep -E "^serviceaccount/v-token|^rolebinding.apps|^rolebinding/v-|NAME"
+kubectl get sa/"$SA" rolebinding/"$SA" -n default
 ```
 
-应能看到一个 `v-token-mode-b-...` SA 与一个 `v-binding-mode-b-...` RoleBinding。
+应能看到一个临时 SA 与一个同名临时 RoleBinding。
+Vault 默认会用同一个生成名创建这两个对象，名称形如 `v-<调用者>-mode-b-<时间戳>-<随机串>`。
 `pod-reader` Role 没动（被复用）。
 
 ```bash
-kubectl describe rolebinding -n default | grep -A 8 "Name:.*v-binding"
+kubectl describe rolebinding "$SA" -n default
 ```
 
 ## 3.5 验证权限
@@ -61,23 +62,29 @@ kubectl --token="$TOKEN" -n default auth can-i list secrets    # no
 ```bash
 vault lease revoke "$LEASE"
 sleep 1
-kubectl get sa,rolebinding -n default | grep -E "v-token|v-binding" || echo "(临时对象已被清理)"
+kubectl get sa/"$SA" rolebinding/"$SA" -n default 2>/dev/null || echo "(临时对象已被清理)"
 kubectl get role pod-reader -n default
 ```
 
 ## 3.7 多 Lease 隔离演示
 
 ```bash
-LEASE1=$(vault read -format=json kubernetes/creds/mode-b kubernetes_namespace=default | jq -r .lease_id)
-LEASE2=$(vault read -format=json kubernetes/creds/mode-b kubernetes_namespace=default | jq -r .lease_id)
+CRED1=$(vault write -format=json kubernetes/creds/mode-b kubernetes_namespace=default)
+LEASE1=$(echo "$CRED1" | jq -r .lease_id)
+SA1=$(echo "$CRED1" | jq -r .data.service_account_name)
+
+CRED2=$(vault write -format=json kubernetes/creds/mode-b kubernetes_namespace=default)
+LEASE2=$(echo "$CRED2" | jq -r .lease_id)
+SA2=$(echo "$CRED2" | jq -r .data.service_account_name)
 
 echo "现在有两组临时对象："
-kubectl get sa,rolebinding -n default | grep "v-"
+kubectl get sa/"$SA1" rolebinding/"$SA1" sa/"$SA2" rolebinding/"$SA2" -n default
 
 echo ">>> revoke 第一个 lease"
 vault lease revoke "$LEASE1"
 sleep 1
-kubectl get sa,rolebinding -n default | grep "v-"
+kubectl get sa/"$SA1" rolebinding/"$SA1" -n default 2>/dev/null || echo "第一组已清理"
+kubectl get sa/"$SA2" rolebinding/"$SA2" -n default
 echo "(应该只剩一组)"
 
 vault lease revoke "$LEASE2"
@@ -87,7 +94,7 @@ vault lease revoke "$LEASE2"
 
 ## ✅ 验收
 
-- [ ] 申领后 `default` ns 多了 `v-token-mode-b-*` SA 与 `v-binding-mode-b-*` RoleBinding
+- [ ] 申领后 `default` ns 多了同名的临时 SA 与临时 RoleBinding（名称包含 `mode-b`）
 - [ ] 这两个对象的 RoleBinding `roleRef` 指向 `pod-reader`
 - [ ] 权限：list pods=yes，list secrets=no
 - [ ] revoke 单条 lease 只清那一组临时对象，另一组仍在

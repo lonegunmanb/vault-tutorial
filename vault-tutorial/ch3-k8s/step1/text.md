@@ -39,7 +39,7 @@ vault write kubernetes/roles/connectivity-check \
   allowed_kubernetes_namespaces="default" \
   service_account_name="viewer-sa"
 
-vault read kubernetes/creds/connectivity-check
+vault write kubernetes/creds/connectivity-check kubernetes_namespace=default
 ```
 
 应返回 `lease_id` + `service_account_token` 等字段。这条命令成功 = Vault 能连通 K8s API + manager SA 至少有 `serviceaccounts/token:create`。
@@ -50,4 +50,4 @@ vault read kubernetes/creds/connectivity-check
 
 - [ ] `vault secrets list` 看得到 `kubernetes/`
 - [ ] `kubectl describe clusterrole vault-kubernetes-secrets` 列出 `bind`/`escalate`
-- [ ] `vault read kubernetes/creds/connectivity-check` 返回了一条真实 SA token
+- [ ] `vault write kubernetes/creds/connectivity-check kubernetes_namespace=default` 返回了一条真实 SA token

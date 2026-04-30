@@ -1,6 +1,6 @@
 {
   "title": "Kubernetes 机密引擎：三种动态 SA Token 签发模式",
-  "description": "在 k3s 单节点集群上运行 Vault 1.19.2 (Dev 模式)，亲手验证 kubernetes/ 引擎的三种 Role 模式：service_account_name (借用现有 SA)、kubernetes_role_name (动态 RoleBinding + 临时 SA)、generated_role_rules (Role+RoleBinding+SA 全量现场生成)，并观察 Lease 到期时三种模式的不同清理行为。",
+  "description": "在 Killercoda 预置的 kubeadm 单节点 Kubernetes 集群上运行 Vault 1.19.2 (Dev 模式)，亲手验证 kubernetes/ 引擎的三种 Role 模式：service_account_name (借用现有 SA)、kubernetes_role_name (动态 RoleBinding + 临时 SA)、generated_role_rules (Role+RoleBinding+SA 全量现场生成)，并观察 Lease 到期时三种模式的不同清理行为。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -35,7 +35,7 @@
     }
   },
   "backend": {
-    "imageid": "ubuntu"
+    "imageid": "kubernetes-kubeadm-1node"
   },
   "interface": {
     "layout": "editor-terminal"

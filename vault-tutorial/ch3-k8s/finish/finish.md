@@ -41,7 +41,7 @@ revoke │ (无)   │       │ -SA -RB  │      │ -Role-RB-SA │
    这是 K8s 的反权限提升保护，本实验的 ClusterRole 已显式授予。
 
 3. **`vault read kubernetes/config` 看不到 token** —— 不是 bug，机密字段从不回显。
-   要验证配置，直接 `vault read kubernetes/creds/<role>` 试一次申领。
+   要验证配置，直接 `vault write kubernetes/creds/<role> kubernetes_namespace=<ns>` 试一次申领。
 
 ## 与下一节的衔接
 

@@ -4,37 +4,39 @@ set +e
 source /root/setup-common.sh
 
 # ─────────────────────────────────────────────────────────
-# 并行：装 vault + 装 jq + 装 k3s
+# 并行：装 Vault + 装 jq；Kubernetes 由 Killercoda 后端镜像预置
 # ─────────────────────────────────────────────────────────
 install_vault &
 INSTALL_VAULT_PID=$!
 
 apt-get update -qq && apt-get install -y -qq jq curl > /dev/null 2>&1
 
-# 装 k3s（单节点，禁 traefik 与 metrics-server 节省资源；kubeconfig 644 给非 root shell 用）
-echo "Installing k3s..."
-curl -sfL https://get.k3s.io | \
-  INSTALL_K3S_EXEC="--disable=traefik --disable=metrics-server --write-kubeconfig-mode=644" \
-  sh - > /var/log/k3s-install.log 2>&1
+# Killercoda 的 kubernetes-kubeadm-1node 镜像已内置单节点集群。
+# 这里只等待 API server 与 node ready，并把 kubeconfig 显式写入登录 shell。
+if [ -z "${KUBECONFIG:-}" ]; then
+  if [ -f /root/.kube/config ]; then
+    export KUBECONFIG=/root/.kube/config
+  elif [ -f /etc/kubernetes/admin.conf ]; then
+    export KUBECONFIG=/etc/kubernetes/admin.conf
+  fi
+fi
 
-# 等 k3s 就绪
-echo "Waiting for k3s to be ready..."
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-for i in $(seq 1 90); do
-  if [ -f /etc/rancher/k3s/k3s.yaml ] && kubectl get nodes 2>/dev/null | grep -q " Ready "; then
-    echo "k3s ready."
+echo "Waiting for Kubernetes to be ready..."
+for i in $(seq 1 120); do
+  if kubectl get nodes 2>/dev/null | grep -q " Ready "; then
+    echo "Kubernetes ready."
     break
   fi
   sleep 1
 done
 
 # 持久化 KUBECONFIG 给所有 shell
-cat > /etc/profile.d/k3s.sh <<'EOF'
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+cat > /etc/profile.d/kubernetes.sh <<EOF
+export KUBECONFIG='${KUBECONFIG:-/root/.kube/config}'
 EOF
-chmod +x /etc/profile.d/k3s.sh
+chmod +x /etc/profile.d/kubernetes.sh
 grep -q "KUBECONFIG=" /root/.bashrc 2>/dev/null || \
-  echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> /root/.bashrc
+  cat /etc/profile.d/kubernetes.sh >> /root/.bashrc
 
 # ─────────────────────────────────────────────────────────
 # 创建 manager SA + ClusterRole + ClusterRoleBinding
@@ -86,7 +88,7 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-K8S_HOST="https://$(hostname -i):6443"
+K8S_HOST=$(kubectl config view --minify -o 'jsonpath={.clusters[0].cluster.server}')
 K8S_CA_CERT=$(kubectl get secret vault-manager-token -n vault-system \
   -o jsonpath='{.data.ca\.crt}' | base64 -d)
 

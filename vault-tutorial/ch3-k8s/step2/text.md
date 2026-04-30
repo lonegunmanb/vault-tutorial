@@ -4,7 +4,7 @@
 
 1. 用 `service_account_name="viewer-sa"` 创建 Vault Role
 2. 申领 token，用 `kubectl --token=...` 验证它的权限恰好是 `pod-reader` Role 给的
-3. revoke Lease，观察 K8s 上 **没有任何对象被删除**——因为模式 A 没有创建临时对象
+3. revoke Lease，观察 K8s 上 **没有任何对象被删除**——因为模式 A 没有创建临时对象；已签出的短期 token 会按自身 `exp` 自然过期
 
 ---
 
@@ -32,7 +32,7 @@ vault read kubernetes/roles/mode-a
 ## 2.3 申领 + 验证权限
 
 ```bash
-CRED=$(vault read -format=json kubernetes/creds/mode-a)
+CRED=$(vault write -format=json kubernetes/creds/mode-a kubernetes_namespace=default)
 TOKEN=$(echo "$CRED" | jq -r .data.service_account_token)
 LEASE=$(echo "$CRED" | jq -r .lease_id)
 SA=$(echo "$CRED" | jq -r .data.service_account_name)
@@ -65,19 +65,21 @@ kubectl get sa,role,rolebinding -n default
 
 数量**完全没变**。模式 A 没有任何临时对象需要清理。
 
-不过 token 已经被 K8s 记下"该 SA 在某个时点之前签的 token 才算"——简单的验证：
+注意：模式 A 借用的是已有 `viewer-sa`，Vault revoke lease 时无法删除这个已有 SA，也不会主动撤销单个 TokenRequest token。
+所以刚刚签出的 token 通常会继续有效，直到 JWT 自己的 `exp` 到期。
+你可以解码 token 看它的过期时间：
 
 ```bash
-kubectl --token="$TOKEN" -n default auth can-i list pods
+PAYLOAD=$(echo "$TOKEN" | cut -d'.' -f2 | tr '_-' '/+')
+PAYLOAD="${PAYLOAD}$(printf '=%.0s' $(seq 1 $(( (4 - ${#PAYLOAD} % 4) % 4 ))))"
+echo "$PAYLOAD" | base64 -d 2>/dev/null | jq -r '.iat,.exp | todate'
 ```
-
-会返回 `no` 或报错（token 已过 Vault 的 TTL；K8s 端的撤销由 token 自带 expiry 实现）。
 
 ---
 
 ## ✅ 验收
 
-- [ ] `vault read kubernetes/creds/mode-a` 返回 `service_account_name: viewer-sa`
+- [ ] `vault write kubernetes/creds/mode-a kubernetes_namespace=default` 返回 `service_account_name: viewer-sa`
 - [ ] `kubectl --token` 验证权限：`list pods` = yes，`list secrets` = no
 - [ ] revoke 后 K8s 上 SA / Role / RoleBinding 数量不变
-- [ ] revoke 后 token 已不再有效
+- [ ] 已理解：模式 A 的短期 token 不会被提前撤销，只会随 JWT `exp` 自然过期
