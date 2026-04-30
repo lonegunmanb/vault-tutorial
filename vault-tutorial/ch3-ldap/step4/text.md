@@ -11,6 +11,14 @@
 
 ## 4.1 创建 Library Set
 
+先确认 `svc-ops-1` 现在还是 init 预置的原始密码（为 4.1 之后做对比准备）：
+
+```bash
+ldapwhoami -x -H ldap://127.0.0.1:389 \
+  -D "cn=svc-ops-1,ou=ServiceAccounts,dc=example,dc=org" -w "ops-initial-pass-1"
+# 应输出: dn:cn=svc-ops-1,ou=serviceaccounts,dc=example,dc=org
+```
+
 ```bash
 vault write ldap/library/break-glass-team \
   service_account_names="svc-ops-1,svc-ops-2,svc-ops-3" \
@@ -27,14 +35,19 @@ vault read ldap/library/break-glass-team/status
 
 三个账号都应显示 `available: true`。
 
+> **创建即接管**：`vault write ldap/library/...` 完成的那一刻，Vault 已经把池中所有账号的密码
+> 轮成了**只有 Vault 才知道**的随机串。验证一下：
+>
+> ```bash
+> ldapwhoami -x -H ldap://127.0.0.1:389 \
+>   -D "cn=svc-ops-1,ou=ServiceAccounts,dc=example,dc=org" -w "ops-initial-pass-1" 2>&1 | head -1
+> # 应输出: ldap_bind: Invalid credentials (49)
+> ```
+>
+> 这意味着任何在外面攥着 `ops-initial-pass-1` 的人都立刻失去了访问能力——之后只能通过 check-out
+> 拿到 Vault 现场发的新密码。
+
 ## 4.2 借出（check-out）一个账号
-
-记下当前 svc-ops-1 的初始密码（应该还是 `ops-initial-pass-1`，确认它确实能登：
-
-```bash
-ldapwhoami -x -H ldap://127.0.0.1:389 \
-  -D "cn=svc-ops-1,ou=ServiceAccounts,dc=example,dc=org" -w "ops-initial-pass-1"
-```
 
 借出：
 
@@ -58,7 +71,7 @@ echo "Lease: $LEASE"
 ldapwhoami -x -H ldap://127.0.0.1:389 \
   -D "cn=$ACCT,ou=ServiceAccounts,dc=example,dc=org" -w "$PASS"
 
-# 假设借到的是 svc-ops-1，原始密码 ops-initial-pass-1 已失效
+# 原始密码 ops-initial-pass-1 在 4.1 创建 library 时就已失效，check-out 后依然无效
 ldapwhoami -x -H ldap://127.0.0.1:389 \
   -D "cn=$ACCT,ou=ServiceAccounts,dc=example,dc=org" -w "ops-initial-pass-1" 2>&1 | head -1
 # 应输出 ldap_bind: Invalid credentials (49)
