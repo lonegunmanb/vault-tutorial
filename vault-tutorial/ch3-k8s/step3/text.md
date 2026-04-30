@@ -53,8 +53,19 @@ kubectl describe rolebinding "$SA" -n default
 ## 3.5 验证权限
 
 ```bash
-kubectl --token="$TOKEN" -n default auth can-i list pods       # yes
-kubectl --token="$TOKEN" -n default auth can-i list secrets    # no
+K8S_SERVER=$(kubectl config view --minify -o 'jsonpath={.clusters[0].cluster.server}')
+TOKEN_KUBECONFIG=/tmp/vault-k8s-token-only.conf
+: > "$TOKEN_KUBECONFIG"
+
+kc_token() {
+  kubectl --kubeconfig="$TOKEN_KUBECONFIG" \
+    --server="$K8S_SERVER" \
+    --insecure-skip-tls-verify=true \
+    --token="$TOKEN" "$@"
+}
+
+kc_token -n default auth can-i list pods       # yes
+kc_token -n default auth can-i list secrets    # no
 ```
 
 ## 3.6 revoke → 临时对象消失，Role 留下
@@ -96,6 +107,6 @@ vault lease revoke "$LEASE2"
 
 - [ ] 申领后 `default` ns 多了同名的临时 SA 与临时 RoleBinding（名称包含 `mode-b`）
 - [ ] 这两个对象的 RoleBinding `roleRef` 指向 `pod-reader`
-- [ ] 权限：list pods=yes，list secrets=no
+- [ ] 使用 token-only 的 `kubectl` 验证权限：list pods=yes，list secrets=no
 - [ ] revoke 单条 lease 只清那一组临时对象，另一组仍在
 - [ ] revoke 全部后 `pod-reader` Role 仍然存在

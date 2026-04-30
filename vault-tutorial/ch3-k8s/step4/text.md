@@ -47,10 +47,21 @@ kubectl describe role "$SA" -n default
 ## 4.3 验证权限严格符合声明
 
 ```bash
-kubectl --token="$TOKEN" -n default auth can-i get secrets       # yes
-kubectl --token="$TOKEN" -n default auth can-i list configmaps   # yes
-kubectl --token="$TOKEN" -n default auth can-i delete secrets    # no  (verbs 没 delete)
-kubectl --token="$TOKEN" -n default auth can-i list pods         # no  (resources 没 pods)
+K8S_SERVER=$(kubectl config view --minify -o 'jsonpath={.clusters[0].cluster.server}')
+TOKEN_KUBECONFIG=/tmp/vault-k8s-token-only.conf
+: > "$TOKEN_KUBECONFIG"
+
+kc_token() {
+  kubectl --kubeconfig="$TOKEN_KUBECONFIG" \
+    --server="$K8S_SERVER" \
+    --insecure-skip-tls-verify=true \
+    --token="$TOKEN" "$@"
+}
+
+kc_token -n default auth can-i get secrets       # yes
+kc_token -n default auth can-i list configmaps   # yes
+kc_token -n default auth can-i delete secrets    # no  (verbs 没 delete)
+kc_token -n default auth can-i list pods         # no  (resources 没 pods)
 ```
 
 ## 4.4 revoke → 三件套全消失
@@ -87,6 +98,6 @@ echo "revoke C 后  : $(count)  (C 删 Role + RoleBinding + SA，应少 3)"
 ## ✅ 验收
 
 - [ ] 申领后 `default` ns 同时多了同名临时 Role、RoleBinding、SA（名称包含 `mode-c`）
-- [ ] `kubectl --token` 验证权限严格匹配 rules：can secrets/configmaps get/list；不能 delete/list pods
+- [ ] 使用 token-only 的 `kubectl` 验证权限严格匹配 rules：can secrets/configmaps get/list；不能 delete/list pods
 - [ ] revoke 后三件套**全部消失**
 - [ ] 对照实验显示：A 不删任何对象；B 删 2 个（SA + RB）；C 删 3 个（Role + RB + SA）

@@ -1,7 +1,7 @@
 # 实验：Kubernetes 机密引擎的三种 SA Token 签发模式
 
 [3.11 Kubernetes 机密引擎](/ch3-k8s) 讲清楚了 manager SA + 三种 Role 模式的全部模型。
-本实验在 Killercoda 预置的 **kubeadm 单节点 Kubernetes 集群** 上把三种模式跑一遍，并用 `kubectl auth can-i`
+本实验在 Killercoda 预置的 **kubeadm 单节点 Kubernetes 集群** 上把三种模式跑一遍，并用 token-only 的 `kubectl auth can-i`
 验证每次签出的 token 权限符合预期、用 `kubectl get role,rolebinding,sa` 观察 Lease 到期时的清理行为。
 
 ---

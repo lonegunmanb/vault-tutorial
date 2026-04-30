@@ -3,7 +3,7 @@
 模型：[3.11 §4.1](/ch3-k8s)。本步要：
 
 1. 用 `service_account_name="viewer-sa"` 创建 Vault Role
-2. 申领 token，用 `kubectl --token=...` 验证它的权限恰好是 `pod-reader` Role 给的
+2. 申领 token，用一个**只带该 token、不带 admin 证书**的 `kubectl` 调用验证它的权限恰好是 `pod-reader` Role 给的
 3. revoke Lease，观察 K8s 上 **没有任何对象被删除**——因为模式 A 没有创建临时对象；已签出的短期 token 会按自身 `exp` 自然过期
 
 ---
@@ -41,12 +41,27 @@ echo "Token 颁给的 SA: $SA"
 echo "Lease ID: $LEASE"
 ```
 
+> 注意：Killercoda 预置的 kubeconfig 通常带有集群管理员 client certificate。
+> 如果只写 `kubectl --token="$TOKEN" ...`，kubectl 仍可能同时带上管理员证书，API Server 会把你识别成管理员，于是 `list secrets` 也会返回 `yes`。
+> 下面先创建一个空 kubeconfig，再只带本次签出的 token 来验证权限。
+
 ```bash
+K8S_SERVER=$(kubectl config view --minify -o 'jsonpath={.clusters[0].cluster.server}')
+TOKEN_KUBECONFIG=/tmp/vault-k8s-token-only.conf
+: > "$TOKEN_KUBECONFIG"
+
+kc_token() {
+  kubectl --kubeconfig="$TOKEN_KUBECONFIG" \
+    --server="$K8S_SERVER" \
+    --insecure-skip-tls-verify=true \
+    --token="$TOKEN" "$@"
+}
+
 # 应输出 yes（pod-reader 给了 list pods）
-kubectl --token="$TOKEN" -n default auth can-i list pods
+kc_token -n default auth can-i list pods
 
 # 应输出 no（pod-reader 没给 secrets 权限）
-kubectl --token="$TOKEN" -n default auth can-i list secrets
+kc_token -n default auth can-i list secrets
 ```
 
 ## 2.4 revoke 后观察 K8s 状态
@@ -80,6 +95,6 @@ echo "$PAYLOAD" | base64 -d 2>/dev/null | jq -r '.iat,.exp | todate'
 ## ✅ 验收
 
 - [ ] `vault write kubernetes/creds/mode-a kubernetes_namespace=default` 返回 `service_account_name: viewer-sa`
-- [ ] `kubectl --token` 验证权限：`list pods` = yes，`list secrets` = no
+- [ ] 使用 token-only 的 `kubectl` 验证权限：`list pods` = yes，`list secrets` = no
 - [ ] revoke 后 K8s 上 SA / Role / RoleBinding 数量不变
 - [ ] 已理解：模式 A 的短期 token 不会被提前撤销，只会随 JWT `exp` 自然过期
