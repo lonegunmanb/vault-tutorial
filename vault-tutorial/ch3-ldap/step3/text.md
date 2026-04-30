@@ -85,10 +85,13 @@ sleep 1
 # 再查
 ldapsearch -x -H ldap://127.0.0.1:389 \
   -D "cn=admin,dc=example,dc=org" -w admin \
-  -b "ou=DynamicUsers,dc=example,dc=org" "(cn=$USER)" cn 2>&1 | grep -E "numEntries|cn:"
+  -b "ou=DynamicUsers,dc=example,dc=org" "(cn=$USER)" cn 2>&1 | grep -E "numResponses|numEntries|cn:"
 ```
 
-应只看到 `# numResponses: 1`（即没有任何 cn= 条目）——账号已被 `deletion_ldif` 销毁。
+应只看到 `# numResponses: 1`、看不到任何 `# numEntries:` 也看不到 `cn:` 行——账号已被 `deletion_ldif` 销毁。
+
+> 小知识：`ldapsearch` 在 0 命中时只会输出 `# numResponses: 1`（包含 search-result 本身），
+> **不会**输出 `# numEntries:` 行（该行只在命中 ≥1 时才出现）。所以 grep 必须包含 `numResponses` 才能看到「删除成功」的信号。
 
 ## 3.6 让 Lease 自然过期
 
@@ -109,7 +112,7 @@ sleep 130
 # 再查应已消失
 ldapsearch -x -H ldap://127.0.0.1:389 \
   -D "cn=admin,dc=example,dc=org" -w admin \
-  -b "ou=DynamicUsers,dc=example,dc=org" "(cn=$USER2)" cn | grep -E "numEntries|cn:"
+  -b "ou=DynamicUsers,dc=example,dc=org" "(cn=$USER2)" cn | grep -E "numResponses|numEntries|cn:"
 ```
 
 ---
