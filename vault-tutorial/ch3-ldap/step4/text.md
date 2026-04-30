@@ -67,14 +67,21 @@ echo "Lease: $LEASE"
 ## 4.3 验证"借出瞬间换密"
 
 ```bash
-# 用 Vault 给的新密码可登
+# 用 Vault 给的新密码应能登
 ldapwhoami -x -H ldap://127.0.0.1:389 \
-  -D "cn=$ACCT,ou=ServiceAccounts,dc=example,dc=org" -w "$PASS"
+  -D "cn=$ACCT,ou=ServiceAccounts,dc=example,dc=org" -w "$PASS" \
+  && echo "✅ 新密码可用" || echo "❌ 新密码不该失败"
+# 应输出:
+#   dn:cn=svc-ops-1,ou=serviceaccounts,dc=example,dc=org
+#   ✅ 新密码可用
 
-# 原始密码 ops-initial-pass-1 在 4.1 创建 library 时就已失效，check-out 后依然无效
+# 原始密码 ops-initial-pass-1 在 4.1 创建 library 时就已失效，check-out 后依然失效
 ldapwhoami -x -H ldap://127.0.0.1:389 \
-  -D "cn=$ACCT,ou=ServiceAccounts,dc=example,dc=org" -w "ops-initial-pass-1" 2>&1 | head -1
-# 应输出 ldap_bind: Invalid credentials (49)
+  -D "cn=$ACCT,ou=ServiceAccounts,dc=example,dc=org" -w "ops-initial-pass-1" \
+  && echo "❌ 旧密码不该还能登" || echo "✅ 旧密码已失效 (49)"
+# 应输出:
+#   ldap_bind: Invalid credentials (49)
+#   ✅ 旧密码已失效 (49)
 ```
 
 查池子状态：
@@ -99,8 +106,11 @@ vault write ldap/library/break-glass-team/check-in \
 ```bash
 # 借出期间的密码 $PASS 现在已失效（Vault 在归还瞬间又改了一次密码）
 ldapwhoami -x -H ldap://127.0.0.1:389 \
-  -D "cn=$ACCT,ou=ServiceAccounts,dc=example,dc=org" -w "$PASS" 2>&1 | head -1
-# 应输出 ldap_bind: Invalid credentials (49)
+  -D "cn=$ACCT,ou=ServiceAccounts,dc=example,dc=org" -w "$PASS" \
+  && echo "❌ 归还后旧密码不该还能登" || echo "✅ 归还瞬间密码已失效 (49)"
+# 应输出:
+#   ldap_bind: Invalid credentials (49)
+#   ✅ 归还瞬间密码已失效 (49)
 ```
 
 ```bash
@@ -120,7 +130,8 @@ echo "再借一次, 拿到: $ACCT2 / $PASS2"
 [ "$PASS" != "$PASS2" ] && echo "✅ 即便借到同一账号，密码也不同"
 
 ldapwhoami -x -H ldap://127.0.0.1:389 \
-  -D "cn=$ACCT2,ou=ServiceAccounts,dc=example,dc=org" -w "$PASS2"
+  -D "cn=$ACCT2,ou=ServiceAccounts,dc=example,dc=org" -w "$PASS2" \
+  && echo "✅ 新密码可用" || echo "❌ 不该失败"
 ```
 
 ## 4.6 把池子借空
