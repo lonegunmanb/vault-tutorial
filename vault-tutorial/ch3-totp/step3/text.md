@@ -172,9 +172,10 @@ vault write totp/code/my-user code=$CODE_NOW
 
 ## 3.8 一次成功的 code 能不能被重放？
 
-TOTP 标准本身**没有强制规定**"一个 code 只能用一次"——这跟 OTP /
-HOTP 不同。Vault 的 provider 模式默认也不做"防重放"，只要 code 还
-在 skew 窗口里，**它确实可以被多次提交并多次返回 `valid=true`**。
+TOTP 标准本身**没有强制规定**"一个 code 只能用一次"——这跟 HOTP
+不同。但 Vault 的 provider 模式**自己加了一层防重放**：每个 key
+在内部记账"这串数字在当前窗口里已经被用过"，同一 code 第二次提交
+会被直接拒绝。
 
 ```bash
 # 同一个还在窗口里的 code 连提两次
@@ -183,11 +184,35 @@ vault write totp/code/my-user code=$CODE
 vault write totp/code/my-user code=$CODE
 ```
 
-两次大概率都返回 `valid=true`。
+第一次会返回：
 
-> 如果业务必须做"一个 code 只能登录一次"的反重放，需要在 Vault 上
-> 一层自己维护"已用过的 (user, code, window) 三元组"——Vault TOTP
-> 引擎本身只负责"这串数字算出来对不对"，不负责"它是不是被用过"。
+```
+Key      Value
+---      -----
+valid    true
+```
+
+第二次直接是 HTTP 400 报错：
+
+```
+Error writing data to totp/code/my-user: Error making API request.
+
+URL: PUT http://127.0.0.1:8200/v1/totp/code/my-user
+Code: 400. Errors:
+
+* code already used; wait until the next time period
+```
+
+注意这里的返回**不再是** `valid=false` 这种业务字段，而是 HTTP 400
+这种**协议层错误**——Vault 在算 TOTP 之前就先查"这串数字本窗口用
+过没"，命中就直接拒收。和 §3.6 那种"算出来对不上" 的 `valid=false`
+是两条完全不同的失败路径。
+
+> 这条防重放是**每个 key 独立**的：换一个 key 的 code、或者等到
+> 下一个时间窗口（用 `oathtool --totp -b "$SECRET"` 重新算一遍）
+> 就会立刻恢复 `valid=true`。换句话说，Vault 不需要业务层再叠一层
+> (user, code, window) 三元组去重——provider 模式的 `/code` 端点
+> 已经把"一个 code 只能用一次"这层语义内置好了。
 
 ## 3.9 一句话 recap
 

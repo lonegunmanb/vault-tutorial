@@ -14,7 +14,7 @@
 | **Provider** | `generate=true` 让 Vault 自造 seed；`url` + `barcode` **只在创建那一次返回**，错过再也拿不回 |
 | **valid 语义** | 验证失败是 `valid=false` 这个**业务字段**，不是 HTTP 401/403——上层负责"几次错误锁账户"之类的策略 |
 | **skew 窗口** | 默认 `skew=1` 容忍 ~90 秒漂移；`skew=0` 收紧到 30 秒 |
-| **重放问题** | TOTP 引擎本身**不防重放**——同一 code 在窗口内可多次返回 valid=true，需要业务层叠 (user, code, window) 去重 |
+| **防重放** | Vault provider 模式**内置防重放**——同一 code 在同一窗口里第二次提交直接 HTTP 400 `code already used; wait until the next time period`，业务层不需要再叠 (user, code, window) 去重 |
 | **period 一致性** | 双方 period 必须一致——`oathtool --time-step-size=10` 对应 Vault `period=10`，不一致就永远算不到一起 |
 | **ACL 拆分** | `totp/keys/*` 给 operator，`totp/code/*` 给 user，**两个 token 互相越权立刻 403** |
 | **删 key 后果** | seed 物理删除，所有已注册用户的 authenticator app 立刻失效——provider 模式下"换 seed"必须双轨过渡 |
@@ -53,16 +53,21 @@
 ## 留个思考题
 
 实验里 §3.7 演示了"同一个 code 等到下一个窗口仍然 valid=true"，
-§3.8 演示了"同一窗口里 code 可以被多次提交并多次 valid=true"。
-**如果 Vault 没有任何防重放，这意味着 TOTP 在网络劫持场景下其实有
-一个本质上无法靠 Vault 自己堵住的攻击窗口**——是哪种攻击？应该在
-什么层把它堵住？
+§3.8 演示了"同一窗口里同一 code 第二次提交会被 Vault 直接拒掉
+（HTTP 400 `code already used`）"。**Vault 已经把"一个 code 只能用
+一次"这层防重放内置进了 provider 模式**——但这并不意味着 TOTP
+在网络劫持场景下就安全了。**剩下的攻击窗口是哪种？应该在哪一层
+把它堵住？**
 
-> （答案在 [3.12 章正文 §3.2 后的提醒段落里有暗示]——简单说：HTTPS
-> + 短 TTL + 业务层做 (user, code, window) 反重放。如果允许 code
-> 在窗口内被复用，攻击者只要劫持一次明文 code 就能在 ~90 秒里多
-> 次冒名登录。生产里 Vault TOTP 必须叠在 TLS 之上 + 业务层做单次
-> 消费记账，**才能匹配传统硬件 token 的安全等级**。）
+> （提示：Vault 的防重放是"先到先得"语义。如果攻击者在中间人位置
+> 截到了用户**还没来得及提交**的明文 code，他可以**抢在用户之前**
+> 把这个 code 提交给 Vault——这次 `valid=true` 算在攻击者头上，
+> 用户随后再提交反而会撞到 `code already used` 的 400。换句话说，
+> Vault 内置防重放**只能保证一个 code 最多被消费一次**，不能保证
+> **它一定是被合法用户消费的**。生产里堵这个口的标准做法只有一条：
+> 让 code 在网络上**永远不出明文**——Vault 必须挂在 TLS 之后，业
+> 务前端到 Vault 之间也必须全段 TLS，**才能匹配传统硬件 token 的
+> 安全等级**。）
 
 ## 接下来去哪儿
 

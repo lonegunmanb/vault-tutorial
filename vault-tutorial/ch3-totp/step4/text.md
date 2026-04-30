@@ -87,17 +87,27 @@ vault write -format=json totp/keys/strict-skew \
 
 SECRET=$(jq -r '.data.url' /root/strict-skew.json | grep -oE 'secret=[^&]+' | cut -d= -f2)
 
-# 算一份 code，立刻验证 → 应该 valid=true
+# 算一份 code，先不提交——记下来留着等一会儿再验
 CODE=$(oathtool --totp -b "$SECRET")
-vault write totp/code/strict-skew code=$CODE
+echo "记下 code: $CODE，接下来等 35 秒让窗口走过去……"
 
-# 等 35 秒，让窗口走过 1 个 → 严格模式下立刻拒
+# 等 35 秒，让窗口走过 1 个
 sleep 35
+
+# 现在才提交刚才那份 code → 严格模式下应该被拒
 vault write totp/code/strict-skew code=$CODE
 ```
 
-第二次几乎一定 `valid=false`——这跟 Step 3.7 默认 skew=1 时"等 30s
-依然 valid=true"形成直接对照。
+应该看到 `valid=false`——因为 `skew=0` 只接受**当前窗口**的 code，
+35 秒后已经进入了下一个窗口，旧 code 不再有效。这跟 Step 3.7
+默认 skew=1 时"等 30s 依然 valid=true"形成直接对照。
+
+> 为什么不像 Step 3.7 那样"先立刻验一次 valid=true，再等 35 秒验
+> 第二次"？因为 Step 3.8 我们已经看到：provider 模式**内置了防重
+> 放**——同一 code 成功验证一次后，第二次提交会直接 HTTP 400
+> `code already used`，根本走不到 skew 判定。所以要干净地演示
+> skew=0 的效果，需要让这份 code **第一次被 Vault 见到时就已经过
+> 期**，才能看到纯粹的 `valid=false`。
 
 > **生产建议**：如果上下游时钟用 NTP 同步得很可靠，把 `skew=0` 收
 > 严最安全；如果用户手机时钟可能漂移（出国旅游、刷机），保留
@@ -109,7 +119,7 @@ vault write totp/code/strict-skew code=$CODE
 vault list totp/keys
 ```
 
-应该看到 4 个 key：
+应该看到 5 个 key：
 
 ```
 Keys
