@@ -1,62 +1,84 @@
-# 第 1 步：启用 totp/ 引擎，复习 RFC 6238 算法
+# 第一步：启用 TOTP 引擎，搞清两个核心端点
 
-模型：[3.12 §1 + §2](/ch3-totp)。本步要：
+[3.12 章 §1](/ch3-totp) 讲过：TOTP 引擎按 TOTP 标准生成 time-based
+credentials，也可以生成新 key 并验证由这把 key 生成的 password。它
+对外只暴露两条核心路径——`totp/keys/...`（管 key 定义）和
+`totp/code/...`（出/验 code）。这一步先把引擎挂上、把这两条路径的
+角色分清楚，后续 Step 2、Step 3 都依赖它。
 
-1. 确认 `totp/` 引擎已启用
-2. 用 `oathtool` 手动跑一次 TOTP 算法，建立"30 秒窗口、6 位数字、HMAC-SHA1"的肌肉记忆
-3. 记下"全世界用同一个 secret + 当前时间，得到的码必然相同"这条不变量
+## 1.1 挂载 TOTP 引擎
 
----
-
-## 1.1 引擎状态
-
-```bash
-vault secrets list | grep -E "Path|totp"
-```
-
-应能看到 `totp/    totp    ...`。
-
-## 1.2 用 oathtool 手算一次 TOTP
-
-`oathtool` 接受一个 base32 secret + `--totp` 标志，输出当前 30 秒窗口的 6 位码：
+按官方文档的命名约定挂在 `totp/`：
 
 ```bash
-SECRET="JBSWY3DPEHPK3PXP"     # base32 of "Hello!\xDE\xAD\xBE\xEF"
-oathtool --totp -b "$SECRET"
-# 输出: 一个 6 位数字
+vault secrets enable totp
 ```
 
-立刻再跑一次（应得到同样的码——除非你恰好跨过 30 秒边界）：
+`secrets list` 一眼确认：
 
 ```bash
-oathtool --totp -b "$SECRET"
+vault secrets list | grep totp
 ```
 
-等 30 秒后再跑（必然是不同的码）：
+应该能看到一行 `totp/    totp    totp_xxxxx`。这跟其它任何引擎挂载没
+区别——TOTP 引擎在路由表里就是个普通插件。
+
+> 默认挂在与引擎名同名的 `totp/` 路径下；如果想挂在别的路径，加一个
+> `-path=` 参数即可，例如 `vault secrets enable -path=mfa totp`。
+> 本实验后续命令都假设默认 `totp/` 路径。
+
+## 1.2 看一眼挂载之后的"零状态"
+
+刚挂上的 TOTP 引擎里**一个 key 都没有**。`vault list` 一下：
 
 ```bash
-sleep 31 && oathtool --totp -b "$SECRET"
+vault list totp/keys
 ```
 
-## 1.3 同一个 secret 的过去/未来码
+会得到：
 
-`oathtool` 的 `--now` 可以模拟某个时间点：
+```
+No value found at totp/keys/
+```
+
+> "No value" 是 Vault CLI 对"路径存在但当前没数据"的标准回答。这个
+> 输出本身证明引擎已经挂好——只是 `totp/keys/` 这个 LIST 端点目前
+> 里面没条目。
+
+试试在没建 key 的情况下读 `/code`：
 
 ```bash
-oathtool --totp -b "$SECRET" --now="2024-01-01 00:00:00 UTC"
-oathtool --totp -b "$SECRET" --now="2024-01-01 00:00:30 UTC"   # 下一个窗口
-oathtool --totp -b "$SECRET" --now="2024-01-01 00:00:00 UTC" --window=2
-# 最后一条会输出 3 个连续窗口的码 (now, now+30s, now+60s)
+vault read totp/code/no-such-key
 ```
 
-**核心不变量**：相同的 `(secret, time-window)` 组合在任何机器上得到的 6 位码必然相同。
-这就是为什么 Vault 与 Authenticator App、与 oathtool、与 Google Authenticator 之间能互相校验。
+会立刻返回 `unknown key: no-such-key`。**`totp/keys/...` 是 key 定义
+所在，`totp/code/...` 完全寄生在 key 上**——没有 key，就没有 code。
+这是后面两步的核心心智模型。
 
----
+## 1.3 把两个端点的角色画到表里
 
-## ✅ 验收
+| 端点 | 角色 | 写谁 / 读谁 |
+| :--- | :--- | :--- |
+| `totp/keys/<name>` | **key 定义管理面** | `vault write` 建 key（generator 喂 url / provider `generate=true`），`vault read` 看 key 元数据，`vault list` 列所有 key，`vault delete` 删 key |
+| `totp/code/<name>` | **凭据出/验面** | Generator 模式 `vault read` 出 code；Provider 模式 `vault write code=<...>` 验 code |
 
-- [ ] `vault secrets list` 看得到 `totp/`
-- [ ] `oathtool --totp -b ...` 输出 6 位码
-- [ ] 立即再跑一次得到同样的码（同一窗口）
-- [ ] 等 31 秒后跑得到不同的码（下一窗口）
+两条路径在 ACL 层完全可以**单独授权**——这就是 [3.12 章 §5](/ch3-totp)
+那条权限边界的字面落地，Step 4 我们会实际演示。
+
+## 1.4 不创建 key 直接 list 一下其它端点
+
+```bash
+vault read totp/keys/no-such-key 2>&1
+```
+
+会拿到 `No value found at totp/keys/no-such-key`——读不存在的 key
+返回 "no value"，跟"读不存在的 code"返回 `unknown key` 是两套错误
+路径，因为 Vault CLI 把 read 端点的"没数据"和"未知名字"区分开了。
+
+> 这是个有用的细节：实操中如果 `vault read totp/code/<name>` 报
+> `unknown key`，说明你**还没在 `totp/keys/<name>` 写 key**；
+> 如果 `vault read totp/keys/<name>` 报 `No value found`，说明
+> **key 名字打错了或被删了**。
+
+下一步进入 Generator 模式：让 Vault 接手第三方服务签发的 otpauth URL，
+替你按时算 TOTP code。

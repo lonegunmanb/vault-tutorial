@@ -1,6 +1,6 @@
 {
-  "title": "TOTP 机密引擎：Generator 与 Provider 双角色全验证",
-  "description": "在 Dev 模式 Vault (1.19.2) 上动手验证 totp/ 引擎：以 Generator 模式让 Vault 自己生码 + 用 oathtool 独立验证算法一致；以 Provider 模式让 Vault 校验外部 oathtool 生成的码；演示 ±30s 时钟容忍 (skew)、过期码被拒绝、exported=false 锁死 secret 等关键行为。",
+  "title": "TOTP 机密引擎：Generator 与 Provider 双模式动手实验",
+  "description": "在 Dev 模式 Vault 上把 TOTP 引擎的两种官方模式完整跑一遍：(1) Generator 模式喂入第三方 otpauth url，对照本机 oathtool 验证 Vault 的 TOTP 计算与硬件 authenticator 完全一致 (2) Provider 模式 generate=true 让 Vault 自己生 seed key 并发 barcode，再用 oathtool 模拟『用户手机上的 authenticator app』回提 code 完成 valid/invalid 验证 (3) 调 period / digits / algorithm / skew 看时间窗口效应 (4) 用两条 ACL 把『管 key 的 operator』和『读/验 code 的 user』在权限层面真正拆开",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -9,19 +9,19 @@
     },
     "steps": [
       {
-        "title": "启用 totp/ 并复习 RFC 6238 算法",
+        "title": "启用 TOTP 引擎，搞清 totp/keys 与 totp/code 两个核心端点",
         "text": "step1/text.md"
       },
       {
-        "title": "Generator 模式：让 Vault 替你做 Authenticator",
+        "title": "Generator 模式：喂第三方 url，oathtool 在本地算同一个 TOTP 做对照",
         "text": "step2/text.md"
       },
       {
-        "title": "Provider 模式：让 Vault 替你校验外部码",
+        "title": "Provider 模式：generate=true 让 Vault 自己生 seed，oathtool 模拟用户 app 提交 code 验证",
         "text": "step3/text.md"
       },
       {
-        "title": "exported=false 锁死 + 时钟容忍 + 过期码",
+        "title": "进阶参数 + ACL：period/digits/algorithm/skew 与『管 key/读 code』权限拆分",
         "text": "step4/text.md"
       }
     ],

@@ -7,238 +7,179 @@ group_order: 30
 
 # 3.12 TOTP 机密引擎：让 Vault 同时充当验证器与认证器
 
-> **核心结论**：TOTP 机密引擎（`totp/`）让 Vault 接管 [RFC 6238](https://datatracker.ietf.org/doc/html/rfc6238)
-> 定义的"基于时间的一次性密码"工作。它有**两种角色**，必须在 `vault write totp/keys/<name> generate=...`
-> 时就**明确选择**，二选一不可同时：
->
-> - **`generate=true`（Generator 角色）**：Vault 是**认证器**——像 Google Authenticator 一样，
->   持有 secret 并按 30 秒生成一次性 6 位码，外界系统拿这个码去登录。
-> - **`generate=false`（Provider 角色）**：Vault 是**验证器**——用户/外界系统持 secret 并生成码，
->   Vault 校验"用户输入的这个码是不是正确的"。
->
-> 一图记住：**Vault 自己生码 → Generator；Vault 帮你校码 → Provider。**
+> **核心结论**：Vault 的 TOTP 机密引擎用于按 TOTP 标准生成基于时间的凭据，也可以生成一把新 key 并验证由这把 key 生成的密码。
+> 它有两种官方定位：作为 **generator** 时，Vault 像 Google Authenticator 一样生成 TOTP code；作为 **provider** 时，Vault 像 Google.com 登录服务一样生成 key 并验证第三方 App 产生的 TOTP code。
 
 参考：
-- [TOTP Secrets Engine — Vault Docs](https://developer.hashicorp.com/vault/docs/secrets/totp)
-- [TOTP Secrets Engine API](https://developer.hashicorp.com/vault/api-docs/secret/totp)
-- [RFC 6238 — TOTP: Time-Based One-Time Password Algorithm](https://datatracker.ietf.org/doc/html/rfc6238)
-- [RFC 4226 — HOTP](https://datatracker.ietf.org/doc/html/rfc4226)（TOTP 的底层算法）
-
----
-
-## 1. RFC 6238 三十秒回顾
-
-TOTP 是 HOTP（基于计数器）的"以时间作计数器"变种。算法：
-
-```
-T = floor((now - T0) / X)        # 默认 T0 = Unix epoch, X = 30s
-HOTP(K, T) = Truncate(HMAC-SHA1(K, T))   # 6 位数字
-```
-
-每个对 `(secret K, period X)` 在每个时间窗口里 **全世界产生同一个 6 位码**——
-这就是为什么"两端只要时钟对得上 + 共享同一个 secret"就能互相验证。
-
-衍生关键术语：
-
-| 术语 | 含义 |
-| --- | --- |
-| **`secret` / `key`** | base32 编码的共享密钥（一般 16 ~ 32 字节） |
-| **`period`** | 每个码的有效时间窗口，默认 30s |
-| **`digits`** | 码的长度，默认 6（也支持 8） |
-| **`algorithm`** | HMAC 算法，默认 SHA1（也支持 SHA256/SHA512） |
-| **`issuer`** | 在认证 App 里显示的服务名（如 "GitHub"） |
-| **`account_name`** | 在认证 App 里显示的账号（如 "alice@example.com"） |
-| **`url`** | 完整的 `otpauth://totp/...` URL，可被生成 QR 码扫码导入 |
-
-`otpauth://` URL 的形状：
-
-```
-otpauth://totp/<Issuer>:<Account>?secret=<base32>&issuer=<Issuer>&algorithm=SHA1&digits=6&period=30
-```
-
-只要**任意一个**支持 RFC 6238 的客户端（Google Authenticator / Authy / 1Password / `oathtool`）
-扫描这个 URL，就能从 Vault 接管认证器角色。
-
----
-
-## 2. 两种角色的形状对比
+- [TOTP secrets engine](https://developer.hashicorp.com/vault/docs/secrets/totp)
 
 ![totp-two-modes](/images/ch3-totp/totp-two-modes.png)
 
-| 维度 | Generator (`generate=true`) | Provider (`generate=false`) |
-| --- | --- | --- |
-| Vault 持有 secret | ✅ 自己生成 / 接管 | ✅ 由调用者写入（含 secret 或 url） |
-| Vault 现在能做什么 | `vault read totp/code/<name>` 当前 6 位码 | `vault write totp/code/<name> code=...` 校验 |
-| 谁是"展示码"的一方 | Vault | 外部 Authenticator App / 用户 |
-| 谁是"校验码"的一方 | 外部登录系统 | Vault |
-| 典型用途 | 让 Vault 替代 Google Authenticator 持有 MFA 种子 | 给自家 Web 站添加"扫 Authenticator 二维码 → 登录时校验"功能 |
-| 是否能扫 QR 码 | ✅ 创建时 Vault 返回 base64 PNG（可保存为图片） | 取决于 Authenticator App，与 Vault 无关 |
-
-> **二选一是设计决定**：同一个 key 不能既能让 Vault 生码又能让 Vault 校码；
-> 想要"我自己也保留 backup secret + 让 Vault 校码"，那就用 Provider 模式，secret 在外部生成后写入 Vault。
 
 ---
 
-## 3. Generator 模式：让 Vault 替你拿 Authenticator 种子
+## 1. TOTP 引擎到底负责什么
+
+TOTP secrets engine 生成的是符合 TOTP 标准的 time-based credentials。
+同一个引擎还可以生成新的 key，并验证由这把 key 生成出来的 passwords。
+官方文档把这两个能力拆成两种身份：generator 与 provider。
+
+| 身份 | Vault 在做什么 | 官方类比 |
+| :--- | :--- | :--- |
+| generator | Vault 根据已经配置好的 named key 生成新的 time-based OTP code。 | Google Authenticator |
+| provider | Vault 生成新的 key，并验证使用这些 key 生成的 passwords。 | Google.com sign in service |
+
+这张表的关键不是“哪个更安全”，而是“谁持有种子、谁验证口令”：generator 模式下，Vault 读取 `/code` 端点来输出 code；provider 模式下，Vault 接收用户提交的 code 并返回 `valid` 结果。
+
+---
+
+## 2. Generator 模式：用 Vault 代替传统 TOTP 生成器
+
+Generator 模式下，TOTP secrets engine 可以作为 TOTP code generator 使用。
+在这种模式中，它可以替代 Google Authenticator 这一类传统 TOTP generator。
+官方文档给出的安全收益是：生成 code 的能力受 policy 保护，并且整个过程会被审计。
+
+### 2.1 设置步骤
+
+多数 secrets engines 在执行功能之前都必须先完成配置，这些步骤通常由 operator 或 configuration management tool 完成。
+
+第一步是启用 TOTP secrets engine。
 
 ```bash
 vault secrets enable totp
-
-vault write totp/keys/my-bank \
-  generate=true \
-  issuer="MyBank" \
-  account_name="alice@example.com" \
-  exported=true \
-  qr_size=200
 ```
 
-返回字段：
+默认情况下，secrets engine 会挂载到与引擎名称相同的路径，也就是 `totp/`。
+如果要把它启用到不同路径，可以使用 `-path` 参数。
 
-| 字段 | 说明 |
-| --- | --- |
-| `barcode` | base64 PNG，**可解码后保存为 .png 直接展示给人扫** |
-| `url` | `otpauth://totp/MyBank:alice@example.com?secret=...` 完整字符串 |
-
-之后 Vault 可以随时被问"现在的码是多少"：
+第二步是配置一个 named key，key 的名字会作为说明用途的人类可读标识。
 
 ```bash
-vault read totp/code/my-bank
-# code  654321
+vault write totp/keys/my-key \
+	url="otpauth://totp/Vault:test@test.com?secret=Y64VEVMBTSXCYIWRSHRNDZW62MPGVU2G&issuer=Vault"
 ```
 
-外部登录系统（如某个老旧的 SSH bastion）配置上同一个 secret，
-登录时：人去 `vault read totp/code/my-bank` → 拿码 → 输给 SSH bastion 校验 → 通过。
+这里的 `url` 对应第三方服务提供的条形码里的 secret key 或 value。
 
-> **`exported=true` 与 `exported=false` 的差别**：
-> - `true`（默认）：返回 `barcode` + `url`（含 secret），允许"既存在 Vault，又导入到手机 App"
-> - `false`：**不返回 url 和 barcode**，secret 完全锁在 Vault 内，连 root 都看不到。
->   选择 `false` 等于宣告"这个 MFA 种子只能 Vault 用，永不能再由别处生码"。
->
-> `exported` **只能在创建时生效一次**——之后无论 root 还是任何 policy 都无法再读出 secret。
+### 2.2 生成 code
 
----
+当 secrets engine 已经配置好，并且 user 或 machine 拥有带有合适权限的 Vault token 后，它就可以生成 credentials。
 
-## 4. Provider 模式：让 Vault 替你做"码校验后端"
+生成新的 time-based OTP 时，需要用 key 的名字读取 `/code` endpoint。
 
 ```bash
-# 路径 1：用户已有 otpauth:// URL（可能是别处生成、或扫码所得）
-vault write totp/keys/web-2fa-bob \
-  generate=false \
-  url="otpauth://totp/MyApp:bob@example.com?secret=JBSWY3DPEHPK3PXP&issuer=MyApp&algorithm=SHA1&digits=6&period=30"
-
-# 路径 2：直接传 secret（base32）
-vault write totp/keys/web-2fa-bob \
-  generate=false \
-  key="JBSWY3DPEHPK3PXP" \
-  issuer="MyApp" \
-  account_name="bob@example.com" \
-  algorithm="SHA1" digits=6 period=30
+vault read totp/code/my-key
 ```
 
-校验：
+官方示例的返回值中包含 `code` 字段。
+
+```text
+Key     Value
+---     -----
+code    260610
+```
+
+ACL 可以把 TOTP secrets engine 的使用限制成：受信任的 operators 管理 key definitions，而 users 与 applications 只能读取它们被允许读取的 credentials。
+
+---
+
+## 3. Provider 模式：让 Vault 生成 key 并验证用户 code
+
+Provider 模式下，TOTP secrets engine 可以生成新的 keys，并验证使用这些 keys 生成的 passwords。
+官方文档把这种模式类比为 Google.com sign in service。
+
+### 3.1 设置步骤
+
+Provider 模式同样需要在执行功能之前先完成 secrets engine 配置，这些步骤通常由 operator 或 configuration management tool 完成。
+
+第一步同样是启用 TOTP secrets engine。
 
 ```bash
-vault write totp/code/web-2fa-bob code=432198
-# Key      Value
-# valid    true
+vault secrets enable totp
 ```
 
-应用流程：
+默认挂载路径仍然是引擎名称对应的 `totp/`，需要其他路径时仍然使用 `-path` 参数。
 
-```
-用户登录 → 输入 username/password
-        → 输入 Authenticator App 显示的 6 位码
-        → 应用调 vault write totp/code/<userKey> code=...
-        → 通过则放行
-```
-
-**Vault 自动处理时钟漂移**：默认接受**当前 ± 1 个 period** 内的码（`skew=1`），
-即 ±30 秒。如设备时钟差较大可在创建时调 `skew` 或 `period`。
-
----
-
-## 5. 共享字段一览
-
-无论哪种模式，TOTP key 都支持以下字段（均可在 `vault write totp/keys/<name>` 时设置）：
-
-| 字段 | 默认 | 说明 |
-| --- | --- | --- |
-| `algorithm` | `SHA1` | HMAC 算法（SHA1/SHA256/SHA512） |
-| `digits` | `6` | 码长度（6/8） |
-| `period` | `30` | 时间窗口秒数 |
-| `skew` | `1` | 校验时容忍的窗口数（仅 Provider 模式生效，Generator 输出永远是当前窗口） |
-| `key_size` | `20` | 生成密钥时的字节数（仅 `generate=true`） |
-| `issuer` / `account_name` | (空) | 写入 `otpauth://` URL 用 |
-| `qr_size` | `200` | barcode PNG 像素（0 表示不生成） |
-| `exported` | `true` | 见 §3 |
-
----
-
-## 6. 删除与替换
+第二步是创建一个 named key，并使用 `generate` option 告诉 Vault 充当 provider。
 
 ```bash
-vault delete totp/keys/<name>
+vault write totp/keys/my-user \
+	generate=true \
+	issuer=Vault \
+	account_name=user@test.com
 ```
 
-**删除即销毁** —— 如果是 `exported=false` 的 Generator key，删了就再也回不来了。
-没有任何"备份"或"导出"路径。
+官方示例的响应包含 `barcode` 与 `url` 两类输出。
+`barcode` 是 base64-encoded barcode，`url` 是 OTP url。
+这两者是等价的，并且都应该交给需要用 TOTP 进行认证的用户。
 
-要轮换 secret？没有原地 rotate 接口，标准做法：
-
-1. 创建新 key（同账号，新 issuer 或带后缀的 name）
-2. 让用户重新扫码导入到 Authenticator
-3. 一段过渡期后删除旧 key
-
----
-
-## 7. 路径与权限快速查阅
-
-| 操作 | 路径 | Policy 示例 |
-| --- | --- | --- |
-| 启用 / 禁用 | `sys/mounts/totp` | `["create","read","update","delete"]` |
-| 创建 / 删除 key | `totp/keys/<name>` | `["create","read","update","delete","list"]` |
-| 列出所有 key | `totp/keys/` | `["list"]` |
-| 读当前码 (Generator) | `totp/code/<name>` (READ) | `["read"]` |
-| 校验码 (Provider) | `totp/code/<name>` (UPDATE/WRITE) | `["update"]` |
-
-> **注意**：`totp/code/<name>` 的 READ 与 WRITE 是**两种完全不同的语义**！
-> READ = "现在的码是多少"（仅对 Generator key 生效）；
-> WRITE/UPDATE = "我提交一个码请校验"（仅对 Provider key 生效）。
-> 写 Policy 时要按角色精准给权限——不要为 Provider key 开 `read` 权限（那是无意义的）。
-
----
-
-## 8. 与其它章节的关系
-
+```text
+Key        Value
+---        -----
+barcode    iVBORw0KGgoAAAANSUhEUgAAAMgAAADIEAAAAADYoy0BA...
+url        otpauth://totp/Vault:user@test.com?algorithm=SHA1&digits=6&issuer=Vault&period=30&secret=V7MBSK324I7KF6KVW34NDFH2GYHIF6JY
 ```
-[2.5 Auth Methods]      ← TOTP 不是认证方法本身，但常用于增强其它认证（MFA Step-up）
-[2.6 Policies]          ← 用 Policy 区分 Generator-only 与 Provider-only 角色
-[3.1 Secrets Engines]   ← 引擎通用框架
-[3.12 TOTP] ◄── 你在这儿
-[未来 ENT MFA]          ← Vault Enterprise 的内置 MFA 体系会用 TOTP 引擎做后端
+
+### 3.2 验证 code
+
+在 provider 模式的使用阶段，用户提交由第三方 App 生成的 TOTP code 给 Vault 验证。
+
+```bash
+vault write totp/code/my-user code=886531
+```
+
+官方示例的验证响应返回 `valid=true`。
+
+```text
+Key      Value
+---      -----
+valid    true
 ```
 
 ---
 
-## 9. 三个最容易踩的坑
+## 4. 两种模式的端点心智模型
 
-1. **`exported=false` 的 Generator key 一旦丢了 Vault 数据就永远找不回** —— 它本质等同于 Authenticator App 里那个种子，
-   除了删了重建（用户重扫码）没有其它恢复方法。涉及金融/支付 MFA 时务必先确认备份方案。
+Generator 模式读取 `totp/code/<key-name>` 来生成新的 time-based OTP。
+Provider 模式写入 `totp/code/<key-name>` 并携带 `code` 参数来验证第三方 App 生成的 TOTP code。
 
-2. **Provider 模式给 Policy 的常见错误：开 `read` 不开 `update`** —— `vault write totp/code/...`
-   实际是 update 操作；只开 read 会得到 403。
+| 动作 | CLI 形态 | 结果 |
+| :--- | :--- | :--- |
+| 生成 code | `vault read totp/code/my-key` | 返回 `code` 字段。 |
+| 验证 code | `vault write totp/code/my-user code=886531` | 返回 `valid` 字段。 |
 
-3. **服务器与 Authenticator App 时钟必须基本同步** —— `skew=1` 给了 ±30s 容忍，但若服务器漂移到 1 分钟以上，
-   所有码都会被 Vault 判定无效。生产环境务必确保 NTP 健康。
+这个差异也解释了 generator 与 provider 的角色边界：一个是 Vault 输出 code，另一个是 Vault 检查 code 是否有效。
 
 ---
 
-## 参考文献
+## 5. 权限边界：把“管理 key”和“读取凭据”拆开
 
-- [TOTP Secrets Engine — Vault Docs](https://developer.hashicorp.com/vault/docs/secrets/totp)
-- [TOTP Secrets Engine API](https://developer.hashicorp.com/vault/api-docs/secret/totp)
-- [RFC 6238](https://datatracker.ietf.org/doc/html/rfc6238)、[RFC 4226](https://datatracker.ietf.org/doc/html/rfc4226)
-- [Key Uri Format (otpauth://)](https://github.com/google/google-authenticator/wiki/Key-Uri-Format)
+官方文档明确指出，可以用 ACL 限制 TOTP secrets engine 的使用。
+一种官方描述的权限分工是：trusted operators 管理 key definitions，users 与 applications 被限制在它们被允许读取的 credentials 范围内。
+
+因此，在 generator 模式中，`totp/keys/...` 更接近 key definition 管理面，而 `totp/code/...` 更接近 credential 读取面。
+在 provider 模式中，`totp/keys/...` 用于创建 named key，`totp/code/...` 用于验证用户提交的 code。
+
+---
+
+## 6. 本章实验要验证的最小闭环
+
+本章的互动实验围绕官方文档中的两个最小闭环展开：generator 闭环与 provider 闭环。
+
+Generator 闭环包含三步：启用 `totp` 引擎、写入带 `url` 的 named key、读取 `/code` endpoint 生成 code。
+
+Provider 闭环包含三步：启用 `totp` 引擎、用 `generate=true` 创建 named key、向 `/code` endpoint 写入用户 code 并读取 `valid` 结果。
+
+如果只记一条路径，可以先记 generator：`totp/keys/<name>` 保存第三方服务给出的 `otpauth://...` URL，`totp/code/<name>` 输出当前 TOTP code。
+
+如果要记 provider，可以记住 `generate=true` 会让 Vault 成为 provider，并且响应里的 barcode 与 OTP url 都可以交给使用 TOTP 认证的用户。
+
+---
+
+## 7. API 入口
+
+TOTP secrets engine 提供完整的 HTTP API。
+官方 TOTP 页面把更细的 HTTP API 细节指向 “TOTP secrets engine API”。
 
 ---
 
