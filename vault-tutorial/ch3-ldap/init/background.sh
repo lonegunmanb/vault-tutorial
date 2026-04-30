@@ -46,9 +46,13 @@ start_openldap
 
 # ─────────────────────────────────────────────────────────
 # 预置 OU 与账号
+# 一次性 LDIF + ldapadd -c：osixia 容器在 base DN 已上线后还会跑一会儿 bootstrap，
+# 期间个别写入会被拒。-c 让 ldapadd 遇到任何条目错误（包括重复执行时的 "Already exists"）
+# 都继续往后走，最后用 ldapsearch 校验条目数 + 必要时重试，避免 step1 出现 "只看到 2 个 cn:" 的情况。
 # ─────────────────────────────────────────────────────────
-ldapadd -x -H ldap://127.0.0.1:389 \
-  -D "cn=admin,dc=example,dc=org" -w admin <<'EOF' > /dev/null 2>&1
+seed_ldap_entries() {
+  ldapadd -c -x -H ldap://127.0.0.1:389 \
+    -D "cn=admin,dc=example,dc=org" -w admin <<'EOF'
 dn: ou=ServiceAccounts,dc=example,dc=org
 objectClass: organizationalUnit
 ou: ServiceAccounts
@@ -56,31 +60,68 @@ ou: ServiceAccounts
 dn: ou=DynamicUsers,dc=example,dc=org
 objectClass: organizationalUnit
 ou: DynamicUsers
-EOF
 
-# Static role 用的三个账号
-for i in 1 2 3; do
-  ldapadd -x -H ldap://127.0.0.1:389 \
-    -D "cn=admin,dc=example,dc=org" -w admin <<EOF > /dev/null 2>&1
-dn: cn=app${i},ou=ServiceAccounts,dc=example,dc=org
+dn: cn=app1,ou=ServiceAccounts,dc=example,dc=org
 objectClass: inetOrgPerson
-cn: app${i}
-sn: App${i}
-userPassword: initial-pass-${i}
+cn: app1
+sn: App1
+userPassword: initial-pass-1
+
+dn: cn=app2,ou=ServiceAccounts,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: app2
+sn: App2
+userPassword: initial-pass-2
+
+dn: cn=app3,ou=ServiceAccounts,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: app3
+sn: App3
+userPassword: initial-pass-3
+
+dn: cn=svc-ops-1,ou=ServiceAccounts,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: svc-ops-1
+sn: Ops1
+userPassword: ops-initial-pass-1
+
+dn: cn=svc-ops-2,ou=ServiceAccounts,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: svc-ops-2
+sn: Ops2
+userPassword: ops-initial-pass-2
+
+dn: cn=svc-ops-3,ou=ServiceAccounts,dc=example,dc=org
+objectClass: inetOrgPerson
+cn: svc-ops-3
+sn: Ops3
+userPassword: ops-initial-pass-3
 EOF
+}
+
+count_seeded() {
+  ldapsearch -x -LLL -H ldap://127.0.0.1:389 \
+    -D "cn=admin,dc=example,dc=org" -w admin \
+    -b "ou=ServiceAccounts,dc=example,dc=org" \
+    "(objectClass=inetOrgPerson)" cn 2>/dev/null \
+    | grep -c '^cn:'
+}
+
+for attempt in 1 2 3 4 5; do
+  seed_ldap_entries > /tmp/ldapadd.log 2>&1 || true
+  n=$(count_seeded)
+  if [ "$n" -ge 6 ]; then
+    echo "Seeded $n LDAP entries on attempt $attempt."
+    break
+  fi
+  echo "Seed attempt $attempt got only $n/6 entries; retrying in 2s..."
+  sleep 2
 done
 
-# Library 池子的三个账号
-for i in 1 2 3; do
-  ldapadd -x -H ldap://127.0.0.1:389 \
-    -D "cn=admin,dc=example,dc=org" -w admin <<EOF > /dev/null 2>&1
-dn: cn=svc-ops-${i},ou=ServiceAccounts,dc=example,dc=org
-objectClass: inetOrgPerson
-cn: svc-ops-${i}
-sn: Ops${i}
-userPassword: ops-initial-pass-${i}
-EOF
-done
+if [ "$(count_seeded)" -lt 6 ]; then
+  echo "ERROR: failed to seed all 6 LDAP entries after retries. ldapadd log:"
+  cat /tmp/ldapadd.log
+fi
 
 # 等 vault 装完
 wait "$INSTALL_VAULT_PID"

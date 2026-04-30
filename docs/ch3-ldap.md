@@ -287,7 +287,7 @@ vault write -f ldap/library/manage/break-glass-team/check-in \
      │
 [3.10 LDAP 引擎] ◄── 你在这儿
      │
-[未来 7.X LDAP Auth] ── 反向："LDAP 用户 → 登录 Vault"
+[TODO:写 LDAP Auth 时要更新这里：未来 4.X LDAP Auth] ── 反向："LDAP 用户 → 登录 Vault"
 ```
 
 ---
