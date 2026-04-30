@@ -21,8 +21,11 @@ vault write kubernetes/roles/mode-b \
 ## 3.2 申领前快照
 
 ```bash
-kubectl get sa,rolebinding -n default | grep -E "mode-b|NAME" || echo "(目前无 mode-b 临时对象)"
+kubectl get sa,rolebinding -n default --no-headers 2>/dev/null | grep 'mode-b' || echo "(目前无 mode-b 临时对象)"
 ```
+
+如果只看到 `NAME` 表头，说明命令把 `kubectl get` 的标题行也过滤出来了，并不表示已经有临时对象。
+这里加上 `--no-headers` 后，未申领前应直接输出“目前无 mode-b 临时对象”。
 
 ## 3.3 申领
 
@@ -44,7 +47,7 @@ kubectl get sa/"$SA" rolebinding/"$SA" -n default
 
 应能看到一个临时 SA 与一个同名临时 RoleBinding。
 Vault 默认会用同一个生成名创建这两个对象，名称形如 `v-<调用者>-mode-b-<时间戳>-<随机串>`。
-`pod-reader` Role 没动（被复用）。
+注意：`pod-reader` 这个 Role 是实验开始前就存在的“权限模板”。模式 B 不会新建、修改或删除它；Vault 只新建临时 SA 与临时 RoleBinding，让这个临时 SA 通过 RoleBinding 使用 `pod-reader` 已有的权限。
 
 ```bash
 kubectl describe rolebinding "$SA" -n default
