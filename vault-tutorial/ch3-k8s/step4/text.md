@@ -1,5 +1,7 @@
 # 第 4 步：模式 C `generated_role_rules` —— Role + RoleBinding + SA 三件套全量现场生成
 
+![模式 C：现场生成 Role、RoleBinding、ServiceAccount 三件套的实验流程](../assets/k8s-mode-c-story.png)
+
 模型：[3.11 §4.3](/ch3-k8s)。本步要：
 
 1. 创建 Vault Role，**直接在 Vault 里写死 K8s Role 的 rules**

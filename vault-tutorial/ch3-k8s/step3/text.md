@@ -1,5 +1,7 @@
 # 第 3 步：模式 B `kubernetes_role_name` —— 动态 RoleBinding + 临时 SA
 
+![模式 B：临时 ServiceAccount 绑定现有 Role 的实验流程](../assets/k8s-mode-b-story.png)
+
 模型：[3.11 §4.2](/ch3-k8s)。本步要：
 
 1. 创建 Vault Role 引用现有 K8s Role `pod-reader`

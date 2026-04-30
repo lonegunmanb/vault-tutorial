@@ -1,5 +1,7 @@
 # 第 2 步：模式 A `service_account_name` —— 借用现有 SA
 
+![模式 A：借用现有 ServiceAccount 的实验流程](../assets/k8s-mode-a-story.png)
+
 模型：[3.11 §4.1](/ch3-k8s)。本步要：
 
 1. 用 `service_account_name="viewer-sa"` 创建 Vault Role
