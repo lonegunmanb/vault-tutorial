@@ -19,6 +19,7 @@
     { "path": "ch3-k8s" },
     { "path": "ch3-totp" },
     { "path": "ch3-transit" },
+    { "path": "ch3-postgres" },
     { "path": "ch5-mount-migration" }
   ]
 }

@@ -9,7 +9,7 @@ group_order: 30
 
 > **核心结论**：Transit 机密引擎（`transit/`）颠覆了 Vault 一贯的"我替你存机密"模型，
 > 转而提供**纯密码学服务**："**应用持密文，Vault 持钥匙**"——Vault **不存任何业务数据**，
-> 只在调用时按命名密钥执行加密 / 解密 / 签名 / 验签 / HMAC / 派生 / 数据密钥（DEK）生成等操作。
+> 只在调用时按命名密钥执行加密 / 解密 / 签名 / 验签 / HMAC / 哈希 / 随机数 / 派生 / 数据密钥（DEK）生成等操作。
 > 可以把它理解成 KV 引擎的**分工反转**：KV 是 Vault 替应用存机密，Transit 是应用自己存数据、只让 Vault 替它守钥匙。
 > 关键的运维特性是**无中断密钥轮转**：`rotate` 在密钥下增加新版本，旧版本仍能解密老密文，新加密自动用新版本，
 > 配合 `rewrap` 可逐步把存量密文升级到新版本。
@@ -36,12 +36,12 @@ group_order: 30
 | --- | --- | --- |
 | Vault 持有什么 | 业务机密本身 | 加密用的密钥 |
 | 应用持有什么 | 路径名 + Vault Token | 密文 + Vault Token |
-| 数据流 | App → 读路径 ← Vault 返机密 | App → 送密文 ← Vault 返明文 |
+| 数据流 | App → 读路径 ← Vault 返机密 | 加密：App 送明文 → Vault 返密文；解密：App 送密文 → Vault 返明文 |
 | 业务数据存在哪 | Vault Storage | App 自己的数据库 / 磁盘 |
 | 谁解密 | (无加密概念，直接读) | 必须经过 Vault |
-| 撤销访问的方法 | 删 Policy / Token | 删 Policy / Token，**或删整把 key**（一刀切让所有密文失效） |
+| 撤销访问的方法 | 删 Policy / Token | 删 Policy / Token；按版本淘汰可调 `min_decryption_version`；删整把 key 会让所有密文失效 |
 
-> **EaaS 的精神**：业务系统的数据库可能里里外外都是密文，**离开了 Vault 一字不通**。
+> **EaaS 的精神**：业务系统的数据库可能里里外外都是密文，**离开了 Vault 一个字都看不懂**。
 > 这把"内行人也读不出"的能力推给所有微服务，无需在每个服务里硬塞密钥管理代码。
 
 ---
@@ -54,22 +54,29 @@ vault write -f transit/keys/order-pii            # 创建一把默认 key (aes25
 vault read transit/keys/order-pii                # 看密钥元数据
 ```
 
-返回的关键字段：
+返回的关键字段（对应 [Read key API](https://developer.hashicorp.com/vault/api-docs/secret/transit#read-key) 响应）：
 
 | 字段 | 说明 |
 | --- | --- |
-| `type` | 算法（默认 `aes256-gcm96`） |
-| `keys` | 已存在的版本号映射（首次创建时只有 `1`） |
-| `latest_version` | 加密时使用的版本号（初始 = 1） |
-| `min_decryption_version` | 解密时允许的最小版本（默认 1，可调） |
-| `min_encryption_version` | 加密时允许的最小版本（默认 0=用 latest） |
+| `name` | 密钥名（与 URL 中的 `:name` 一致） |
+| `type` | 算法（默认 `aes256-gcm96`，详见 §5 类型矩阵） |
+| `keys` | 已存在的版本号 → 创建时间 (Unix 秒) 映射；非对称 key 这里还会带 `public_key` 等元数据 |
+| `latest_version` | 当前最高版本号；新加密默认走它（初始 = 1） |
+| `min_decryption_version` | 解密时允许的最小版本（默认 1，可调；调高后低版本密文会被拒绝，旧版本 key material 会归档而非立刻删除） |
+| `min_encryption_version` | 加密时允许的最小版本（默认 0 = 用 `latest_version`；非 0 时必须 ≥ `min_decryption_version`） |
 | `deletion_allowed` | 默认 `false`——**默认整把 key 不能被删**，必须先 `update deletion_allowed=true` |
-| `derived` | 是否启用密钥派生（见 §6） |
-| `convergent_encryption` | 是否启用收敛加密 |
-| `exportable` | 是否允许 `export` 出原始密钥（默认 false） |
+| `derived` | 是否启用密钥派生（见 §6.1）；启用后所有加/解密都必须传 `context` |
+| `convergent_encryption` | 是否启用收敛加密（要求 `derived=true`，见 §6.2） |
+| `exportable` | 是否允许 `export` 出原始密钥（默认 `false`，**一旦设 true 不可撤回**） |
+| `allow_plaintext_backup` | 是否允许 `backup` 输出含明文 key 的备份（默认 `false`，**同样一旦开启不可撤回**） |
+| `auto_rotate_period` | 自动轮转周期（duration 字符串，默认 `0` 表示禁用；最短 1 小时） |
+| `imported` | 是否是通过 BYOK / `import` 导入的密钥（导入的 key 默认不可再次 rotate，除非 `allow_rotation=true`） |
+| `supports_encryption` / `supports_decryption` | 由 `type` 推导：该 key 能否做加 / 解密（如 `ed25519` 两个都 `false`） |
+| `supports_signing` | 该 key 能否做签名（仅非对称 key 为 `true`） |
+| `supports_derivation` | 该 key 能否启用密钥派生（如 AES-GCM、ChaCha20、Ed25519 支持，ECDSA / RSA 不支持） |
 
 > **`deletion_allowed=false` 是双保险**：避免误操作把整个引擎下所有用此 key 加密的密文一次性变废铁。
-> 真要删，必须**两步**：先 update 解锁，再 delete。
+> 真要删，必须**两步**：先 update 允许删除，再 delete。
 
 ---
 
@@ -96,7 +103,7 @@ echo MTM4MDAxMzgwMDA= | base64 -d
 
 - `vault:` 命名空间前缀，Vault 用来识别这是它产生的密文
 - `v<N>` 加密时使用的密钥版本号（解密时 Vault 自动按这个版本选私钥）
-- `<base64-data>` 实际密文 + nonce + 认证标签
+- `<base64-data>` Vault 生成的密文载荷；官方入门示例称其为 IV 与 ciphertext 的 base64 拼接，但不同算法 / 模式下内部布局可能不同，应用应把整个 `vault:v<N>:...` 当不透明字符串保存
 
 > 应用只需要保存这个不透明字符串，无需关心算法、密钥、版本——这些都被 Vault 隐藏在路由后面。
 
@@ -110,12 +117,12 @@ vault write transit/encrypt/order-pii \
   ]'
 ```
 
-返回 `batch_results` 数组对应 ciphertext，性能比 N 次单条调用高一个量级。
+返回 `batch_results` 数组对应 ciphertext，性能通常更高。
 
 ### 3.2 关联数据 (Context / Associated Data)
 
-可以在加密时传 `context` 字段（仅当 key 是 `derived=true`）或 `associated_data`（GCM 模式认证额外数据）。
-这两个机制让"密文 + 关联数据"必须配对成功才能解密——典型场景：把租户 ID 绑进 associated_data，
+可以在加密时传 `context` 字段（仅当 key 是 `derived=true`，且必须 base64 编码）或 `associated_data`（AEAD cipher 的 AAD，覆盖 AES-GCM / ChaCha20-Poly1305，同样必须 base64 编码）。
+这两个机制让"密文 + context / AAD"必须配对成功才能解密——典型场景：把租户 ID 绑进 `associated_data`，
 让 A 租户密文绝不可能被 B 租户的解密路径破解。
 
 ---
@@ -144,15 +151,20 @@ vault write transit/rewrap/order-pii ciphertext=vault:v1:OLD_DATA...
 **`rewrap` 不需要明文** —— Vault 内部用 v1 解密、用 v2 重新加密、把结果给你。
 应用要做的就是把数据库里所有 `vault:v1:` 字符串替换成新返回的 `vault:v2:` 字符串。
 
-要让旧版本彻底失效：
+![transit-rewrap-no-plaintext](/images/ch3-transit/transit-rewrap-no-plaintext.png)
+
+要让旧版本在常规解密路径中被拒绝：
 
 ```bash
 vault write transit/keys/order-pii/config min_decryption_version=2
 # 此后所有 vault:v1:... 解密都会被拒绝
 ```
 
+这会把低于阈值的 key version 移出工作集并归档；紧急情况下仍可把 `min_decryption_version` 调回。
+如果要不可恢复地删除旧版本，需要另用 `transit/keys/<name>/trim`，那是更危险的永久操作。
+
 > 这个组合让密钥轮转**完全异步且零中断**：业务无须停机，按背景批处理速度逐步把 v1 密文升级到 v2，
-> 做完后 `min_decryption_version=2` 一刀关掉旧版。
+> 做完后 `min_decryption_version=2` 停止接受旧版密文。
 
 ---
 
@@ -160,16 +172,23 @@ vault write transit/keys/order-pii/config min_decryption_version=2
 
 `type` 字段决定 key 的算法和支持的操作：
 
+> 官方文档有一个容易忽略的点：**所有 Transit key type 都会额外生成独立 HMAC key**，所以 `/transit/hmac` 并不只属于 `hmac` 类型；
+> `hmac` 类型只是“只做 HMAC”的专用类型。CMAC 则是 Enterprise 的独立 `/transit/cmac` 操作。
+
 | `type` | 算法族 | 加/解密 | 签/验签 | HMAC | 数据密钥 (DEK) | 备注 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `aes128-gcm96` / `aes256-gcm96` | AES-GCM | ✅ | ❌ | ✅ | ✅ | 默认推荐 |
-| `chacha20-poly1305` | ChaCha20-Poly1305 | ✅ | ❌ | ✅ | ✅ | 移动 / IoT 友好 |
-| `xchacha20-poly1305` | XChaCha20-Poly1305 | ✅ | ❌ | ✅ | ✅ | 192-bit nonce，可承受更高加密次数 |
-| `ed25519` | Ed25519 | ❌ | ✅ | ✅ | ❌ | 签名速度极快，仅签验 |
-| `ecdsa-p256` / `p384` / `p521` | ECDSA | ❌ | ✅ | ✅ | ❌ | 兼容传统 PKI |
-| `rsa-2048` / `3072` / `4096` | RSA | ✅ (OAEP) | ✅ (PSS/PKCS1) | ✅ | ❌ | 兼容性好但慢 |
-| `hmac` | HMAC | ❌ | ❌ | ✅ | ❌ | 仅 HMAC 计算 |
-| `aes256-cmac` / `aes192-cmac` | AES-CMAC | ❌ | ❌ | ✅ (CMAC) | ❌ | 1.18+ 新增 |
+| `aes128-gcm96` / `aes256-gcm96` | AES-GCM | ✅ | ❌ | ✅ | ✅ | 支持派生 / 收敛加密；`aes256-gcm96` 是默认类型 |
+| `chacha20-poly1305` | ChaCha20-Poly1305 | ✅ | ❌ | ✅ | ✅ | 支持派生 / 收敛加密；FIPS 140-3 模式下不应使用 |
+| `ed25519` | Ed25519 | ❌ | ✅ | ✅ | ❌ | 支持签名派生；FIPS 140-3 模式下不应使用 |
+| `ecdsa-p256` / `ecdsa-p384` / `ecdsa-p521` | ECDSA | ❌ | ✅ | ✅ | ❌ | NIST P 曲线签名 key |
+| `rsa-2048` / `rsa-3072` / `rsa-4096` | RSA | ✅ | ✅ (PSS/PKCS#1 v1.5) | ✅ | ✅ | 加/解密与 DEK 默认使用 OAEP；也支持 legacy `pkcs1v15` padding（不推荐，除非兼容旧系统） |
+| `hmac` | HMAC | ❌ | ❌ | ✅ | ❌ | 仅 HMAC 生成 / 验证；支持导入，`key_size` 可配置 |
+| `managed_key` | Managed Key | 仅部分后端 | ✅ | ✅ | 仅部分后端 | Enterprise；Sign / Verify 在 managed key 类型上支持较完整；Encrypt / Decrypt 目前主要只有 PKCS#11 managed keys 支持 |
+| `aes128-cmac` / `aes192-cmac` / `aes256-cmac` | AES-CMAC | ❌ | ❌ | ✅ | ❌ | Enterprise；CMAC 走 `/transit/cmac`，验算时用 `cmac` 参数 |
+| `ml-dsa` | ML-DSA | ❌ | ✅ | ✅ | ❌ | Enterprise 实验特性，后量子签名 |
+| `hybrid` | Hybrid signatures | ❌ | ✅ | ✅ | ❌ | Enterprise 实验特性，后量子 + 椭圆曲线混合签名 |
+| `slh-dsa` | SLH-DSA | ❌ | ✅ | ✅ | ❌ | Enterprise 实验特性，后量子签名 |
+| `aes128-cbc` / `aes256-cbc` | AES-CBC | ✅ | ❌ | ✅ | ✅ | Enterprise；支持派生 / 收敛加密 |
 
 创建非默认类型的 key：
 
@@ -181,7 +200,7 @@ vault write transit/keys/signing-key type=ed25519
 
 ## 6. 派生密钥 (`derived`) 与收敛加密
 
-普通 key 加密同样的明文每次得到不同密文（因为 nonce 随机）。
+普通 key 加密同样的明文每次得到不同密文（因为 nonce / IV 等加密参数会随机生成）。
 两个高级开关让密文行为更可预测：
 
 ### 6.1 `derived=true`：每次调用根据 `context` 派生子密钥
@@ -198,20 +217,23 @@ vault write transit/encrypt/multi-tenant \
   context=$(echo -n "tenant-A" | base64)
 ```
 
-Vault 用 HMAC-SHA256(master_key, context) 派生出子密钥后才加密。
+Vault 用内部 KDF 根据 master key 与 `context` 派生出子密钥后才加密。
 **不同 `context` → 不同子密钥 → 密文互相不可解**——这就实现了"主密钥分一把、租户隔离"。
+注意这里的 `context` 派生是 Transit 加/解密流程的一部分，和 API 里的 `/transit/derivedkeys` 数据密钥派生接口不是同一件事。
 
-### 6.2 `convergent_encryption=true`：相同 (plaintext, context) → 相同密文
+### 6.2 `convergent_encryption=true`：相同输入 → 相同密文
 
 ```bash
 vault write -f transit/keys/searchable derived=true convergent_encryption=true
 ```
 
-要求同时启用 `derived=true`。开启后，相同的 `(plaintext, context)` 输入永远得到相同密文——
-代价是放弃了 nonce 的随机性（攻击者能识别"这是同一个值"），换来"密文上能做相等性查询"。
+要求同时启用 `derived=true`。开启后，在同一 key/version 与相同 `context` 下，相同 plaintext 会得到相同密文——
+Vault 会确定性派生 nonce，而不是每次随机生成 nonce；换来的能力是"密文上能做相等性查询"。
 典型用途：在加密的 PII 字段上做 SQL `WHERE encrypted_phone = ?` 查询。
 
-> ⚠️ 收敛加密**会泄露明文相等性**——电话号码、身份证号这种集合不大、容易被字典爆破的字段不要用。
+官方文档还提醒过历史版本差异：早期收敛加密 v1 需要客户端提供 nonce，v2 曾有离线明文确认攻击风险；新版本 key 可通过 rotate + rewrap 升级到 v3 算法。
+
+> ⚠️ 收敛加密**会泄露明文相等性**——电话号码、身份证号这类低熵字段要特别谨慎，通常需要额外的威胁建模与访问控制，不能把它当成普通随机加密的等价替代品。
 
 ---
 
@@ -221,34 +243,35 @@ vault write -f transit/keys/searchable derived=true convergent_encryption=true
 
 加密大文件 / 大对象时，每次都把 GB 级数据送给 Vault 不现实。**信封加密** 解法：
 
-1. **本地随机生成 DEK**（一次性 32 字节对称密钥）
-2. **本地用 DEK** 加密大数据（AES-GCM 等）
-3. **让 Vault 用 master key 加密 DEK**（这一步只有 32 字节走 Vault）
-4. 存：**密文大数据 + 被 Vault 包过的 DEK**
-5. 读时：先把 wrapped DEK 给 Vault 解封，再用 DEK 本地解密大数据
+1. **让 Vault 生成 DEK**（默认 256-bit 高熵数据密钥），并同时返回两份：明文 DEK + wrapped DEK
+2. **本地用明文 DEK** 加密大数据（AES-GCM 等），用完尽快从内存中丢弃
+3. 存：**密文大数据 + wrapped DEK**（也就是被 Transit key 加密过的 DEK）
+4. 读时：先把 wrapped DEK 交给 Vault 解封，拿回明文 DEK
+5. **本地用 DEK** 解密大数据
 
 Vault 一站式接口：
 
 ```bash
-# 生成 wrapped DEK + 同时返回明文 DEK 让你立刻用
+# 生成 DEK：返回明文 DEK + 被 Transit key 包装后的 DEK
 vault write -f transit/datakey/plaintext/order-pii
 # Key            Value
-# plaintext      <base64 of 32-byte DEK>     ← 立刻用它本地加密大数据
-# ciphertext     vault:v1:wrapped-dek...     ← 跟密文一起存数据库
+# plaintext      <base64 of DEK>          ← 立刻用它本地加密大数据
+# ciphertext     vault:v1:wrapped-dek...  ← 跟密文大数据一起存数据库
 
-# 之后只要 wrapped 形式（不含 plaintext，更安全）
+# 只生成 wrapped DEK，不返回 plaintext
 vault write -f transit/datakey/wrapped/order-pii
-# 只返回 ciphertext，不返回 plaintext —— 仅用于"还原密钥之前的安全准备"
+# ciphertext     vault:v1:wrapped-dek...
+# 适合让低权限流程预生成 wrapped DEK；它拿不到明文 DEK，不能直接加密业务数据
 
 # 解封 wrapped DEK
 vault write transit/decrypt/order-pii ciphertext=vault:v1:wrapped-dek...
-# 拿到 base64 DEK 后本地解密
+# plaintext      <base64 of DEK>          ← 拿到后本地解密大数据
 ```
 
 DEK 模式好处：
 
 - **大数据从不经过 Vault** —— 性能与本地加密相当
-- **被 Vault 锁定的 DEK 替代了"密钥分发"问题** —— 想撤销访问？在 Vault 上 `min_decryption_version` 一调即可
+- **被 Vault 锁定的 DEK 替代了"密钥分发"问题** —— 按主体撤销访问靠 Policy / Token；按版本淘汰旧 wrapped DEK 时再调 `min_decryption_version`
 - **配合 key rotate** —— 旧 wrapped DEK 仍能用旧版本解，新生成的自动用新版本
 
 ---
@@ -272,7 +295,7 @@ vault write transit/verify/signing-key \
 # valid  true
 ```
 
-### 8.2 HMAC（对称 key 的"签名"）
+### 8.2 HMAC（Vault 托管的对称 MAC）
 
 ```bash
 vault write transit/hmac/order-pii input=$(echo -n "msg" | base64)
@@ -284,16 +307,20 @@ vault write transit/verify/order-pii \
 # valid  true
 ```
 
-> HMAC 与 Sign 的差别：HMAC 用对称 key（双方都需要 key 才能验），Sign 用私钥（公钥发出去验）。
-> 选 ed25519 / ecdsa / rsa 让 Vault 持私钥、签出来的内容用公钥就能验。
+> HMAC 与 Sign 的差别：HMAC 使用 Vault 为该 Transit key version 维护的独立 HMAC secret，生成和验证通常都经 `/transit/hmac` 与 `/transit/verify` 交给 Vault；
+> Sign 使用私钥签名，选 ed25519 / ecdsa / rsa 时，Vault 持私钥，外部系统可用公钥验签。
+> 只有在显式允许导出 `hmac-key` 时，外部系统才可能离线验 HMAC；默认不建议这么做。
 
-### 8.3 导出公钥
+### 8.3 读取 / 导出公钥
 
-非对称 key 的公钥可以无害地泄露：
+非对称 key 的公钥不是机密，但分发时仍要保证来源可信、内容未被替换。可以直接读 key 元数据；具备相应权限 / 配置时，也可以走 public-key export endpoint：
 
 ```bash
 vault read transit/keys/signing-key
-# keys.<version>.public_key   <PEM 格式公钥>
+# keys.<version>.public_key   <按 key type 返回的标准格式公钥>
+
+vault read transit/export/public-key/signing-key
+# keys.<version>              <对应版本的公钥>
 ```
 
 ---
@@ -304,14 +331,17 @@ vault read transit/keys/signing-key
 | --- | --- | --- |
 | 启用 / 禁用 | `sys/mounts/transit` | `["create","read","update","delete"]` |
 | 创建 / 配置 / 删除 key | `transit/keys/<name>` `transit/keys/<name>/config` | `["create","read","update","delete"]` |
-| 加密 / 解密 | `transit/encrypt/<name>` `transit/decrypt/<name>` | `["update"]`（写操作） |
+| 加密 / 解密 | `transit/encrypt/<name>` `transit/decrypt/<name>` | 通常给 `["update"]`；`encrypt` 额外支持 `["create"]` 用于 key 不存在时 upsert |
 | 轮转 | `transit/keys/<name>/rotate` | `["update"]` |
 | Rewrap | `transit/rewrap/<name>` | `["update"]` |
 | 数据密钥 | `transit/datakey/{plaintext,wrapped}/<name>` | `["update"]` |
 | 签 / 验 / HMAC | `transit/sign/<name>` `transit/verify/<name>` `transit/hmac/<name>` | `["update"]` |
+| 哈希 / 随机数 | `transit/hash(/<algorithm>)` `transit/random(/<source>)(/<bytes>)` | `["update"]` |
+| Transit 全局 key 配置 | `transit/config/keys` | `["read","update"]`（如 `disable_upsert`） |
 
 > **典型最小授权**：业务应用只给 `update` on `transit/encrypt/<name>` + `transit/decrypt/<name>`，
 > **不给 `create/update` on `transit/keys/<name>`**——应用只能用密钥，无权改/删/换密钥。
+> 若给了 `create` on `transit/encrypt/<name>`，未知 key 可能被自动创建；可用 `transit/config/keys disable_upsert=true` 关闭这种 upsert 能力。
 > 密钥管理员另一套 Policy 持有创建/轮转/删除权限。
 
 ---
@@ -323,8 +353,8 @@ Transit 的几条**默认就严**的安全设定：
 | 默认 | 含义 | 想改怎么办 |
 | --- | --- | --- |
 | `deletion_allowed=false` | key 不能被删除 | `vault write transit/keys/<name>/config deletion_allowed=true` 后再删 |
-| `exportable=false` | 不能导出原始 key 字节 | 创建时 `exportable=true`（一旦设了，整个生命周期都可导出，无法收回） |
-| `allow_plaintext_backup=false` | `transit/backup/<name>` 不能含明文 key | 同上，创建时 `allow_plaintext_backup=true` |
+| `exportable=false` | 不能通过 `/transit/export` 导出原始 key material / HMAC key 等敏感材料 | 创建 key 时或之后通过 config update 设 `exportable=true`；一旦开启不可关闭 |
+| `allow_plaintext_backup=false` | 默认拒绝 `/transit/backup/<name>` 这种含明文 key material 的备份 | 创建 key 时或之后通过 config update 设 `allow_plaintext_backup=true`；一旦开启不可关闭，备份会包含配置、所有版本 key 与 HMAC key |
 
 > 强烈建议：除非有明确"key 必须出门"的合规要求，否则保持 `exportable=false` + `allow_plaintext_backup=false`。
 > 这才是真正的"应用持密文，Vault 持钥匙——而且钥匙永不离开 Vault"。
@@ -349,10 +379,10 @@ Transit 的几条**默认就严**的安全设定：
    命令行务必 `$(echo -n "..." | base64)`，自动化里一定要 `--data-binary @-` 之类的姿势避免换行。
 
 2. **删 key 不可逆，且会让所有密文变废铁** —— 默认 `deletion_allowed=false` 是良性保护。
-   想撤销访问应改用 `min_decryption_version` 或 Policy 撤销，而非真的删 key。
+   按主体撤销访问应撤销 Policy / Token；按版本淘汰旧密文才调 `min_decryption_version`；真正删 key 只适合明确要永久销毁所有相关密文的场景。
 
 3. **轮转后忘了 rewrap，旧密文一直走旧版本解** —— 不会出错，但若旧版本被 `min_decryption_version` 关了就突然全失败。
-   生产规范是**每次 rotate 后立即排程 rewrap**，再过几个保留周期才 raise `min_decryption_version`。
+   生产规范是**每次 rotate 后立即排程 rewrap**，再过几个保留周期才 raise `min_decryption_version`；若还要不可恢复地删旧版本，再谨慎使用 `trim`。
 
 ---
 
