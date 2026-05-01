@@ -8,6 +8,7 @@
 | **Step 2** | rotate 增版本而非替换；旧密文照常解；rewrap 升级旧密文无需明文；min_decryption_version 一刀关旧版（且可逆） |
 | **Step 3** | derived 派生密钥实现租户隔离；信封加密让 100 MB 数据从不经过 Vault |
 | **Step 4** | ed25519 非对称签名 + 公钥分发；HMAC 对称签名；deletion_allowed 双保险 + 删 key 不可逆 |
+| **Step 5** | BYOK 外部 AES key 导入；wrapping_key / import 流程；导入 key 像普通 Transit key 一样加解密 |
 
 ## EaaS 心智速记
 
@@ -21,7 +22,7 @@
    撤销访问的方式      改 Policy             改 Policy 或删整把 key
 ```
 
-## 三个最容易踩的坑
+## 四个最容易踩的坑
 
 1. **`plaintext` 必须 base64** —— 直接传字符串会被当成已编码字符。
 
@@ -30,6 +31,8 @@
 
 3. **删 key 不是"撤销访问"的良好选项** —— 不可逆且会让所有密文成废比特。
    日常撤销请用 Policy/Token；只有在合规要求"销毁数据"时才删 key。
+
+4. **BYOK 导入不是把明文 key 直接 POST 给 Vault** —— 先走 wrapping key / import 流程；导入后也要清理本地明文 key material。
 
 ## 与下一节的衔接
 

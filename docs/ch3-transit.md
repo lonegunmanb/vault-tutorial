@@ -125,6 +125,63 @@ vault write transit/encrypt/order-pii \
 这两个机制让"密文 + context / AAD"必须配对成功才能解密——典型场景：把租户 ID 绑进 `associated_data`，
 让 A 租户密文绝不可能被 B 租户的解密路径破解。
 
+在 CLI 里，`context` 就是 `vault write` 的一个参数。典型用法是先创建派生 key，然后加/解密两边都传同一个 base64 context；同一份明文在不同租户 context 下会得到彼此隔离的密文：
+
+```bash
+vault write -f transit/keys/tenant-pii derived=true
+
+# 不传 context 会失败
+vault write transit/encrypt/tenant-pii \
+  plaintext=$(echo -n "13800138000" | base64) 2>&1 | tail -3
+# 应报错：context is required for derived keys
+
+B64=$(echo -n "13800138000" | base64)
+CTX_A=$(echo -n "tenant-A" | base64)
+CTX_B=$(echo -n "tenant-B" | base64)
+
+CT_A=$(vault write -format=json transit/encrypt/tenant-pii \
+  plaintext="$B64" context="$CTX_A" | jq -r .data.ciphertext)
+echo "Tenant A 密文: $CT_A"
+
+CT_B=$(vault write -format=json transit/encrypt/tenant-pii \
+  plaintext="$B64" context="$CTX_B" | jq -r .data.ciphertext)
+echo "Tenant B 密文: $CT_B"
+
+# tenant-A 用自己的 context 解 A 的密文 → 成功
+vault write -format=json transit/decrypt/tenant-pii \
+  ciphertext="$CT_A" context="$CTX_A" | jq -r .data.plaintext | base64 -d
+echo
+
+# tenant-B 试图用自己的 context 解 A 的密文 → 失败
+vault write transit/decrypt/tenant-pii \
+  ciphertext="$CT_A" context="$CTX_B" 2>&1 | tail -3
+# 应报错：cipher: message authentication failed 之类
+```
+
+如果直接调用 HTTP API，`associated_data` 不参与派生子密钥，而是作为 AEAD 的 AAD 被认证；解密时必须传入完全相同的 AAD：
+
+```bash
+curl \
+  --header "X-Vault-Token: $VAULT_TOKEN" \
+  --request POST \
+  --data '{
+    "plaintext": "MTM4MDAxMzgwMDA=",
+    "associated_data": "dGVuYW50LUE="
+  }' \
+  $VAULT_ADDR/v1/transit/encrypt/order-pii
+
+curl \
+  --header "X-Vault-Token: $VAULT_TOKEN" \
+  --request POST \
+  --data '{
+    "ciphertext": "vault:v1:...",
+    "associated_data": "dGVuYW50LUE="
+  }' \
+  $VAULT_ADDR/v1/transit/decrypt/order-pii
+```
+
+如果传错 `context` 或 `associated_data`，Vault 会把这次解密视为认证失败；应用不应该把它当成“换个租户再试一次”的普通业务分支。
+
 ---
 
 ## 4. 无中断密钥轮转：`rotate` + `rewrap`
@@ -361,7 +418,70 @@ Transit 的几条**默认就严**的安全设定：
 
 ---
 
-## 11. 与其它章节的关系
+## 11. BYOK 导入与 Key Wrapping
+
+Transit 也支持 **Bring Your Own Key (BYOK)**：也就是把 Vault 外部生成的 key material 导入 Transit，让这把外部 key 后续像普通 Transit key 一样参与加密 / 解密。官方 key wrapping guide 的定位不是讲 `rewrap` 旧密文，而是讲“导入外部 key 之前，如何把目标 key 包装成 Vault 可接受的 import ciphertext”。[来源：key-wrapping-guide.mdx「import」开篇：BYOK allows users to import keys generated outside Vault；document describes wrapping an externally-generated key for import]
+
+第一步仍然是启用 Transit 引擎；如果引擎已经启用，可以跳过这步。[来源：key-wrapping-guide.mdx「Mount the secrets engine」段]
+
+```bash
+# 来源：key-wrapping-guide.mdx「Mount the secrets engine」命令示例
+vault secrets enable transit
+```
+
+然后读取 Transit 的 wrapping public key：`transit/wrapping_key` 会返回一把 4096-bit RSA 公钥。后续流程取决于目标 key 存在软件里，还是存在 HSM 里。[来源：key-wrapping-guide.mdx「Retrieve the transit wrapping key」段：vault read transit/wrapping_key；This returns a 4096-bit RSA key；steps depend on software or HSM]
+
+```bash
+# 来源：key-wrapping-guide.mdx「Retrieve the transit wrapping key」命令示例
+vault read transit/wrapping_key
+```
+
+软件场景下，官方 Go 示例的核心流程是：解析 PEM 格式的 wrapping key，生成一把临时 AES key，用 AES-KWP 包装目标 key，再用 Transit 的 RSA wrapping key 通过 RSA-OAEP 包装这把临时 AES key。[来源：key-wrapping-guide.mdx「Software example (Go)」段：parse wrapping key with encoding/pem and crypto/x509；generate an ephemeral AES key；Tink KWP wraps target key；rsa.EncryptOAEP wraps ephemeral AES key]
+
+临时 AES key 用完后要安全删除；官方示例特别提醒这一点，因为它短暂持有“能解开目标 key 包装层”的能力。[来源：key-wrapping-guide.mdx「Software example (Go)」note：Be sure to securely delete the ephemeral AES key once it has been used]
+
+软件包装完成后，把 `wrappedAESKey` 和 `wrappedTargetKey` 拼接成一个字节串：最左边 4096 bits 是被 RSA-OAEP 包过的 AES key，剩余部分是被 AES-KWP 包过的目标 key；最后把整个字节串 base64 编码，作为 import 的 `ciphertext` 参数。[来源：key-wrapping-guide.mdx「Software example (Go)」段：concatenate wrapped keys；leftmost 4096 bits wrapped AES key；remaining bits wrapped target key；base64-encode]
+
+```bash
+# 来源：key-wrapping-guide.mdx「Software example (Go)」import 命令示例
+vault write transit/keys/test-key/import \
+  ciphertext=$CIPHERTEXT \
+  hash_function=SHA256 \
+  type=$KEY_TYPE
+```
+
+这里的 `hash_function` 要和包装临时 AES key 时 RSA-OAEP 使用的 hash 一致；官方 Go 示例用 `SHA256`，也说明 Vault 支持 `SHA1`、`SHA384`、`SHA512` 等选项。[来源：key-wrapping-guide.mdx「Software example (Go)」段：example uses SHA256；Vault also supports SHA1, SHA384, or SHA512；hash function must be provided when importing]
+
+HSM 场景下，官方以 AWS CloudHSM 为例：先把 Transit 的 wrapping public key 写入 HSM，形成一个可用于 wrap 的 RSA public key object；如果使用别的 HSM 工具，也要确保 wrapping key 的用途包含 `CKA_WRAP`。[来源：key-wrapping-guide.mdx「AWS CloudHSM example」段：write transit wrapping key to HSM；importPubKey；usage includes CKA_WRAP]
+
+```bash
+# 来源：key-wrapping-guide.mdx「AWS CloudHSM example」importPubKey 命令示例
+importPubKey -f wrapping_key.pem -l "vault-transit-wrapping-key"
+```
+
+之后在 HSM 内用 wrapping key 包目标 key；AWS CloudHSM 示例里的 `wrapKey -noheader ... -m 7` 使用 `CKM_AES_RSA_KEY_WRAP` 机制，`-t 3` 表示 `SHA256`，`-out ciphertext.key` 输出二进制包装结果。[来源：key-wrapping-guide.mdx「AWS CloudHSM example」wrapKey 段：wrap target key using wrapping key；-m 7 corresponds to CKM_AES_RSA_KEY_WRAP；-t 3 specifies SHA256；output ciphertext.key；noheader removes AWS-specific header]
+
+```bash
+# 来源：key-wrapping-guide.mdx「AWS CloudHSM example」wrapKey 命令示例
+wrapKey -noheader -k 1 -w 2 -t 3 -m 7 -out ciphertext.key
+```
+
+HSM 输出通常是二进制文件，交给 Vault 前同样需要 base64 编码，再把结果作为 `ciphertext` 传给 `transit/keys/<name>/import`；导入完成后，这把 key 就可以像其它 Transit key 一样使用。[来源：key-wrapping-guide.mdx「AWS CloudHSM example」导入段：binary output needs base64-encoded；vault write transit/keys/test-key/import；Once imported, it can be used like any other transit key]
+
+```bash
+# 来源：key-wrapping-guide.mdx「AWS CloudHSM example」base64 与 import 命令示例
+export CIPHERTEXT=$(base64 ciphertext.key)
+vault write transit/keys/test-key/import \
+  ciphertext=$CIPHERTEXT \
+  hash_function=SHA256 \
+  type=$KEY_TYPE
+```
+
+这套流程的重点是：Vault 不要求你把外部 key material 明文发给它，而是先用 Transit 的 wrapping public key 和约定的包装格式构造 `ciphertext`，再走 import endpoint；软件 key 与 HSM key 的差别主要在“包装动作由谁执行”。[来源：key-wrapping-guide.mdx「Software example (Go)」与「AWS CloudHSM example」整体流程：software uses Go crypto/Tink；HSM uses key_mgmt_util；both produce base64 ciphertext for transit/keys/test-key/import]
+
+---
+
+## 12. 与其它章节的关系
 
 ```
 [3.2 KV v2]              ← 镜像对照：那是 Vault 替你存机密；这是 Vault 替你守钥匙
@@ -373,7 +493,7 @@ Transit 的几条**默认就严**的安全设定：
 
 ---
 
-## 12. 三个最容易踩的坑
+## 13. 三个最容易踩的坑
 
 1. **`plaintext` 必须 base64** —— 直接传明文字符串会被当成已编码、解出乱码。
    命令行务必 `$(echo -n "..." | base64)`，自动化里一定要 `--data-binary @-` 之类的姿势避免换行。
@@ -390,6 +510,7 @@ Transit 的几条**默认就严**的安全设定：
 
 - [Transit Secrets Engine — Vault Docs](https://developer.hashicorp.com/vault/docs/secrets/transit)
 - [Transit Secrets Engine API](https://developer.hashicorp.com/vault/api-docs/secret/transit)
+- [Key wrapping for transit key import](https://developer.hashicorp.com/vault/docs/secrets/transit/key-wrapping-guide)
 - [Tutorial - Encryption as a Service](https://developer.hashicorp.com/vault/tutorials/encryption-as-a-service/eaas-transit)
 - [NIST SP 800-38D — GCM](https://csrc.nist.gov/publications/detail/sp/800-38d/final)、[RFC 8439 — ChaCha20-Poly1305](https://datatracker.ietf.org/doc/html/rfc8439)
 

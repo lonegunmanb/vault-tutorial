@@ -1,6 +1,6 @@
 {
   "title": "Transit 机密引擎：加密即服务全流程",
-  "description": "在 Dev 模式 Vault (1.19.2) 上动手验证 transit/ 引擎：加解密 + base64 双向、密钥版本化与无中断 rotate/rewrap、min_decryption_version 一刀关旧版、derived 派生密钥实现租户隔离、datakey/plaintext 信封加密大数据、ed25519 签名/验签、HMAC、deletion_allowed 双保险。",
+  "description": "在 Dev 模式 Vault (1.19.2) 上动手验证 transit/ 引擎：加解密 + base64 双向、密钥版本化与无中断 rotate/rewrap、min_decryption_version 一刀关旧版、derived 派生密钥实现租户隔离、datakey/plaintext 信封加密大数据、ed25519 签名/验签、HMAC、deletion_allowed 双保险、BYOK 外部密钥导入。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -23,6 +23,10 @@
       {
         "title": "签名 / 验签 / HMAC + 删除 key 的双保险",
         "text": "step4/text.md"
+      },
+      {
+        "title": "BYOK 导入外部密钥：wrapping_key + import",
+        "text": "step5/text.md"
       }
     ],
     "finish": {
