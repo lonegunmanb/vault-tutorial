@@ -8,10 +8,11 @@ group_order: 30
 # 3.4 Cubbyhole 机密引擎：每个 Token 一个私人储物柜
 
 > **核心结论**：Cubbyhole 是 Vault 内置的、**绑定在 Token 维度**的微
-> 型存储引擎。它最大的特点不是"能存什么"——它存的就是任意 KV 字段，
-> 跟 KV v1 长得一模一样——而是它**存在哪儿**：每一份数据都被关在
-> 当前 Token 的私有命名空间里，**任何其它 Token（包括 root）都看不
-> 见、读不到**；当 Token 过期或被 revoke，这块储物柜会被原子销毁。
+> 型存储引擎。它把任意 key/value 字段写入 Vault 配置的物理存储，但
+> 不是按全局路径共享，而是按**当前 Token 的私有命名空间**分区：在
+> ACL 允许访问 `cubbyhole/*` 的前提下，一个 Token 只能读写自己的
+> cubbyhole，**任何其它 Token（包括 root）都看不见、读不到**；当
+> Token 过期或被 revoke，这块储物柜会随 Token 一起销毁。
 > 这一节我们梳理清楚：为什么 Cubbyhole 在挂载层面就被官方标记为"不
 > 能 disable / 不能 move / 不能再次 enable"、它和 KV v1/v2 的本质区
 > 别在哪里、以及它如何成为 [2.7 章](/ch2-response-wrapping)
@@ -32,15 +33,16 @@ KV（不论 v1 还是 v2）解决的是**全局共享的机密数据**：路径�
 - 一个**临时脚本**想把中间结果暂存几分钟，不想让任何别的人看到、也不
   想留下任何长期残留
 - 一段**转手数据**：A 系统生成、希望 B 系统取走一次后即灭；任何中间
-  人（包括 root）都不该能截胡
+  人（包括 root）都不该能截胡——这类需求通常应走 Response Wrapping，
+  而不是手工共享某个长期 Token
 - **Response Wrapping 的载体**：Vault 把"被包起来的真实响应"暂存到
   某个地方，只交出一个一次性 wrapping token——这个"地方"不能是普通
   KV，否则任何 root 都能直接去读
 
 Cubbyhole 就是为了这类需求存在的。它的核心不变量只有一条：
 
-> **`cubbyhole/<path>` 的可见性等于"持有这个 Token"——别无其它授权
-> 维度**。
+> **`cubbyhole/<path>` 仍受 ACL capability 约束，但隔离边界永远是当前
+> Token：ACL 再宽，也不能让一个 Token 读到另一个 Token 的 cubbyhole。**
 
 把这条记牢，下面所有特殊行为都会变得自然。
 
@@ -62,7 +64,7 @@ Cubbyhole 就是为了这类需求存在的。它的核心不变量只有一条�
 | `vault secrets disable cubbyhole/` | ❌ | `cannot unmount "cubbyhole/"`——禁用等于把所有 Token 当前的暂存数据 + 未拆封的 wrapping token 全部打爆，会击穿 Token 体系 |
 | `vault secrets move cubbyhole/ → other/` | ❌ | `cannot remount "cubbyhole/"`——内部硬编码 `cubbyhole/response` 等系统路径，搬走会让 Response Wrapping 找不到家 |
 | `vault secrets enable -path=cb cubbyhole` | ❌ | `mount type of "cubbyhole" is not mountable`——"按 Token 隔离"在底层是单例实现，多挂一份没意义 |
-| `vault secrets tune cubbyhole/` | ❌ | `cannot tune "cubbyhole/"`——连常规调参也被堵；Cubbyhole 是"出厂即定型"的特殊存在 |
+| `vault secrets tune cubbyhole/` | ❌ | `cannot tune "cubbyhole/"`——这条不在 Cubbyhole 概览页列出的三项限制里，但系统 API 实际也会拒绝 |
 
 > 你能对它做的只有两件事：**读它的元数据**（`vault read
 > sys/mounts/cubbyhole`）和**通过自己的 Token 读写它的数据**——所有
@@ -89,7 +91,7 @@ Cubbyhole 就是为了这类需求存在的。它的核心不变量只有一条�
 | 可见性单位 | Policy 控制的全局路径 | Policy 控制的全局路径（带 `data/`） | **Token 私有**：只有写入时所用的 Token 能看 |
 | 跨 Token 共享 | ✅（凭 Policy） | ✅（凭 Policy） | ❌ **绝对不行**——root 也不行 |
 | 版本历史 | ❌ | ✅ 多版本 + soft delete | ❌（写入直接覆盖） |
-| TTL / lease | ❌ 永久 | ❌ 永久（除非显式 destroy） | ⏱ **绑定 Token 寿命**：Token 一灭即灭 |
+| TTL / lease | ❌ 永久 | ❌ 永久（除非显式 destroy） | ⏱ **绑定 Token 寿命**：值本身没有 TTL / refresh interval |
 | Policy 怎么写 | `kv/foo` | `kv/data/foo` | 一般**不需要写**——见 §6 |
 | 适用场景 | 简单全局机密 | 需要历史 / 软删的全局机密 | 临时暂存 / Response Wrapping 载体 |
 
@@ -119,8 +121,15 @@ vault delete cubbyhole/my-secret
 ```
 
 写入后立刻读，是当前这个 Token 在自己的命名空间里读自己的数据——所
-以不需要任何额外 Policy 配置就能成功（默认 token policy 已经允许，
-见 §6）。
+以在 Token 带有 `default` policy 的常见情况下，不需要额外写策略就能
+成功（见 §6）。
+
+两个官方 API 语义要特别记住：
+
+- 对同一个 `cubbyhole/<path>` 再次 `write` 会**整体替换**旧值，不是
+  局部 merge，也没有 KV v2 那样的版本历史。
+- `list` 只返回 key 名，目录会带 `/` 后缀；它不会返回这些 key 下面
+  的实际 secret value。
 
 ---
 
@@ -132,8 +141,8 @@ vault delete cubbyhole/my-secret
 1. **同一个 Token 多次访问**——能看到自己之前写的所有数据
 2. **不同的 Token**（哪怕是父子关系、哪怕另一个是 root）——**完全
    看不到**对方写的任何东西
-3. **Token 过期或 `vault token revoke` 之后**——这个 Token 写过的
-   全部 cubbyhole 数据被 Vault 原子清空，无法恢复
+3. **Token 过期或 `vault token revoke` 之后**——该 Token 的 cubbyhole
+  数据随 Token 销毁，正常 cubbyhole API 视角下不可再读
 
 第 2 条尤其反直觉。常见的两类误会：
 
@@ -146,7 +155,8 @@ vault delete cubbyhole/my-secret
   Cubbyhole 数据；要"看"必须**用这个 token 本人去登录**。
 
 这条隔离不是 Policy 加上去的，是 Cubbyhole 引擎在底层用 Token ID 直
-接做命名空间分片实现的——**Policy 写得再开放也无法跨 Token 看见对
+接做命名空间分片实现的——Policy 可以授予或拒绝"当前 Token 访问自己
+cubbyhole"的 capability，但**Policy 写得再开放也无法跨 Token 看见对
 方的 cubbyhole**。本章实验 Step 2 会让你亲手验证这一点。
 
 ---
@@ -162,18 +172,23 @@ path "cubbyhole/*" {
 }
 ```
 
-也就是说：**只要 Token 绑了 default policy（默认就绑了），就拥有自己
-cubbyhole 的全套权限**——你不需要再写一份 KV-style 的"哪个用户能读
-哪个路径"的 Policy。Token 隔离已经把"谁能看"那一维度处理掉了。
+也就是说：**只要 Token 绑了 `default` policy（常规创建时默认会绑），
+就拥有自己 cubbyhole 的全套权限**——你通常不需要再写一份 KV-style 的
+"哪个用户能读哪个路径"的 Policy。Token 隔离已经把"能不能跨 Token
+看见别人数据"那一维度处理掉了。
 
-什么时候需要动这块 Policy？**只有想"剥夺"的时候**：
+什么时候需要动这块 Policy？主要是想收窄这个 Token 自己的 cubbyhole
+能力时：
 
-- 用 `no_default_policy=true` 创建 Token，让它彻底没有 cubbyhole 权
-  限——主要用于 Response Wrapping 流程中那种"一次性扔出去就作废"
-  的纯传递场景
+- 用 `no_default_policy=true` 创建 Token，或用自定义 policy 覆盖能力，
+  让这个 Token 没有直接访问 `cubbyhole/*` 的权限
 - 在自定义 Policy 里把 `cubbyhole/*` 的 capability 缩到 `["read"]`
   之类——理论上可行，实战上几乎没人用，因为 cubbyhole 本来就只能影
   响这一个 Token 自己
+
+Response Wrapping 不需要你手工给 wrapping token 设计这类 policy；官方
+推荐的交互面是 `sys/wrapping/lookup`、`sys/wrapping/unwrap`、
+`sys/wrapping/rewrap` 与 `sys/wrapping/wrap`。
 
 ---
 
@@ -199,8 +214,8 @@ Token 的 cubbyhole 里**：
                       │
                       ▼
 拆封方：vault unwrap s.xxxx
-        → Vault 用 s.xxxx 登录 → 读 cubbyhole/response → 拿到原响应
-        → 立即 revoke s.xxxx → cubbyhole 整体销毁
+  → Vault 校验这个 single-use token → 取回其 cubbyhole 中的原响应
+  → 该 wrapping token 失效，cubbyhole 中的包装内容随之不可再读
 ```
 
 这条流水线里，**Cubbyhole 的"按 Token 隔离 + Token 灭则数据灭"**正
@@ -213,7 +228,8 @@ Token 的 cubbyhole 里**：
   后的"重放"或"二次窃取"再无可能
 
 明白了这一层，2.7 章那句"Response Wrapping 用 Cubbyhole 当底层载体"
-就不再是黑箱描述，而是字面意义上的"`cubbyhole/response` 这个路径"。
+就不再是黑箱描述；日常操作仍应走官方的 `sys/wrapping/unwrap` / CLI
+`vault unwrap`，不要把直接读内部 cubbyhole 路径当成稳定接口。
 
 ---
 
@@ -244,9 +260,10 @@ Token 的 cubbyhole 里**：
 
 | 想做的事 | 路径 | 备注 |
 | --- | --- | --- |
-| 写 / 读 / 删自己的 cubbyhole 数据 | `cubbyhole/<任意路径>` | default policy 已经放开，无需额外授权 |
-| 列出自己 cubbyhole 下的 keys | `cubbyhole/` | 同上 |
-| 看 Response Wrapping 的载体路径 | `cubbyhole/response` | Vault 内部约定；直接读在 1.19+ 会报 deprecation，生产请用 `vault unwrap` / `sys/wrapping/unwrap` |
+| 写 / 读 / 删自己的 cubbyhole 数据 | `cubbyhole/<任意路径>` | 常规 `default` policy 已放开；仍只作用于当前 Token 自己 |
+| 列出自己 cubbyhole 下的 keys | `cubbyhole/` | 只列 key，不返回 value；目录以 `/` 结尾 |
+| 从已加载 snapshot 恢复 | `RECOVER /cubbyhole/<path>` | 运维恢复接口；不要把它当成业务层 TTL / revoke 后的常规找回机制 |
+| 看 Response Wrapping 的载体路径 | `cubbyhole/response` | 教学上可帮助理解内部载体；生产请用 `vault unwrap` / `sys/wrapping/unwrap` |
 | disable / move / 二次 enable / tune | — | **全部禁止**，见 §2 |
 | 跨 Token 读对方的 cubbyhole | — | **没有任何 Policy 写法能做到** |
 
@@ -279,9 +296,8 @@ Token 的 cubbyhole 里**：
 - **Step 3**：在一个短 TTL 的 token 里写 cubbyhole，看它过期后数据被
   整体销毁；再 `vault token revoke` 另一个 token，看 cubbyhole 同步
   消失
-- **Step 4**：用 `-wrap-ttl=` 走一遍 Response Wrapping 流程，用
-  wrapping token **直接 `vault read cubbyhole/response`**，把 §7 那张
-  图字面验证一遍（Vault 1.19+ 在这条命令上会同时点亮 deprecation
-  警告：生产里请用 `vault unwrap` / `sys/wrapping/unwrap`）
+- **Step 4**：用 `-wrap-ttl=` 走一遍 Response Wrapping 流程，先按官方
+  推荐用 `vault unwrap` / `sys/wrapping/unwrap` 拆封，再用教学性的方式
+  观察 wrapping token 对应的 cubbyhole 载体为什么只能被消费一次
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch3-cubbyhole" title="实验：Cubbyhole 引擎与 Token 隔离全流程" />

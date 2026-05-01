@@ -9,17 +9,20 @@ group_order: 30
 
 > **核心结论**：和 [3.4 Cubbyhole](/ch3-cubbyhole) 一样，`identity/`
 > 是 Vault **默认挂载、不可禁用、不可迁移**的特殊内置引擎——但它的
-> 任务不是"存数据"，而是给整个集群当**身份中枢**。它对外暴露三件事：
+> 任务不是"存数据"，而是给整个集群当**身份中枢**。本章聚焦它最常用的
+> 三类能力（Vault Enterprise 另有 SCIM API，用于 SCIM client 配置和
+> 用户 / 组供应）：
 >
 > 1. **身份对象的 CRUD**：Entity / Group / Alias 的增删改查 API（背后
 >    的概念在 [2.5 身份实体](/ch2-identity-entity) 已经讲过，本章不再
 >    重复，只关心"通过 `identity/` 引擎怎么操作"）。
-> 2. **Identity Tokens**：以 Vault 当前 Entity 的元数据为载荷，签发
->    符合 OIDC 规范的 JWT；公钥通过标准 `.well-known` JWKS 暴露，外部
->    系统可以脱离 Vault 验证。
-> 3. **OIDC Identity Provider**：在 Identity Tokens 之上再封一层完整
->    的 Authorization Code Flow + Discovery，让 Vault 反向变成下游应
->    用的**单点登录服务器**——这是 [7.11 / 7.12](/) 的底层支撑。
+> 2. **Identity Tokens**：以 Vault 当前 Entity 身份和可选模板字段为
+>    载荷，签发符合 OIDC 规范的 JWT；公钥通过标准 `.well-known` JWKS
+>    暴露，外部系统可以不带 Vault Token 完成本地验签。
+> 3. **OIDC Identity Provider**：同样基于 Identity 引擎的身份对象、
+>    named keys 与模板能力，提供完整的 Authorization Code Flow +
+>    Discovery，让 Vault 反向变成下游应用的**单点登录服务器**——这是
+>    [7.11 / 7.12](/) 的底层支撑。
 
 参考：
 - [Identity Secrets Engine — Overview](https://developer.hashicorp.com/vault/docs/secrets/identity)
@@ -47,10 +50,11 @@ group_order: 30
   处走完登录流程，公证处签一张同样格式的盖章证明书塞给来访者，让他
   带回去。
 
-后两种用法用的**都是同一种"盖章证明书"——一条符合 OIDC 规范的 JWT**，
-公章（公钥）通过标准 `.well-known` 端点公开发布，谁都能离线验签
-（细节见 [§3](#_3-identity-tokens-让-vault-变成-jwt-签发机)）。区别只在
-"谁去申请"和"在哪一步交付"：
+后两种用法最终交付的**都是 OIDC ID Token 风格的签名 JWT**，公章
+（公钥）通过标准 `.well-known` / JWKS 端点公开发布；验证方只需要能
+访问或缓存这些公钥，不需要拿 Vault Token 做授权调用（细节见
+[§3](#_3-identity-tokens-让-vault-变成-jwt-签发机)）。区别只在"谁去
+申请"和"在哪一步交付"：
 
 | 用法 | 类比 | 谁主动 | 用户与 Vault 是否要交互 | 典型场景 |
 | --- | --- | --- | --- | --- |
@@ -131,9 +135,9 @@ vault auth list -format=json | jq -r 'to_entries[] | "\(.key) \(.value.accessor)
 
 ### 2.2 "同名自动归并" vs "手动归并"
 
-当一个用户首次通过某 auth method 登录、且**该 mount 的 alias name 与
-某个已有 Entity 的某个 alias 不冲突**时，Vault 会**新建** Entity；如
-果 alias name 在该 mount 下已存在，则复用。
+当一个用户首次通过某 auth method（Token backend 除外）登录、且**该
+mount 的 alias name 与某个已有 Entity 的某个 alias 不冲突**时，Vault
+会**新建** Entity；如果 alias name 在该 mount 下已存在，则复用。
 
 但**跨 mount 的"这两个登录其实是同一个人"是 Vault 自己看不出来的**
 ——你必须显式 `vault write identity/entity-alias` 把第二个 alias 挂
@@ -157,8 +161,8 @@ Group。
 
 > **一句话定位**：Identity Tokens 让 Vault 能为 *已登录的 Entity* 签
 > 发一个**符合 OIDC 规范的 JWT**，公钥通过标准 `.well-known` 端点对
-> 外暴露——任何懂 JWT 的下游系统都能在**完全不查询 Vault** 的情况下
-> 验证这条身份声明。
+> 外暴露——任何懂 JWT 的下游系统都能在拿到并缓存公钥后，在本地验证
+> 这条身份声明。
 
 这是把 Vault 从"机密存储"升级成"身份发证机关"的关键一跳。
 
@@ -190,9 +194,10 @@ Group。
 
 #### OIDC 规定的标准 Claim
 
-OpenID Connect 在 JWT 之上规定了一组**ID Token 必须有**的 claim
-（见 [OIDC Core §2](https://openid.net/specs/openid-connect-core-1_0.html#IDToken)），
-Vault 签出来的 token 一定带上：
+OpenID Connect 在 JWT 之上规定了一组 ID Token claim（见
+[OIDC Core §2](https://openid.net/specs/openid-connect-core-1_0.html#IDToken)）。
+对 `identity/oidc/token/<role>` 签发的 Identity Token，Vault 官方文档
+明确保证**至少**带上这五个字段：
 
 | Claim | 含义 |
 | --- | --- |
@@ -201,10 +206,13 @@ Vault 签出来的 token 一定带上：
 | `aud` | **Audience**——预期接收方（Vault 里 = role 的 `client_id`） |
 | `iat` | **Issued At**——签发时间（Unix 秒） |
 | `exp` | **Expiration**——过期时间（Unix 秒）；超过即视为无效 |
-| `nbf` | **Not Before**（可选）——这个时间之前不接受 |
-| `nonce` | （OIDC 流程里）防重放随机串，由 RP 在请求时给定、token 原样回填 |
 
-除了这些标准字段，签发方还可以加任意**自定义 claim**——这正是
+`nbf` 不是 Vault 自动附带的必需字段；官方示例里它是通过 role
+`template` 写进去的自定义 claim。`nonce` 则属于 OIDC 登录流程里常见的
+请求关联 / 防重放字段，不是 `identity/oidc/token/<role>` API 的固定
+输出字段。
+
+除了这些基础字段，签发方还可以加任意**自定义 claim**——这正是
 [§3.3](#_3-3-模板-把-entity-元数据塞进-jwt) 模板的用武之地。
 
 #### 验证一条 JWT 的标准动作
@@ -212,37 +220,46 @@ Vault 签出来的 token 一定带上：
 无论用哪种语言的 JWT 库，验证步骤都一样：
 
 1. 解出 header，拿到 `alg` 与 `kid`
-2. 从 issuer 的 JWKS 端点（`<iss>/.well-known/keys`）拉公钥列表，按
+2. 从 issuer 的 JWKS 端点（通常是 `<iss>/.well-known/keys`）拉公钥列表，按
    `kid` 找到对应公钥
 3. 用该公钥按 `alg` 校验第三段签名 → **签名有效性**
 4. 校验 `exp > now`、`nbf <= now`（如有）、`aud` 等于本服务的预期
    client_id、`iss` 等于预期签发者 → **业务有效性**
 5. 全部通过 → 信任 payload 里的所有 claim
 
-记住：**JWT 验证完全是离线的**——除了首次拉一次 JWKS 公钥（之后还可
-以缓存），不需要再回头问签发者。这就是它能取代"每次请求都查一次中央
-session 服务器"的根本原因，也是 [§3.4](#_3-4-验证侧-两种姿势) 推荐
-JWKS 路线、§3.4 把 introspect 列为"高敏特例"的依据。
+记住：签名与 claim 校验是在验证方本地完成的；除了拉取或刷新 JWKS
+公钥（之后还可以缓存），不需要带 Vault Token 回头问签发者。这就是它
+能取代"每次请求都查一次中央 session 服务器"的根本原因，也是
+[§3.4](#_3-4-验证侧-两种姿势) 推荐 JWKS 路线、§3.4 把 introspect 列为
+"高敏特例"的依据。
 
 ### 3.1 三个核心对象：Key / Role / Token
 
 ```
-identity/oidc/key/<name>     ← 命名密钥对（Vault 帮你生成 + 自动轮转的 RSA/EC 私钥）
+identity/oidc/key/<name>     ← 命名密钥对（Vault 生成 + 自动轮转；算法可配）
 identity/oidc/role/<name>    ← 模板 + TTL + 引用某个 key + 限定 client_id
 identity/oidc/token/<role>   ← 当前 token 的持有者（Entity）请求签发一条 JWT
 ```
 
 三者之间的关系是**多对一**：多个 role 可以共用一个 key；一个 role
-对应固定的 client_id（也就是 JWT 里 `aud` 字段的值）。
+都有一个 `client_id`（也就是 JWT 里 `aud` 字段的值），可以由操作者显
+式指定，也可以留空让 Vault 自动生成。role 必须引用一把 named key，
+Vault 不支持签发 unsigned ID token。
 
-### 3.2 Key 的两个关键参数：`rotation_period` 与 `verification_ttl`
+### 3.2 Key 的关键参数：轮转、保留、算法与允许的 client_id
 
 - **`rotation_period`**（默认 24h）：每隔多久 Vault 自动生成一对新的
   签名密钥，并用新密钥签后续 token；旧的**私钥立即销毁**。
 - **`verification_ttl`**（默认 24h）：旧的**公钥**在 JWKS 端点上还会
   保留多久——这是给"已经签出去、还没过期"的老 token 留的验证窗口。
+- **签名算法**：named key 会记录签名算法；Vault OIDC Provider 的
+  discovery 示例列出 `RS256/RS384/RS512`、`ES256/ES384/ES512` 与
+  `EdDSA`。
+- **允许的 client ID**：key 可以限制哪些 `client_id` 对应的 role 能
+  引用它；设为 `*` 表示允许全部。这个校验发生在请求签发 token 时，
+  不是配置 role / key 的时候。
 
-> **配置规律**：`verification_ttl ≥ role.token_ttl` —— 否则 token
+> **配置规律**：`verification_ttl ≥ role` 的 `ttl` —— 否则 token
 > 还没过期，公钥已经从 JWKS 上消失，下游验证全军覆没。
 
 ### 3.3 模板：把 Entity 元数据塞进 JWT
@@ -270,9 +287,12 @@ EOT
 | `identity.entity.metadata.<key>` | Entity 元数据 |
 | `identity.entity.aliases.<accessor>.name` | 在指定 auth mount 下的 alias 名 |
 | `identity.entity.aliases.<accessor>.metadata.<key>` | Alias 元数据 |
-| `time.now` / `time.now.plus.<dur>` | 当前时间 / 延后/提前的时间戳 |
+| `identity.entity.aliases.<accessor>.custom_metadata.<key>` | Alias custom metadata |
+| `time.now` / `time.now.plus.<dur>` / `time.now.minus.<dur>` | 当前时间 / 延后/提前的时间戳 |
 
 ⚠️ 模板的**顶层 key 不能与标准 OIDC claim 同名**（否则会覆盖 `iss/sub/...`）。
+如果某个 metadata key 或 alias accessor 对当前 Entity 不存在，模板会按
+数据类型得到空字符串或空对象，而不是替你报错。
 
 ### 3.4 验证侧：两种姿势
 
@@ -280,7 +300,7 @@ EOT
 
 | 验证方式 | 端点 | 是否需要 Vault Token | 优势 | 局限 |
 | --- | --- | --- | --- | --- |
-| **JWKS / OIDC Discovery**（推荐） | `…/identity/oidc/.well-known/openid-configuration` 与 `…/.well-known/keys` | ❌ 不需要 | 标准 OIDC 库直接对接；Vault 不在请求路径上 | 无法感知"Entity 已被禁用"等运行时状态 |
+| **JWKS / OIDC Discovery**（通常优先） | `…/identity/oidc/.well-known/openid-configuration` 与 `…/.well-known/keys` | ❌ 不需要 | 标准 OIDC 库直接对接；签名校验在本地完成 | 无法感知"Entity 已被禁用"等运行时状态 |
 | **Introspection** | `identity/oidc/introspect` | ✅ 需要 | 多查一次"Entity 还活着没"，能识别中途禁用 | 增加 Vault 一次请求；要管验证侧的 Vault 凭据 |
 
 > 大多数生产场景用 JWKS 即可——脱离 Vault、可缓存、与所有 OIDC 库
@@ -288,16 +308,19 @@ EOT
 
 ### 3.5 `iss`（Issuer）的网络可达性
 
-签出去的 JWT 里 `iss` 字段的值就是 Vault 用来发布 JWKS 的 base URL。
-默认取自 Vault 启动时配置的 `api_addr`。**下游验证方一定要能直连这
-个地址**——典型坑：
+签出去的 JWT 里 `iss` 字段是验证方用来发现公钥的 issuer URL。默认情
+况下，Vault 会基于启动配置里的 `api_addr` 设置 issuer；如果显式配置
+`identity/oidc/config` 的 `issuer`，这个地址必须指到该 Vault 实例的
+`/v1/identity/oidc` 路径，例如
+`https://vault-1.example.com:8200/v1/identity/oidc`。**下游验证方一定要
+能访问这个 issuer 对应的 `.well-known` / JWKS 端点**——典型坑：
 
 - Vault 跑在内网，`api_addr=https://vault.internal:8200`，但下游服
   务在外网 → 验证拿不到 JWKS → 全部失败。
 - 多集群部署但 token 在集群 A 签、却让集群 B 验 → JWKS 来自 A，`iss`
   字段也写的 A，B 自己的 JWKS 上没这把公钥 → 失败。
 
-需要时用 `identity/oidc/config` 显式覆盖 `issuer`。
+需要时用 `identity/oidc/config` 显式覆盖 `issuer`，但不要只填裸域名。
 
 ![identity-token-flow](/images/ch3-identity/identity-token-flow.png)
 
@@ -313,12 +336,14 @@ Vault**——下游应用走标准的 Authorization Code Flow，把用户**重�
 ### 4.1 默认就有一个 Provider
 
 Vault 每个 namespace 自带一个名为 `default` 的 OIDC provider 和一把
-名为 `default` 的 key。**这意味着启用一个完整 OIDC IdP 的最少操作只
-有两步**：
+名为 `default` 的 key。**这意味着如果已有可供终端用户登录的 auth
+method，接入一个 OIDC RP 的关键配置很少；从空的 dev 环境起步，官方
+最小示例通常是三步**：
 
 1. 启用任一 auth method（`userpass`/`oidc`/`ldap` 都行——这决定终端
    用户拿什么登录 Vault）
-2. 创建一个 `identity/oidc/client/<app>` 客户端，把 `assignments` 设
+2. 在该 auth method 下创建或接入一个能登录的终端用户
+3. 创建一个 `identity/oidc/client/<app>` 客户端，把 `assignments` 设
    为内置的 `allow_all`
 
 之后下游应用就可以用 `client_id`、`client_secret` 和 issuer
@@ -328,15 +353,15 @@ Vault 每个 namespace 自带一个名为 `default` 的 OIDC provider 和一把
 
 ```
 identity/oidc/provider/<name>     ← 网关：暴露 .well-known 与 authorize/token/userinfo 端点
-   └─ allowed_client_ids          ← 哪些 client 能走这个 provider
-   └─ scopes_supported            ← 这个 provider 提供哪些 scope
-   └─ issuer                      ← JWT iss 字段值（同 Identity Tokens 的注意点）
+provider.allowed_client_ids       ← 哪些 client 能走这个 provider
+provider.scopes_supported         ← 这个 provider 提供哪些 scope
+provider.issuer                   ← Provider issuer（/v1/identity/oidc/provider/<name>）
 
 identity/oidc/client/<name>       ← 一个下游应用
-   ├─ client_type                 ← confidential（带 secret） / public（PKCE）
-   ├─ redirect_uris               ← 允许重定向回的 URL（OIDC 安全核心）
-   ├─ assignments                 ← 谁能通过这个 client 登录（默认空 → 全拒）
-   └─ key                         ← 用哪把 named key 签 ID Token
+client.client_type                ← confidential（带 secret） / public（PKCE）
+client.redirect_uris              ← 允许重定向回的 URL（OIDC 安全核心）
+client.assignments                ← 谁能通过这个 client 登录（默认空 → 全拒）
+client.key                        ← 用哪把 named key 签 ID Token
 
 identity/oidc/scope/<name>        ← 自定义 scope；模板语法同 §3.3
 identity/oidc/assignment/<name>   ← Entity / Group 白名单
@@ -413,10 +438,10 @@ vault write identity/oidc/client/admin-portal \
 | 把 Alias 挂到 Entity | `identity/entity-alias` + `mount_accessor` | 同一 mount 下一个 Entity 只能一个 alias |
 | 创建 Group | `identity/group` | `type=internal` 显式列成员；`type=external` 走 alias 自动同步 |
 | 跨 mount 查询身份 | `identity/lookup/entity` & `identity/lookup/group` | 调试归并时常用 |
-| 创建签名密钥 | `identity/oidc/key/<name>` | 关注 `rotation_period` 与 `verification_ttl` |
+| 创建签名密钥 | `identity/oidc/key/<name>` | 关注 `rotation_period`、`verification_ttl`、算法与允许的 `client_id` |
 | 创建 ID Token Role | `identity/oidc/role/<name>` | `template`、`ttl`、`client_id`、`key` |
 | 让当前 Entity 签 token | `identity/oidc/token/<role>` | 只能为请求者自己的 Entity 签 |
-| 验证 token（脱离 Vault） | `…/identity/oidc/.well-known/openid-configuration` & `…/.well-known/keys` | 无需鉴权 |
+| 验证 token（脱离 Vault 授权） | `…/identity/oidc/.well-known/openid-configuration` & `…/.well-known/keys` | 无需 Vault Token，但验证方要能访问或缓存 JWKS |
 | 验证 token（在线） | `identity/oidc/introspect` | 需要 Vault Token |
 | 创建 OIDC client（RP） | `identity/oidc/client/<name>` | 默认 `assignments=[]` → 谁都进不来 |
 | 把白名单装上 | `identity/oidc/assignment/<name>` | `entity_ids` + `group_ids` |
