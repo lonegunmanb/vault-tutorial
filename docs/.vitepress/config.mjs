@@ -51,8 +51,9 @@ export default defineConfig({
              { text: '3.6 Identity 机密引擎：Vault 的身份中枢与 OIDC 提供商', link: '/ch3-identity' },
              { text: '3.10 LDAP 机密引擎：托管目录账号的密码轮转、动态创建与借出归还', link: '/ch3-ldap' },
              { text: '3.11 Kubernetes 机密引擎：让 Vault 为 K8s 集群签发动态 ServiceAccount Token', link: '/ch3-k8s' },
-             { text: '3.12 TOTP 机密引擎：让 Vault 同时充当验证器与认证器', link: '/ch3-totp' },
-             { text: '3.13 Transit 机密引擎：加密即服务 (Encryption as a Service)', link: '/ch3-transit' }
+             { text: '3.12 TOTP 机密引擎：让 Vault 同时充当生成器与校验端', link: '/ch3-totp' },
+             { text: '3.13 Transit 机密引擎：加密即服务 (Encryption as a Service)', link: '/ch3-transit' },
+             { text: '3.14 PostgreSQL 数据库机密引擎：动态账号、静态轮转与连接接管', link: '/ch3-postgres' }
            ]
          },
          {

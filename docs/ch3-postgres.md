@@ -148,7 +148,7 @@ Lease 过期或 `vault lease revoke <lease_id>` 时，Vault 调用预设的 revo
 SQL 把这个账号从 PostgreSQL 上清掉。
 
 > 与 [3.10 LDAP](/ch3-ldap) 的 Dynamic Role 完全同模型——只是清理对象从 LDAP entry 变成 PG `ROLE`。
-> 与 [3.3 AWS](/ch3-aws-engine) 的 IAM User 凭据同理，唯一的差异在于"被代管的外部系统"不同。
+> 与 [3.3 AWS](/ch3-aws) 的 IAM User 凭据同理，唯一的差异在于"被代管的外部系统"不同。
 
 ---
 
