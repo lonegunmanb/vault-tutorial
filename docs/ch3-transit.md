@@ -488,7 +488,6 @@ vault write transit/keys/test-key/import \
 [3.4 Cubbyhole]          ← 都不靠"路径权限模型"，但分别为 Token 隔离 / 加密服务
 [3.10/3.11 LDAP/K8s]     ← 那些都是"Vault 向外签发短期凭据"，本章是"Vault 提供算力"
 [3.12 TOTP]              ← 同样是"密码学即服务"，TOTP 是时间一次性密码，Transit 是通用加解密+签名
-[未来 ENT KMSE]          ← Vault Enterprise 的 KMS Engine 把 Transit 模式扩到云 KMS 后端
 ```
 
 ---
