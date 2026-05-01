@@ -1,14 +1,15 @@
 ---
 order: 312
-title: 3.12 TOTP 机密引擎：让 Vault 同时充当验证器与认证器
+title: 3.12 TOTP 机密引擎：让 Vault 同时充当生成器与校验端
 group: 第 3 章：核心机密引擎管理体系 (Secret Engines)
 group_order: 30
 ---
 
-# 3.12 TOTP 机密引擎：让 Vault 同时充当验证器与认证器
+# 3.12 TOTP 机密引擎：让 Vault 同时充当生成器与校验端
 
-> **核心结论**：Vault 的 TOTP 机密引擎用于按 TOTP 标准生成基于时间的凭据，也可以生成一把新 key 并验证由这把 key 生成的密码。
-> 它有两种官方定位：作为 **generator** 时，Vault 像 Google Authenticator 一样生成 TOTP code；作为 **provider** 时，Vault 像 Google.com 登录服务一样生成 key 并验证第三方 App 产生的 TOTP code。
+> **核心结论**：TOTP 的本质是“服务器端”和“客户端认证器”各自保存同一个 secret，再用当前时间和同一套算法算出 6 位或 8 位数字。
+> 登录时客户端提交这个数字，服务器端用自己保存的 secret 和当前时间再算一遍；数字对得上，就说明对方确实拥有同一个 secret。
+> Vault 的 TOTP 机密引擎就是这套机制的一种实现：作为 **generator** 时，它像 Google Authenticator 一样生成 TOTP code；作为 **provider** 时，它像 Google.com 登录服务一样生成 secret 并校验第三方 App 产生的 TOTP code。
 
 参考：
 - [TOTP secrets engine](https://developer.hashicorp.com/vault/docs/secrets/totp)
@@ -18,10 +19,22 @@ group_order: 30
 
 ---
 
-## 1. TOTP 引擎到底负责什么
+## 1. 先用一句话理解 TOTP
 
-TOTP secrets engine 生成的是符合 TOTP 标准的 time-based credentials。
-同一个引擎还可以生成新的 key，并验证由这把 key 生成出来的 passwords。
+TOTP 可以先不用想成“魔法验证码”，而是想成一个很简单的共享秘密校验：
+
+```text
+同一个 secret + 当前时间 + 同一套算法 = 当前这一刻的 6 位或 8 位数字
+```
+
+注册 TOTP 时，服务器端保存一份 secret，用户手机里的 Microsoft Authenticator、Google Authenticator、1Password，或者 Vault 这一类工具也保存同一份 secret。
+之后登录时，客户端认证器不会把 secret 发给服务器，而是用 secret 和当前时间算出一个短数字。
+服务器端也用自己保存的 secret 和当前时间算一遍；如果两边数字一致，就说明提交 code 的人至少拥有这份 secret。
+
+所以 TOTP 校验的关键不是“这个数字本身有多神秘”，而是：**只有拿到同一个 secret 的一方，才能在同一个时间窗口里算出同一个数字**。
+常见配置是每 30 秒换一次 6 位数字，也可以配置成 8 位、10 秒窗口、SHA256 等其它参数；只要 secret、时间窗口、位数和算法一致，不同认证器算出来的结果就应该一致。
+
+Vault 的 TOTP secrets engine 就是在这套标准机制上提供两个角色：它既可以保存已有 secret 并生成 code，也可以自己生成 secret 并验证用户提交的 code。
 官方文档把这两个能力拆成两种身份：generator 与 provider。
 
 | 身份 | Vault 在做什么 | 官方类比 |
