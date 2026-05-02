@@ -85,13 +85,13 @@ Vault 官方的 PKI 文档由多篇子文档组成，本教程将分阶段覆盖
 
 | 官方子文档 | 内容 | 本教程覆盖情况 |
 | --- | --- | --- |
-| **Overview** | 概念入门（即本节） | ✅ 本节 |
-| **Setup and Usage** | 引擎的启用与基本用法 | 后续章节 |
-| **Quick Start — Root CA Setup** | 搭建根 CA 的快速指南 | 后续章节 |
-| **Quick Start — Intermediate CA Setup** | 搭建中间 CA 的快速指南 | 后续章节 |
-| **Considerations** | 运维使用注意事项清单 | 后续章节（踩坑 / 最佳实践） |
-| **Rotation Primitives** | 用于轮换的不同证书类型 | 后续章节 |
-| **ACME** | Vault 对 ACME 协议的支持与限制 | 后续章节 |
+| **Overview** | 概念入门（即本节） | ✅ 第 1 节 |
+| **Setup and Usage** | 引擎的启用与基本用法 | ✅ 第 2 节（最小可用链路） |
+| **Quick Start — Root CA Setup** | 搭建根 CA 的快速指南 | ✅ 第 3 节 |
+| **Quick Start — Intermediate CA Setup** | 搭建中间 CA 的快速指南 | ✅ 第 4 节 |
+| **Considerations** | 运维使用注意事项清单 | ✅ 第 5 节（踩坑 / 最佳实践） |
+| **Rotation Primitives** | 用于轮换的不同证书类型 | ✅ 第 6 节 |
+| **ACME** | Vault 对 ACME 协议的支持与限制 | ✅ 第 7 节（含故障排查） |
 
 ---
 
@@ -493,9 +493,9 @@ vault path-help pki/roles
 
 本节只是 PKI 引擎的 quick start；生产部署建议参考以下资源实现 Root + Intermediate 分层：
 
-- 进阶教程："Build Your Own Certificate Authority (CA)"（`/vault/tutorials/secrets-management/pki-engine`）
-- 企业版功能："PKI Secrets Engine with Managed Keys"（`/vault/tutorials/enterprise/managed-key-pki`），介绍外部托管私钥
-- API 参考：`/vault/api-docs/secret/pki`
+- 进阶教程：[Build Your Own Certificate Authority (CA)](https://developer.hashicorp.com/vault/tutorials/secrets-management/pki-engine)
+- 企业版功能：[PKI Secrets Engine with Managed Keys](https://developer.hashicorp.com/vault/tutorials/enterprise/managed-key-pki)，介绍外部托管私钥
+- API 参考：[PKI Secrets Engine API](https://developer.hashicorp.com/vault/api-docs/secret/pki)
 
 ---
 
@@ -774,7 +774,7 @@ $ vault write pki_int/issue/example-dot-com \
 
 #### 一个挂载点一个 CA
 
-自 Vault 1.11 起支持单挂载多 issuer，但官方 **strongly recommended** 每个 mount 只放一个 issuer。
+自 Vault 1.11 起支持单挂载多 issuer，但官方**强烈推荐**每个挂载点只挂一个 issuer。
 
 **核心理由是权限管理**：对 root 的高权限操作与日常 leaf 签发应分开 mount——能操作 root 的人很少，但需要签 leaf 的人很多。分离后便于审计与最小权限控制。
 
@@ -877,7 +877,21 @@ Vault 的哲学是短期凭据。私钥仅在签发时返回给客户端一次�
 
 **量级影响**：10–1000 张长期存储证书没问题；50k–100k 开始造成压力；500k+ 即使短 TTL 也会拖累大集群。过期证书应使用 tidy 清理。
 
-**BYOC（Bring Your Own Certificate，≥1.12）**：能吊销未存储的证书，因此 `no_store=true` 现在可以"全局安全"地使用，不再因可能需要吊销就被迫存证。
+**用 `no_store=true` 不存证**：当签发量大、TTL 短（官方给出的阈值是 **< 30 天**）时，可在 Role 上设置 `no_store=true`，让 Vault 签发后**不把证书写入存储**，只随响应返回给调用者。
+
+| 维度 | 收益 | 代价 |
+| --- | --- | --- |
+| **吞吐** | 大幅提升（参考 5.3 基准表，"不存证"列比"存证"快 5–10 倍） | — |
+| **存储 / CRL** | 存储不再随签发量线性膨胀；CRL 重建压力下降 | — |
+| **集群扩展** | 满足 Performance Standby 直接处理签发的必要条件之一（见 5.3） | — |
+| **吊销** | — | 无法按 serial 吊销（Vault 不知道这张证书存在） |
+| **审计 / 留痕** | — | 需依赖 audit log 在 Vault 外追踪签发记录 |
+
+> **提示**：在大签发量 + 短 TTL 场景下，`no_store=true` 是**官方推荐**做法；长 TTL + 偶尔需要主动吊销 + 量不大的场景，仍建议保留默认 `no_store=false`。
+
+> ⚠️ **警告**：即便符合"短 TTL"条件，某些**高风险证书类型仍应保留 `no_store=false`**——典型例子是宽通配符证书（如 `*.example.com`），一旦泄漏影响面巨大，需要精确的吊销能力；而像 `service.example.com` 这类范围明确的内部服务证书，即便 90 天 TTL 也可以放心使用 `no_store=true`。决策依据是**单张证书泄漏的影响面**，不是单纯的 TTL 长度。
+
+**BYOC（Bring Your Own Certificate，≥1.12）**：能吊销未存储的证书（调用者提交完整证书来吊销），因此 `no_store=true` 现在可以"全局安全"地使用——吊销代价从此不再是必须存证的理由。
 
 #### 必须提前配置 issuing/CRL/OCSP URL
 
