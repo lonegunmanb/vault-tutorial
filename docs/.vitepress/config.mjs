@@ -53,7 +53,8 @@ export default defineConfig({
              { text: '3.11 Kubernetes 机密引擎：让 Vault 为 K8s 集群签发动态 ServiceAccount Token', link: '/ch3-k8s' },
              { text: '3.12 TOTP 机密引擎：让 Vault 同时充当生成器与校验端', link: '/ch3-totp' },
              { text: '3.13 Transit 机密引擎：加密即服务 (Encryption as a Service)', link: '/ch3-transit' },
-             { text: '3.14 PostgreSQL 数据库机密引擎：动态账号、静态轮转与连接接管', link: '/ch3-postgres' }
+             { text: '3.14 PostgreSQL 数据库机密引擎：动态账号、静态轮转与连接接管', link: '/ch3-postgres' },
+             { text: '3.15 MySQL/MariaDB 数据库机密引擎：动态账号、通配授权与云 IAM', link: '/ch3-mysql' }
            ]
          },
          {

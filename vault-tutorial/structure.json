@@ -20,6 +20,7 @@
     { "path": "ch3-totp" },
     { "path": "ch3-transit" },
     { "path": "ch3-postgres" },
+    { "path": "ch3-mysql" },
     { "path": "ch5-mount-migration" }
   ]
 }
