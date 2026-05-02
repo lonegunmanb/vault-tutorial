@@ -1,8 +1,8 @@
 # 实验：PostgreSQL 数据库机密引擎
 
 [3.14 PostgreSQL 数据库机密引擎](/ch3-postgres) 讲清楚了 `postgresql-database-plugin`
-在 Vault Database 引擎下的形状（连接配置 / Dynamic Role / Static Role）以及与企业版功能
-（Rootless、IAM）的边界。本实验在一个真实的 PostgreSQL 16 容器上把开源版能跑的全部模式
+在 Vault Database 引擎下的形状（连接配置 / Dynamic Role / Static Role）以及 SSL / IAM 进阶认证。
+本实验在一个真实的 PostgreSQL 16 容器上把本地可跑的核心模式
 跑一遍，并用 `psql` 从 PG 端反向验证 Vault 的所有写操作确实落到了数据库里。
 
 ---
@@ -13,7 +13,7 @@
 
 - **PostgreSQL 16** 容器（`postgres:16`），监听 `127.0.0.1:5432`，默认 db `postgres`
   - 超级用户 `root` / `rootpassword`（仅供你调试 / 旁路验证用）
-   - **Vault root** 账号 `vaultadmin` / `vaultadmin`（拥有 `CREATEROLE` 与 `demo` 权限转授权，由 step1 写入 `database/config/postgres-main`）
+   - **Vault root** 账号 `vaultadmin` / `vaultadmin`（拥有 `CREATEROLE`、`legacy_app` 管理权与 `demo` 权限转授权，由 step1 写入 `database/config/postgres-main`）
   - 既有应用账号 `legacy_app` / `legacy-pass`（step3 演示 Static Role 平滑接管）
   - 演示表 `demo.kv (k,v)` 预置两行
 - **Vault 1.19.2** Dev 模式，`VAULT_ADDR=http://127.0.0.1:8200`、`VAULT_TOKEN=root`

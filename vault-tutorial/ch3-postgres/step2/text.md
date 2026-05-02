@@ -74,7 +74,7 @@ PGPASSWORD=rootpassword psql -h 127.0.0.1 -U root -d postgres -tAc \
 # 应输出 0
 
 PGPASSWORD="$PASS" psql -h 127.0.0.1 -U "$USER" -d postgres -c "SELECT 1;" 2>&1 | head -2
-# 应输出: FATAL:  role "v-token-readonly-..." does not exist
+# 应输出 FATAL 登录失败；不同 PG 认证路径下可能是 role does not exist 或 password authentication failed
 ```
 
 ## 2.6 第二次申领，观察 Lease 自然过期清理
@@ -103,7 +103,7 @@ PGPASSWORD=rootpassword psql -h 127.0.0.1 -U root -d postgres -tAc \
 
 - [ ] 申领后 `pg_roles` 里多出一条 `v-token-readonly-...`
 - [ ] 用临时账号能 `SELECT * FROM demo.kv`
-- [ ] `vault lease revoke` 后该账号从 `pg_roles` 消失，再用其密码登 PG 失败
+- [ ] `vault lease revoke` 后该账号从 `pg_roles` 消失，再用其密码登 PG 会失败
 - [ ] 不主动 revoke，TTL 到期后同样消失
 
 > 与 Step 3 的 Static Role 形成对比：Dynamic 的账号 **每次申领都不一样**，密码与账号同生命周期；

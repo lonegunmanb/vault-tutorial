@@ -38,9 +38,9 @@ ORDER BY rolname;
 
 ## 4.2 验证 `allowed_roles` 通配符
 
-step 1 写入的 `allowed_roles="my-role,readonly,svc-*"`：
+step 1 写入的 `allowed_roles="my-role,readonly,legacy-app,svc-*"`：
 
-- 精确匹配：`my-role`、`readonly`
+- 精确匹配：`my-role`、`readonly`、`legacy-app`
 - 通配匹配：`svc-*`（任何以 `svc-` 开头的 role 名）
 
 新建一个名字以 `svc-` 开头的 Dynamic Role：
@@ -96,5 +96,4 @@ vault delete database/roles/analytics
 - [ ] `analytics`（不在 allowed_roles 中）申领时报 `not an allowed role`
 
 > **小结**：本节四步把开源版 `postgresql-database-plugin` 能跑的核心场景都跑了一遍。
-> 企业版独有的 [Rootless Configuration](/ch3-postgres#6-rootless-configuration-每个-static-role-自带一条独立连接-enterprise) 与
-> 需要真实云资源的 [GCP CloudSQL IAM](/ch3-postgres#72-gcp-cloudsql-iam-auth_typegcp_iam) 见正文 §6 §7.2。
+> 需要证书或真实云资源的 x509 / GCP CloudSQL IAM 认证模式，见正文 [§6](/ch3-postgres#6-进阶认证x509-客户端证书-与-gcp-cloudsql-iam)。

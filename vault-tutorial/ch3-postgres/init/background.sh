@@ -17,6 +17,7 @@ start_postgres
 # ─────────────────────────────────────────────────────────
 # 在 PG 内预置：
 #   1) 一个供 Vault 使用的"root"账号 vaultadmin（CREATEROLE，便于建/删账号 + 改密；
+#      对 legacy_app 持 ADMIN OPTION，便于 Static Role 轮转；
 #      对 demo schema/table 持 WITH GRANT OPTION，便于把 SELECT 权限转授给动态账号）
 #   2) 一个供 Step 3 演示 onboarding 的既有账号 legacy_app（带初始密码 legacy-pass）
 #   3) 一张演示用数据表 demo.kv 给动态账号 SELECT
@@ -29,6 +30,9 @@ CREATE ROLE vaultadmin WITH LOGIN PASSWORD 'vaultadmin' CREATEROLE;
 
 -- 2. Step 3 onboarding 演示用既有账号
 CREATE ROLE legacy_app WITH LOGIN PASSWORD 'legacy-pass';
+
+-- PG 16+ 下，CREATEROLE 还不够；要改 legacy_app 密码，vaultadmin 需要该 role 的 ADMIN OPTION
+GRANT legacy_app TO vaultadmin WITH ADMIN OPTION;
 
 -- 3. 演示数据
 CREATE SCHEMA IF NOT EXISTS demo;

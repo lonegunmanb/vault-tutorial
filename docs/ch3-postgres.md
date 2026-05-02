@@ -94,6 +94,8 @@ $ vault write database/config/my-postgresql-database \
 
 > **强烈建议为 Vault 单独建一个数据库账号**（不要把现有业务超级用户拿来用）——
 > Vault 会用它"代为操纵其它数据库账号"，因此需要 CREATE / ALTER / DROP ROLE 等管理权限。
+> 在 PostgreSQL 16+ 中，`CREATEROLE` 不等于可以任意修改所有非 superuser role；
+> 若要让 Vault 轮转某个已存在的 Static Role 账号，Vault 连接账号还需要对目标 role 持有 `WITH ADMIN OPTION`，或采用其它等价的角色管理授权。
 > 如果 `creation_statements` 里还要 `GRANT SELECT/USAGE` 给动态账号，这个 Vault 连接账号还必须是相关对象 owner，
 > 或至少持有对应权限的 `WITH GRANT OPTION`；否则账号会建出来，但查询时可能报 `permission denied for schema ...`。
 

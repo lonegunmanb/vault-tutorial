@@ -34,7 +34,7 @@ PGPASSWORD=vaultadmin psql -h 127.0.0.1 -U vaultadmin -d postgres \
 ```bash
 vault write database/config/postgres-main \
   plugin_name="postgresql-database-plugin" \
-  allowed_roles="my-role,readonly,svc-*" \
+  allowed_roles="my-role,readonly,legacy-app,svc-*" \
   connection_url="postgresql://{{username}}:{{password}}@127.0.0.1:5432/postgres?sslmode=disable" \
   username="vaultadmin" \
   password="vaultadmin" \
@@ -44,7 +44,7 @@ vault write database/config/postgres-main \
 字段含义见 [3.14 §3.1](/ch3-postgres)。注意：
 
 - `connection_url` 里的 `{{username}}` / `{{password}}` 是 **Vault** 的占位符——不是 PG 的；Vault 在每次连接前注入
-- `allowed_roles` 在 step4 里会派上用场（`svc-*` 是通配符）
+- `allowed_roles` 同时约束 Dynamic Role 与 Static Role：`readonly` 给 step2，`legacy-app` 给 step3，`svc-*` 在 step4 演示通配符
 - `password_authentication="scram-sha-256"` 强制让 Vault 在 ALTER USER 时把 PG 密码以 SCRAM 形式存
   （PG 16 默认即此，但显式声明便于审计）
 

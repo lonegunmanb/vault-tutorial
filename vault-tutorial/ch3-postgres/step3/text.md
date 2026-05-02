@@ -31,9 +31,12 @@ vault write database/static-roles/legacy-app \
 vault read database/static-roles/legacy-app
 ```
 
+> Static Role 名 `legacy-app` 也必须被 `database/config/postgres-main` 的 `allowed_roles` 允许；step 1 已把它列入白名单。
+
 > `username` 必须是 PG 里**已存在**的账号名；Static Role 是 1:1 映射，不会替你建账号。
+> 在本实验环境里，PG 端已把 `legacy_app` 授给 `vaultadmin` 并带 `WITH ADMIN OPTION`，所以 Vault 能替它改密码。
 >
-> `skip_import_rotation=true` 让 Vault 不在 onboarding 时立刻轮——这是 [3.14 §5.2](/ch3-postgres) 引官方所述的关键平滑切换技巧。
+> `skip_import_rotation=true` 让 Vault 不在 onboarding 时立刻轮；它只负责延后第一次轮转，不会让 Vault 知道旧密码。
 
 ## 3.2 验证 onboarding 后旧密码仍可用
 
@@ -57,9 +60,8 @@ vault read database/static-creds/legacy-app
 # username               legacy_app
 ```
 
-> 这就是为什么 [3.14 §5.2](/ch3-postgres) 同时给出第二条 bullet：
-> onboarding 时显式传入 `password=<现有密码>` 把当前密码"借给" Vault，让应用能在第一次轮转之前就开始走 Vault 取密码。
-> 本实验为简化只做"延后第一次轮转"；生产里两条建议常一起用。
+> 这就是 `skip_import_rotation=true` 的边界：它能避免 onboarding 立刻打断旧应用，
+> 但第一次轮转前，Vault 还没有可交给应用的新密码。
 
 ## 3.3 手动轮一次：旧密码立刻失效，新密码生效
 
