@@ -43,7 +43,9 @@ vault write database/config/mysql-main \
 vault read database/config/mysql-main
 ```
 
-你应该能看到 `plugin_name`、`connection_url`、`allowed_roles`、`max_open_connections` 等字段；密码不会明文回显。
+你应该能看到顶层的 `plugin_name`、`allowed_roles`，以及 `connection_details` 里的
+`connection_url`、`max_open_connections`、`max_connection_lifetime`、`username` 等连接细节；
+密码不会明文回显。
 
 ## 1.4 轮转 root credential
 

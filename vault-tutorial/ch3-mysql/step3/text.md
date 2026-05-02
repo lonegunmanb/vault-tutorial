@@ -6,20 +6,23 @@
 
 ## 3.1 准备 wildcard SQL
 
+为了避开 Killercoda 页面复制按钮在反引号附近插入 HTML 的问题，这里直接使用官方示例里的
+base64 字符串，再解码到 `/tmp/wildcard.sql` 让你确认真实 SQL。
+
 ```bash
-cat >/tmp/wildcard.sql <<'SQL'
-CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT SELECT ON `fooapp\_%`.* TO '{{name}}'@'%';
-SQL
+WILDCARD_STMT="Q1JFQVRFIFVTRVIgJ3t7bmFtZX19J0AnJScgSURFTlRJRklFRCBCWSAne3twYXNzd29yZH19JzsgR1JBTlQgU0VMRUNUIE9OIGBmb29hcHBcXyVgLiogVE8gJ3t7bmFtZX19J0AnJSc7"
+
+echo "$WILDCARD_STMT" | base64 -d > /tmp/wildcard.sql
 
 cat /tmp/wildcard.sql
 ```
 
-这段 SQL 的含义是：Vault 每次生成一个新用户，然后只授予它读取所有 `fooapp_` 开头数据库的权限。
+你应该看到一行 SQL：Vault 每次生成一个新用户，然后只授予它读取所有 `fooapp_` 开头数据库的权限。
+注意 `GRANT SELECT ON` 后面必须紧跟反引号包住的 `fooapp\_%`，中间不应该出现 `<span ...>` 之类的 HTML。
 
 ## 3.2 base64 后写入 Dynamic Role
 
 ```bash
-WILDCARD_STMT=$(base64 -w 0 /tmp/wildcard.sql)
 echo "$WILDCARD_STMT"
 
 vault write database/roles/wildcard-role \
