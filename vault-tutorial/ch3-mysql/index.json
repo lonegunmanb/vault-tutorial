@@ -1,6 +1,6 @@
 {
   "title": "MySQL/MariaDB 数据库机密引擎：Dynamic Role、root rotation 与通配授权",
-  "description": "在 Dev 模式 Vault (1.19.2) + 一个真实 MySQL 8 容器上动手验证 database/mysql 引擎：启用 database/、写入 mysql-database-plugin 连接配置、rotate-root、Dynamic Role 现场 CREATE USER + GRANT SELECT、Lease revoke 自动 DROP USER、wildcard grant + base64 creation_statements，以及 MySQL 插件 API 参数与 GCP IAM/x509 命令形状。",
+  "description": "在 Dev 模式 Vault (1.19.2) + 一个真实 MySQL 8 容器上动手验证 database/mysql 引擎：启用 database/、写入 mysql-database-plugin 连接配置、rotate-root、Dynamic Role 现场 CREATE USER + GRANT SELECT、Lease revoke 自动 DROP USER，以及 wildcard grant + base64 creation_statements。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -19,10 +19,6 @@
       {
         "title": "Wildcard grant：base64 规避 shell 反引号",
         "text": "step3/text.md"
-      },
-      {
-        "title": "API 参数速查：x509、GCP IAM 与用户名模板",
-        "text": "step4/text.md"
       }
     ],
     "finish": {
