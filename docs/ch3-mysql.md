@@ -19,8 +19,6 @@ group_order: 30
 
 ![MySQL/MariaDB Database Secrets Engine flow](/images/ch3-mysql/mysql-dynamic-credential-flow.png)
 
-> 手绘风格绘图指令：画一个左侧“应用/Vault token”、中间“Vault database/ 引擎”、右侧“MySQL/MariaDB”的三栏流程图；箭头 1 是应用读 `database/creds/my-role`，箭头 2 是 Vault 按 `creation_statements` 到 MySQL 执行 `CREATE USER` 和 `GRANT SELECT`，箭头 3 是 Vault 把 `username/password/lease_id` 返回给应用，箭头 4 是撤销凭据时按 `revocation_statements` 执行 `DROP USER`。画风像白板手绘，线条略微不齐，重点标出 `{{name}}` 和 `{{password}}` 是 Vault 替换的占位符。
-
 > 核查注：图中若出现“Lease 到期后清理用户”的表达，是为了和 [2.3 Lease](/ch2-lease) 的上层租约机制衔接；这两份 MySQL/MariaDB 原文只直接展示 `lease_*` 输出字段，并说明 `revocation_statements` 是撤销用户时执行的语句。
 
 ---
@@ -189,9 +187,7 @@ $ vault write database/roles/my-role \
 
 API 页也印证了这个写法：`creation_statements` 可以接收 base64-encoded semicolon-separated string，所以官方 wildcard 示例不是“特殊技巧”，而是 API 明确支持的输入格式。
 
-![Wildcard grant statement](/images/ch3-mysql/mysql-wildcard-grant.svg)
-
-> 手绘风格绘图指令：画一排三个数据库桶，名字分别是 `fooapp_a`、`fooapp_b`、`barapp_a`；一把钥匙从 Vault 指向前两个桶，钥匙标签写 `GRANT SELECT ON \`fooapp\_%\`.*`，第三个桶旁边画一个小叉。旁边补一个小 shell 气泡：“反引号会被 shell 解释，所以把 SQL 先 base64”。
+![Wildcard grant statement](/images/ch3-mysql/mysql-wildcard-grant.png)
 
 ---
 
