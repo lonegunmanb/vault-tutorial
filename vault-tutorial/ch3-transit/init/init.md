@@ -1,7 +1,7 @@
 # 实验：Transit 机密引擎全流程
 
 [3.13 Transit 机密引擎](/ch3-transit) 把 EaaS 模型、密钥版本化、派生密钥、信封加密、签名 / 验签 / HMAC
-的全部机制讲清楚了。本实验把它们串成一条"造钥匙 → 加解密 → 轮转 → 升级密文 → 一刀关旧版 → 信封加密大文件 → 签验"的完整工作流。
+的全部机制讲清楚了。本实验把它们串成一条"造钥匙 → 加解密 → 轮转 → 升级密文 → 一刀关旧版 → 信封加密大文件 → 签验 / HMAC → 删除保护 → BYOK 导入外部密钥"的完整工作流。
 
 ---
 
@@ -23,5 +23,6 @@
 4. `datakey/plaintext` 一次返回 (DEK plaintext + DEK ciphertext)，本地加密 100 MB 文件全程毫秒级
 5. `ed25519` 签名 + 公钥验证；`hmac` 接口的对称"签名"
 6. `deletion_allowed=false` 默认让你 `vault delete` 直接被拒——必须先 `update`
+7. BYOK：`wrapping_key` 是导入流程用的 RSA 公钥；外部 AES key 经 `vault transit import` 导入后显示 `imported_key=true`，仍通过 `transit/encrypt` / `transit/decrypt` 使用
 
 预期耗时：15 ~ 25 分钟。

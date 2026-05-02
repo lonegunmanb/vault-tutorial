@@ -16,7 +16,8 @@ start_postgres
 
 # ─────────────────────────────────────────────────────────
 # 在 PG 内预置：
-#   1) 一个供 Vault 使用的"root"账号 vaultadmin（CREATEROLE，便于建/删账号 + 改密）
+#   1) 一个供 Vault 使用的"root"账号 vaultadmin（CREATEROLE，便于建/删账号 + 改密；
+#      对 demo schema/table 持 WITH GRANT OPTION，便于把 SELECT 权限转授给动态账号）
 #   2) 一个供 Step 3 演示 onboarding 的既有账号 legacy_app（带初始密码 legacy-pass）
 #   3) 一张演示用数据表 demo.kv 给动态账号 SELECT
 # 用 -c 让命令在 PG 已 ready 后顺序执行；重复执行时的 "already exists" 不致命
@@ -35,10 +36,10 @@ CREATE TABLE IF NOT EXISTS demo.kv (k text PRIMARY KEY, v text);
 INSERT INTO demo.kv (k,v) VALUES ('hello','world'),('vault','rocks')
   ON CONFLICT (k) DO NOTHING;
 
--- vaultadmin 后续要 GRANT SELECT 给临时账号 → 自身得能读
-GRANT USAGE ON SCHEMA demo TO vaultadmin;
-GRANT SELECT ON ALL TABLES IN SCHEMA demo TO vaultadmin;
-ALTER DEFAULT PRIVILEGES IN SCHEMA demo GRANT SELECT ON TABLES TO vaultadmin;
+-- vaultadmin 后续要 GRANT SELECT 给临时账号 → 自身必须持有 grant option
+GRANT USAGE ON SCHEMA demo TO vaultadmin WITH GRANT OPTION;
+GRANT SELECT ON ALL TABLES IN SCHEMA demo TO vaultadmin WITH GRANT OPTION;
+ALTER DEFAULT PRIVILEGES IN SCHEMA demo GRANT SELECT ON TABLES TO vaultadmin WITH GRANT OPTION;
 
 -- legacy_app 也能读（在 step 3 中我们用它的密码登录 PG 验证 onboarding 是否覆盖了密码）
 GRANT USAGE ON SCHEMA demo TO legacy_app;

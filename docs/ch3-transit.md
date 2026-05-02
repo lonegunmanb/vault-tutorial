@@ -341,7 +341,7 @@ DEK 模式好处：
 ### 8.1 签名（仅非对称类型 key）
 
 ```bash
-vault write transit/keys/signing-key type=ed25519
+vault write transit/keys/signing-key type=ed25519 >/dev/null
 
 # 签
 vault write transit/sign/signing-key \
@@ -377,7 +377,8 @@ vault write transit/verify/order-pii \
 
 ```bash
 vault read transit/keys/signing-key
-# keys.<version>.public_key   <按 key type 返回；ed25519 是 base64 原始公钥字节>
+# 默认表格输出在 keys map[<version>:map[... public_key:<base64> ...]] 中显示；
+# JSON 路径是 .data.keys."<version>".public_key，ed25519 是 base64 原始公钥字节
 
 vault read transit/export/public-key/signing-key
 # keys.<version>              <对应版本的公钥>

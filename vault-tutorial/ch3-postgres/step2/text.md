@@ -63,6 +63,18 @@ PGPASSWORD="$PASS" psql -h 127.0.0.1 -U "$USER" -d postgres -c "SELECT * FROM de
 # 应输出 demo.kv 的两行 hello/vault
 ```
 
+> 如果这里报 `permission denied for schema demo`，说明当前环境里的 `vaultadmin` 只有读取权限，
+> 但没有把权限转授给临时账号的 `WITH GRANT OPTION`。执行一次：
+>
+> ```bash
+> PGPASSWORD=rootpassword psql -h 127.0.0.1 -U root -d postgres -c "
+> GRANT USAGE ON SCHEMA demo TO vaultadmin WITH GRANT OPTION;
+> GRANT SELECT ON ALL TABLES IN SCHEMA demo TO vaultadmin WITH GRANT OPTION;"
+> vault lease revoke "$LEASE"
+> ```
+>
+> 然后回到 2.2 重新申领一份动态凭据。
+
 ## 2.5 Revoke Lease，验证账号被销毁
 
 ```bash

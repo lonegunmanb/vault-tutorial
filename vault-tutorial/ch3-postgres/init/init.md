@@ -13,7 +13,7 @@
 
 - **PostgreSQL 16** 容器（`postgres:16`），监听 `127.0.0.1:5432`，默认 db `postgres`
   - 超级用户 `root` / `rootpassword`（仅供你调试 / 旁路验证用）
-  - **Vault root** 账号 `vaultadmin` / `vaultadmin`（拥有 `CREATEROLE`，由 step1 写入 `database/config/postgres-main`）
+   - **Vault root** 账号 `vaultadmin` / `vaultadmin`（拥有 `CREATEROLE` 与 `demo` 权限转授权，由 step1 写入 `database/config/postgres-main`）
   - 既有应用账号 `legacy_app` / `legacy-pass`（step3 演示 Static Role 平滑接管）
   - 演示表 `demo.kv (k,v)` 预置两行
 - **Vault 1.19.2** Dev 模式，`VAULT_ADDR=http://127.0.0.1:8200`、`VAULT_TOKEN=root`

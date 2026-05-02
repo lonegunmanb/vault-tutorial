@@ -8,14 +8,13 @@ group_order: 30
 # 3.14 PostgreSQL 数据库机密引擎：动态账号、静态轮转与连接接管
 
 > **核心结论**：PostgreSQL 机密引擎是 Vault 内置 Database 机密引擎的众多插件之一，由
-> `postgresql-database-plugin` 实现。
+> [`postgresql-database-plugin`](https://github.com/hashicorp/vault/blob/main/plugins/database/postgresql/postgresql-database-plugin/main.go) 实现。
 > 它把对一个 PostgreSQL 实例的"建账号 / 改密码 / 删账号"能力封装成 Vault 的标准
 > Database engine 路径：`database/config/<name>` 写连接，`database/roles/<name>` 写
 > Dynamic Role，`database/static-roles/<name>` 写 Static Role。
 > 应用拿一个 Vault Token 即可 `vault read database/creds/<role>` 即时获得短寿命的
 > PostgreSQL `username` / `password` 与 Lease。
-> 这一节把「插件能力 → 配置形状 → 三种使用模式 → SSL/IAM 进阶 → 常见坑」一次串清，
-> 并明确企业版与开源版的能力分界。
+> 这一节把「插件能力 → 配置形状 → 三种使用模式 → SSL/IAM 进阶 → 常见坑」一次串清。
 
 参考：
 - [PostgreSQL database secrets engine — Vault Docs](https://developer.hashicorp.com/vault/docs/secrets/databases/postgresql)
@@ -59,7 +58,9 @@ Success! Enabled the database secrets engine at: database/
 - **Root Credential Rotation = Yes** → §3 中 `vault write -force database/rotate-root/<name>` 可用
 - **Dynamic Roles = Yes** → §4 用 `database/roles/<name>` + `database/creds/<name>` 走动态发号
 - **Static Roles = Yes** → §5 用 `database/static-roles/<name>` + `database/static-creds/<name>` 走轮转
-- **Credential Types: password, gcp_iam** → §7 GCP CloudSQL IAM 一节使用 `auth_type=gcp_iam`
+- **Credential Types: password, gcp_iam** → §6 GCP CloudSQL IAM 一节使用 `auth_type=gcp_iam`
+
+![PostgreSQL 数据库机密引擎三种模式：Root Rotation、Dynamic Roles、Static Roles](/images/ch3-postgres/postgres-three-modes.png)
 
 > 上层 Database 文档另有总述：自 Vault 1.6 起，Dynamic Roles 与 Static Roles 已成为通用能力；
 > 除 MongoDB Atlas 外，数据库插件通常支持轮转 root 用户凭据。不过跨数据库能力仍应以同页当前能力表逐行确认为准；
@@ -93,6 +94,8 @@ $ vault write database/config/my-postgresql-database \
 
 > **强烈建议为 Vault 单独建一个数据库账号**（不要把现有业务超级用户拿来用）——
 > Vault 会用它"代为操纵其它数据库账号"，因此需要 CREATE / ALTER / DROP ROLE 等管理权限。
+> 如果 `creation_statements` 里还要 `GRANT SELECT/USAGE` 给动态账号，这个 Vault 连接账号还必须是相关对象 owner，
+> 或至少持有对应权限的 `WITH GRANT OPTION`；否则账号会建出来，但查询时可能报 `permission denied for schema ...`。
 
 ### 3.2 立刻轮一次 root（强烈建议）
 
@@ -164,16 +167,7 @@ SQL 把这个账号从 PostgreSQL 上清掉。
 这意味着**应用在 onboarding 之前**还在用的旧密码会瞬间失效——如果应用没准备好从
 Vault 读密码，下一次连接就会被拒。
 
-### 5.2 平滑接管：`skip_import_rotation` 与 `password`
-
-为了缓解上述切换难题，官方上层文档给出两条可同时使用的旋钮；但当前 API 页把
-`skip_static_role_import_rotation`、`skip_import_rotation` 以及 onboarding 时写入静态账号既有
-`password` 标为 Enterprise 能力，使用前应按实际 Vault 版本与许可确认：
-
-1. **关闭 onboarding 立刻轮转**——可在 connection 级用 `skip_static_role_import_rotation` 关，或在每个 role 上用 `skip_import_rotation` 关。
-2. **在 onboarding 时显式传入"既有密码"**——通过 static role 的 `password` 字段把现有密码告诉 Vault，Vault 接管后第一次轮转之前仍能把这个已知密码交给应用，便于多客户端逐步切换。
-
-### 5.3 轮转节奏：周期 vs Cron
+### 5.2 轮转节奏：周期 vs Cron
 
 两种方式 **二选一、不可同设**：
 
@@ -211,45 +205,9 @@ username               staticuser
 
 ---
 
-## 6. Rootless Configuration：每个 Static Role 自带一条独立连接 (Enterprise)
+## 6. 进阶认证：x509 客户端证书 与 GCP CloudSQL IAM
 
-> **企业版限定**：本节描述的功能 **必须 Vault Enterprise**，开源版不可用。
-
-形状：
-
-```bash
-$ vault write database/config/my-postgresql-database \
-    plugin_name="postgresql-database-plugin" \
-    allowed_roles="my-role" \
-    connection_url="postgresql://{{username}}:{{password}}@localhost:5432/database-name" \
-    self_managed=true
-
-$ vault write database/static-roles/my-role \
-  db_name="my-postgresql-database" \
-  username="staticuser" \
-  self_managed_password="password" \
-  rotation_period="1h"
-```
-
-> 当前 PostgreSQL 教程页仍用 `self_managed_password`；Database API 页已把该参数标为
-> deprecated，并说明新写法优先使用 static role 的 `password` 字段。
-
-与默认（root 模型）相比的两点关键差异：
-
-1. `database/config/<name>` 不再填 `username` / `password`；改用 `self_managed=true` 表明"这条连接没有特权 root 账号"。
-2. **每个 static role 各自打开一条独立 DB 连接**，官方示例用 `self_managed_password` 携带该账号自己的当前密码登入；后续的轮转也只在这条专属连接上进行。
-
-副作用与硬约束：
-
-- **不支持 Dynamic Roles**
-- 强烈建议被纳入的账号只持最小权限——每个 static role 都会开一条新连接，权限越大风险越高
-- **带外（out-of-band）改密会让 Vault 与数据库失同步**——必须人工去 PG 把账号密码改回与 Vault 当前一致才能继续轮转
-
----
-
-## 7. 进阶认证：x509 客户端证书 与 GCP CloudSQL IAM
-
-### 7.1 x509 Client Certificate Authentication
+### 6.1 x509 Client Certificate Authentication
 
 Vault PG 插件支持 PostgreSQL 自身的[客户端 x509 证书认证机制](https://www.postgresql.org/docs/16/libpq-ssl.html#LIBPQ-SSL-CLIENTCERT)。
 
@@ -282,7 +240,7 @@ $ vault write database/config/my-postgresql-database \
     username="vaultuser"
 ```
 
-### 7.2 GCP CloudSQL IAM (`auth_type=gcp_iam`)
+### 6.2 GCP CloudSQL IAM (`auth_type=gcp_iam`)
 
 CloudSQL 上跑的 PostgreSQL 可以让 Vault **不用密码**就连进去——靠 GCP Service Account 的 IAM 身份完成认证。
 
@@ -303,7 +261,7 @@ ALTER USER "<YOUR DB USERNAME>" WITH CREATEROLE;
 
 ---
 
-## 8. 路径与 Policy 速查
+## 7. 路径与 Policy 速查
 
 | 操作 | 路径 | Policy capabilities |
 | --- | --- | --- |
@@ -314,16 +272,16 @@ ALTER USER "<YOUR DB USERNAME>" WITH CREATEROLE;
 | Dynamic Role CRUD | `database/roles/<name>` | `["create","read","update","delete"]` |
 | 列出 Dynamic Roles | `database/roles` | `["list"]` |
 | **申领** Dynamic 凭据 | `database/creds/<name>` | `["read"]`（应用只读这一条即可） |
-| Static Role CRUD | `database/static-roles/<name>` | `["create","read","update","delete"]`（路径名见官方 Rootless Configuration §3 示例 `database/static-roles/my-role`） |
+| Static Role CRUD | `database/static-roles/<name>` | `["create","read","update","delete"]` |
 | 列出 Static Roles | `database/static-roles` | `["list"]` |
-| 读 Static 当前密码 | `database/static-creds/<name>` | `["read"]`（路径名见官方 Rootless Configuration §4 示例 `vault read database/static-creds/my-role`） |
+| 读 Static 当前密码 | `database/static-creds/<name>` | `["read"]` |
 
 > 完整字段表见 [PostgreSQL database plugin API](https://developer.hashicorp.com/vault/api-docs/secret/databases/postgresql) 与
 > 上层 [Database secrets engine API](https://developer.hashicorp.com/vault/api-docs/secret/databases)。
 
 ---
 
-## 9. 最容易踩的几个坑
+## 8. 最容易踩的几个坑
 
 1. **绝对不要把 root 用户挂成 Static Role**——见 §3.2 引文。要轮 root 用 `database/rotate-root/<name>`，
    不要走 `database/static-roles/`。
@@ -333,19 +291,16 @@ ALTER USER "<YOUR DB USERNAME>" WITH CREATEROLE;
    `creation_statements` 用 `{{name}}` / `{{password}}` / 可选 `{{expiration}}` 注入动态账号信息。
 
 3. **onboarding Static Role 默认会立刻把现有密码改掉**——切换前若没让应用先从 Vault 读密码，
-  旧密码瞬间失效；在具备这些 onboarding 字段的版本/许可下，存量接管应显式
-  `skip_import_rotation=true`，配合 `password=<现有密码>` 平滑切换。
+    旧密码瞬间失效；存量账号接管前应安排切换窗口，确保应用改为从 Vault 读当前密码。
 
-4. **Rootless 模式只支持 Static Role，不支持 Dynamic** —— 见 §6。
+4. **`rotation_period` 与 `rotation_schedule` 互斥，必须二选一** —— 见 §5.2。
 
-5. **`rotation_period` 与 `rotation_schedule` 互斥，必须二选一** —— 见 §5.3。
-
-6. **MongoDB Atlas 不支持轮转 root**，但 PostgreSQL 支持——这是 Capabilities 表里 `Yes` 的实际含义；
+5. **MongoDB Atlas 不支持轮转 root**，但 PostgreSQL 支持——这是 Capabilities 表里 `Yes` 的实际含义；
    切换到 Atlas 前看一眼上层表。
 
 ---
 
-## 10. 与其它章节的关系
+## 9. 与其它章节的关系
 
 ```
 [2.3 Lease]  ── 本节 Dynamic Role 的 TTL & 自动 DROP ROLE 来源
@@ -356,7 +311,7 @@ ALTER USER "<YOUR DB USERNAME>" WITH CREATEROLE;
      │
 [3.14 PostgreSQL 引擎] ◄── 你在这儿
      │
-[未来 Database 通用框架专章 / Cloud IAM 联邦] ── 本节 §7.2 GCP IAM 的更深入展开
+[未来 Database 通用框架专章 / Cloud IAM 联邦] ── 本节 §6.2 GCP IAM 的更深入展开
 ```
 
 ---

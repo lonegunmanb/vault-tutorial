@@ -5,7 +5,7 @@
 1. 读取 Transit 的 `wrapping_key`，确认它是给导入流程用的 RSA 公钥
 2. 在本地生成一把 32-byte AES-256 外部密钥
 3. 用 `vault transit import` helper 走 BYOK 包装 + 导入流程
-4. 读取导入后的 key 元数据，确认 `imported=true`
+4. 读取导入后的 key 元数据，确认 `imported_key=true`
 5. 像普通 Transit key 一样用导入 key 加密 / 解密
 
 ---
@@ -52,10 +52,10 @@ vault transit import transit/keys/byok-aes @/tmp/byok-aes256.b64 type=aes256-gcm
 你应该看到类似输出：
 
 ```text
-Retrieving transit wrapping key.
+Retrieving wrapping key.
 Wrapping source key with ephemeral key.
-Encrypting ephemeral key with transit wrapping key.
-Submitting wrapped key to Vault transit.
+Encrypting ephemeral key with wrapping key.
+Submitting wrapped key.
 Success!
 ```
 
@@ -67,7 +67,7 @@ Success!
 vault read -format=json transit/keys/byok-aes | jq '.data | {
   name,
   type,
-  imported,
+  imported_key,
   latest_version,
   supports_encryption,
   supports_decryption
@@ -77,7 +77,7 @@ vault read -format=json transit/keys/byok-aes | jq '.data | {
 重点看：
 
 - `type` 应为 `aes256-gcm96`
-- `imported` 应为 `true`
+- `imported_key` 应为 `true`
 - `supports_encryption` / `supports_decryption` 应为 `true`
 
 导入成功后，应用侧不需要知道这把 key 是 Vault 生成的还是外部导入的；使用路径还是 `transit/encrypt/<name>` 与 `transit/decrypt/<name>`。
@@ -122,6 +122,6 @@ unset BYOK_KEY_B64 B64 BYOK_CT
 - [ ] `vault read transit/wrapping_key` 能看到 RSA public key
 - [ ] 本地生成的外部 key 解码后是 32 bytes
 - [ ] `vault transit import ... type=aes256-gcm96` 成功
-- [ ] `vault read transit/keys/byok-aes` 显示 `imported=true`
+- [ ] `vault read transit/keys/byok-aes` 显示 `imported_key=true`
 - [ ] `transit/encrypt/byok-aes` / `transit/decrypt/byok-aes` 能正常加解密
 - [ ] 本地 `/tmp/byok-aes256.b64` 已清理

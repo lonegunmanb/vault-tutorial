@@ -12,11 +12,12 @@
 ## 4.1 创建 ed25519 签名 key
 
 ```bash
-vault write transit/keys/signing-key type=ed25519
+vault write transit/keys/signing-key type=ed25519 >/dev/null
 vault read transit/keys/signing-key
 ```
 
-注意输出含 `keys.<version>.public_key` 字段——这是可以无害对外发布的公钥。
+注意默认表格输出会把公钥折在 `keys map[1:map[... public_key:<base64> ...]]` 里；
+若用 JSON 读取，对应路径是 `.data.keys."1".public_key`。这是可以无害对外发布的公钥。
 
 ## 4.2 签名一份消息
 
@@ -88,6 +89,8 @@ vault write transit/verify/order-pii \
 
 > HMAC 与 sign 的区别：HMAC 用对称 key（双方都需要 key 才能验），sign 用私钥（公钥发出去验）。
 > 持有 HMAC 验证能力 = 持有伪造能力。
+
+![HMAC 与 sign 的区别：共享密钥 vs 公私钥](../assets/hmac-vs-sign.png)
 
 ## 4.6 删除 key 的双保险
 
