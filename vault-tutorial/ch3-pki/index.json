@@ -1,0 +1,47 @@
+{
+  "title": "PKI 机密引擎：Root CA、Intermediate CA、Role 收口、签发验证、多 Issuer 轮换",
+  "description": "在 Dev 模式 Vault (1.19.2) 上把 PKI 引擎跑通：启用 pki/ 与 pki_int/ 双挂载、生成 Root CA、用 Root 签 Intermediate CSR、set-signed 写回、配置 Role 并亲手触发 allowed_domains/max_ttl 拒签、签发 leaf 证书并用 openssl 验证完整信任链，最后通过 generate/exported 与 issuers 切换演示 reissuance / cross-sign 等轮换原语。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 PKI、tune max-lease-ttl、生成 Root CA、配 URL",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "启用 pki_int/、生成 Intermediate CSR、Root 签发、set-signed",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Role 收口：allowed_domains / allow_subdomains / max_ttl 拒签验证",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "签发 leaf 证书、查看 ca_chain、openssl 验证信任链",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "多 Issuer 与轮换原语：reissuance / cross-sign / default 切换",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
