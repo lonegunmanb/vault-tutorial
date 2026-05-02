@@ -6,7 +6,7 @@
 | --- | --- |
 | **Step 1** | `vault write database/config/postgres-main` 接管 `vaultadmin`；`-force database/rotate-root/<name>` 之后旧密码立即作废 |
 | **Step 2 Dynamic** | 每次 `vault read database/creds/<role>` 都在 `pg_roles` 中现场创建一条临时 ROLE；revoke 或 TTL 过期时按 `revocation_statements` 自动 `DROP ROLE` |
-| **Step 3 Static** | `skip_import_rotation=true` 让 onboarding 不打断现有应用；`rotate-role` 与 `rotation_period` 都能让旧密码瞬间失效、新密码生效 |
+| **Step 3 Static** | onboarding 既有账号时立即轮一次密码；`rotate-role` 与 `rotation_period` 都能让上一轮密码瞬间失效、新密码生效 |
 | **Step 4 进阶** | `password_authentication="scram-sha-256"` 让密码在 PG 端以 `SCRAM-SHA-256$...` 哈希存储；`allowed_roles` 含通配符的安全围栏在凭据申领时点强制生效 |
 
 ## Dynamic vs Static 同图速记
@@ -32,8 +32,7 @@
 1. **不要把 root 用户挂成 Static Role**——Vault 不区分 root 与普通账号，一旦轮转 root，
    `database/config/<name>` 立即失效，后续所有 dynamic / static 都用不了。要轮 root 永远走 `database/rotate-root/<name>`。
 
-2. **`skip_import_rotation` 要在 onboarding 那一刻就给**——一旦默认行为执行了第一次轮转，
-   旧密码就回不去了；存量接管务必同时用 `skip_import_rotation=true` 与（可选）`password=<现有密码>`。
+2. **Static Role onboarding 会立即改掉现有密码**——切换前必须让应用准备好从 Vault 读取 `database/static-creds/<name>`，否则旧固定密码会瞬间失效。
 
 3. **`rotation_period` 与 `rotation_schedule` 互斥**——两者只能选一个。要 cron 表达式调度就用后者，
    要简单的"N 秒一轮"就用前者。

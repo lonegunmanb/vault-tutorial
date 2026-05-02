@@ -14,7 +14,7 @@
 - **PostgreSQL 16** 容器（`postgres:16`），监听 `127.0.0.1:5432`，默认 db `postgres`
   - 超级用户 `root` / `rootpassword`（仅供你调试 / 旁路验证用）
    - **Vault root** 账号 `vaultadmin` / `vaultadmin`（拥有 `CREATEROLE`、`legacy_app` 管理权与 `demo` 权限转授权，由 step1 写入 `database/config/postgres-main`）
-  - 既有应用账号 `legacy_app` / `legacy-pass`（step3 演示 Static Role 平滑接管）
+   - 既有应用账号 `legacy_app` / `legacy-pass`（step3 演示 Static Role 接管与轮转）
   - 演示表 `demo.kv (k,v)` 预置两行
 - **Vault 1.19.2** Dev 模式，`VAULT_ADDR=http://127.0.0.1:8200`、`VAULT_TOKEN=root`
 - 工具：`psql`、`jq`、`docker`
@@ -28,8 +28,7 @@
 2. `vault read database/creds/<role>` 每次读都在 PG 里**新建一个临时 ROLE**，临时账号能用
    返回的密码登 PG 并 SELECT 演示表
 3. `vault lease revoke <id>` 立刻让该临时账号从 `pg_roles` 消失；不主动 revoke 时 Lease TTL 到也会清理
-4. Static Role 在 onboarding `legacy_app` 时，**默认**会立刻覆盖 `legacy-pass`；用 `skip_import_rotation=true`
-   可保留原密码以平滑切换；手动 `vault write -f database/rotate-role/<name>` 触发轮转
+4. Static Role 在 onboarding `legacy_app` 时会立刻覆盖 `legacy-pass`；之后可手动 `vault write -f database/rotate-role/<name>` 触发轮转，也可按周期自动轮转
 5. `password_authentication="scram-sha-256"` 让 PG 内 `pg_authid.rolpassword` 以 `SCRAM-SHA-256$...` 形式存储
 6. `allowed_roles` 可用通配符限制哪些 role 名可以挂在某条连接下
 

@@ -1,6 +1,6 @@
 {
   "title": "PostgreSQL 数据库机密引擎：Dynamic Role + Static Role 全跑通",
-  "description": "在 Dev 模式 Vault (1.19.2) + 一个真实的 PostgreSQL 16 容器上动手验证 database/postgresql 引擎：启用引擎与 rotate-root、Dynamic Role 现场建账号 + psql 实连验证 + Lease revoke 自动 DROP ROLE、Static Role 平滑接管既有账号 + 周期轮转 + skip_import_rotation、scram-sha-256 与 allowed_roles 多 role 隔离。",
+  "description": "在 Dev 模式 Vault (1.19.2) + 一个真实的 PostgreSQL 16 容器上动手验证 database/postgresql 引擎：启用引擎与 rotate-root、Dynamic Role 现场建账号 + psql 实连验证 + Lease revoke 自动 DROP ROLE、Static Role 接管既有账号 + 立即轮转 + 周期轮转、scram-sha-256 与 allowed_roles 多 role 隔离。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -17,7 +17,7 @@
         "text": "step2/text.md"
       },
       {
-        "title": "Static Role：平滑接管既有账号、自动周期轮转",
+        "title": "Static Role：接管既有账号、立即轮转与周期轮转",
         "text": "step3/text.md"
       },
       {
