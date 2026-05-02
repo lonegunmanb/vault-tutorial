@@ -58,19 +58,24 @@ echo "CT_A: $CT_A"
 echo "CT_B: $CT_B"
 [ "$CT_A" != "$CT_B" ] && echo "✅ 同明文 → 不同密文 (因为 nonce 随机)"
 # 但都能解出同样的明文
-vault write -format=json transit/decrypt/order-pii ciphertext="$CT_A" | jq -r .data.plaintext | base64 -d
-vault write -format=json transit/decrypt/order-pii ciphertext="$CT_B" | jq -r .data.plaintext | base64 -d
+PT_A=$(vault write -format=json transit/decrypt/order-pii ciphertext="$CT_A" | jq -r .data.plaintext | base64 -d)
+PT_B=$(vault write -format=json transit/decrypt/order-pii ciphertext="$CT_B" | jq -r .data.plaintext | base64 -d)
+echo "PT_A: $PT_A"
+echo "PT_B: $PT_B"
 ```
 
 ## 1.5 批量接口
 
 ```bash
-vault write transit/encrypt/order-pii \
-  batch_input='[
+vault write -format=json transit/encrypt/order-pii - <<'EOF' | jq .data.batch_results
+{
+  "batch_input": [
     {"plaintext": "MTIz"},
     {"plaintext": "NDU2"},
     {"plaintext": "Nzg5"}
-  ]' -format=json | jq .data.batch_results
+  ]
+}
+EOF
 ```
 
 返回 3 个独立密文，性能比 3 次单条快很多（一次 RTT）。

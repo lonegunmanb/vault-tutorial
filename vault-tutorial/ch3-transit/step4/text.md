@@ -56,15 +56,14 @@ vault write transit/verify/signing-key \
 ```bash
 PUBKEY=$(vault read -format=json transit/keys/signing-key | jq -r '.data.keys."1".public_key')
 echo "$PUBKEY"
-# -----BEGIN PUBLIC KEY-----
-# ...
-# -----END PUBLIC KEY-----
+# 形如: RyOd/5bFzxYRaEboh4oDsHzY2T0IVRq5vU60mHpzDzI=
 ```
 
 > 这个公钥可以发到任何不可信环境（CDN、客户端、第三方系统）。
-> 持公钥方可以用 `openssl pkeyutl -verify -pubin -inkey pubkey.pem -sigfile sig -in msg`
-> 等本地工具独立验签——**完全不需要再回 Vault**。这就是非对称签名相对 HMAC 的最大优势：
-> 验签方不需要密钥。
+> 对 `ed25519`，Vault 返回的是 base64 编码的原始公钥字节，不是 PEM。
+> 持公钥方把 `public_key` 和 `vault:v1:<sig>` 里的 `<sig>` 分别 base64 解码后，
+> 交给支持 Ed25519 的本地库 / 工具即可独立验签——**完全不需要再回 Vault**。
+> 这就是非对称签名相对 HMAC 的最大优势：验签方不需要密钥。
 
 ## 4.5 HMAC：对称 key 的"签名"
 

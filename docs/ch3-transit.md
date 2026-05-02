@@ -110,11 +110,14 @@ echo MTM4MDAxMzgwMDA= | base64 -d
 ### 3.1 批量接口
 
 ```bash
-vault write transit/encrypt/order-pii \
-  batch_input='[
+vault write -format=json transit/encrypt/order-pii - <<'EOF' | jq .data.batch_results
+{
+  "batch_input": [
     {"plaintext": "MTIz"},
     {"plaintext": "NDU2"}
-  ]'
+  ]
+}
+EOF
 ```
 
 返回 `batch_results` 数组对应 ciphertext，性能通常更高。
@@ -374,11 +377,14 @@ vault write transit/verify/order-pii \
 
 ```bash
 vault read transit/keys/signing-key
-# keys.<version>.public_key   <按 key type 返回的标准格式公钥>
+# keys.<version>.public_key   <按 key type 返回；ed25519 是 base64 原始公钥字节>
 
 vault read transit/export/public-key/signing-key
 # keys.<version>              <对应版本的公钥>
 ```
+
+例如 `ed25519` 的 `public_key` 看起来会像 `RyOd/...=` 这样的 base64 字符串，
+不是 `-----BEGIN PUBLIC KEY-----` PEM 块；离线验签时按对应算法格式解码 / 转换即可。
 
 ---
 
