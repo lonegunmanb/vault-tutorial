@@ -110,22 +110,54 @@ vault write pki_int/config/issuers default="int-2026-v2"
 vault read pki_int/config/issuers
 ```
 
-## 5.4 验证新签发的 leaf 用了新 issuer
+## 5.4 验证 default 切换的效果
+
+先签一张新 leaf，并把它的关键字段打出来：
 
 ```bash
 vault write -field=certificate pki_int/issue/example-dot-com \
-    common_name="new.example.com" ttl=24h \
-    | openssl x509 -noout -issuer -serial
+    common_name="new.example.com" ttl=24h > new_leaf.crt
+
+echo "── leaf ──"
+openssl x509 -in new_leaf.crt -noout -subject -issuer -serial \
+  -ext authorityKeyIdentifier
 ```
 
-留意 `issuer` 仍是 `CN = example.com Intermediate`（subject 没变），但**它来自新的 issuer**——可以对比新旧 issuer 的 serial：
+再把两张 intermediate（v1 / v2）的 serial、notBefore、**Subject Key Identifier**（SKI，证书自己公钥的指纹）一起列出来对比：
 
 ```bash
-vault read -field=certificate pki_int/issuer/int-2026 \
-  | openssl x509 -noout -serial
-vault read -field=certificate pki_int/issuer/int-2026-v2 \
-  | openssl x509 -noout -serial
+for name in int-2026 int-2026-v2; do
+  echo "── $name ──"
+  vault read -field=certificate pki_int/issuer/$name \
+    | openssl x509 -noout -serial -startdate \
+        -ext subjectKeyIdentifier
+done
 ```
+
+你会看到：
+
+- 两张 CA 证书的 **serial 不同**、**notBefore 不同**（v2 是 5.2 后签的，时间更晚）——证明它们是两个独立的证书对象。
+- 两张 CA 的 **Subject Key Identifier（SKI，自己公钥的指纹）完全相同**，且与 leaf 的 **Authority Key Identifier（AKI，签发者公钥的指纹）完全相同**——因为 reissue 复用了同一份密钥（`generate/existing` + `key_ref`）。
+
+> **（编者注）** 这两个字段是 X.509 v3 扩展，用来在验链时把“被签者”与“签发者”配对：
+>
+> - **SKI**（`X509v3 Subject Key Identifier`）=「**我**这张证书对应的公钥指纹」——通常写在 CA 证书上。
+> - **AKI**（`X509v3 Authority Key Identifier`）=「**签我**的那张 CA，它的公钥指纹是 X」——通常写在被签发的证书（leaf 或下级 CA）上。
+>
+> 验链程序拿 leaf 的 AKI 去匹配某张 CA 的 SKI，匹配上之后再用那张 CA 的公钥去验签。RFC 5280 推荐的算法是对公钥的 DER 编码做 SHA-1（20 字节 = 你看到的那串 `91:C1:B2:...`）。
+
+> ⚠️ **重要观察**：正因为密钥相同，**单看 leaf 的内容无法判断它是 v1 还是 v2 签的**——`openssl verify -CAfile` 拿任意一张当 CA 都能通过验证。这正是 reissue 的设计意图：**对 leaf 透明**，default 切换不会让历史 leaf 失效。
+>
+> 那 default 切换到底改了什么？看下面这条命令——mount 对外暴露的 `ca_chain` 已经从 v1 换成了 v2：
+
+```bash
+curl -s http://127.0.0.1:8200/v1/pki_int/ca_chain \
+  | openssl crl2pkcs7 -nocrl -certfile /dev/stdin 2>/dev/null \
+  | openssl pkcs7 -print_certs -noout 2>/dev/null \
+  | grep -E "subject|serial"
+```
+
+`serial` 应当与 5.4 列出的 **v2** 一致。换句话说：**default 决定的是"mount 以哪张 CA 的身份对外亮相"（影响新签 leaf 的 ca_chain、AIA URL 等），而不是"换一把签发密钥"**。
 
 ## 5.5 切回旧 issuer 也只是一条命令
 
@@ -153,6 +185,6 @@ cross-sign = 拿"已有 CA B 的 subject + 公钥"用"另一张 CA A"再签一�
 ## ✅ 验收
 
 - [ ] `vault list pki_int/issuers` 显示有 **3 张** issuer（intermediate、被顺带导入的 Root 副本、reissue 的 intermediate）
-- [ ] 5.4 新签的 leaf 用的是新 issuer（serial 与 5.2 后导入的一致）
-- [ ] 5.5 切回旧 default 后再签发，issuer 又换回去
+- [ ] 5.4 leaf 的 Authority Key Identifier（AKI）与两张 CA 的 Subject Key Identifier（SKI）都相同（同一密钥），但 mount 的 `ca_chain` serial 与 **v2** 一致——证明 default 切换改的是"对外身份"，不是签发密钥
+- [ ] 5.5 切回旧 default 后再签发，`ca_chain` 又指回 v1
 - [ ] 你能解释为什么 reissuance 不会让历史 leaf 失效
