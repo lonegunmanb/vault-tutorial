@@ -88,8 +88,10 @@ AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK AWS_DEFAULT_REGION=us-ea
     sts_region=us-east-1
 ```
 
-这次应输出 `Success! ...`，`token_meta_client_arn` =
-`arn:aws:iam::000000000000:user/app-user`。
+这次应输出 `Success! ...`，并带有 `token_meta_account_id=000000000000`、
+`token_meta_auth_type=iam`、`token_meta_role_id=...` 这类 metadata。
+默认输出不一定回显 `app-user` 的 ARN；这一步的关键是：同一把
+`app-user` 凭据在 3.2 被精确绑定拒绝，改成通配符后立刻通过。
 
 切回 root：
 

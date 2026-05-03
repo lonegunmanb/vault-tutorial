@@ -91,34 +91,30 @@ AWS_ACCESS_KEY_ID=$DEV_AK AWS_SECRET_ACCESS_KEY=$DEV_SK AWS_DEFAULT_REGION=us-ea
 Success! You are now authenticated. The token information displayed below
 is already stored in the token helper. ...
 
-Key                              Value
----                              -----
-token                            hvs.CAESI...
-token_accessor                   ...
-token_duration                   10m
-token_renewable                  true
-token_policies                   ["default"]
-identity_policies                []
-policies                         ["default"]
-token_meta_account_id            000000000000
-token_meta_auth_type             iam
-token_meta_canonical_arn         arn:aws:iam::000000000000:user/dev-user
-token_meta_client_arn            arn:aws:iam::000000000000:user/dev-user
-token_meta_client_user_id        ...
-token_meta_inferred_aws_region   n/a
-token_meta_inferred_entity_id    n/a
-token_meta_inferred_entity_type  n/a
-token_meta_role                  dev-role-iam
+Key                      Value
+---                      -----
+token                    hvs.CAESI...
+token_accessor           ...
+token_duration           10m
+token_renewable          true
+token_policies           ["default"]
+identity_policies        []
+policies                 ["default"]
+token_meta_account_id    000000000000
+token_meta_auth_type     iam
+token_meta_role_id       ...
 ```
 
 > 几个关键点：
 > - **登录成功了**：token helper 现在存的是 dev-role-iam 这个 role 签
 >   出来的 Vault token，而不是 root token
-> - `token_meta_client_arn` 正是 `dev-user` 的 ARN——证明 Vault 真的把
->   签名转给 LocalStack 验过了
+> - Vault 能签出 token，说明它已经把 CLI 提交的签名转给 LocalStack
+>   STS 验过，并确认返回身份命中了 role 上绑定的 `dev-user` ARN
 > - `header_value=vault.example.com` 必须和 Step 1.4 写的
 >   `iam_server_id_header_value` 一致——Vault CLI 会把它放进签名覆盖
 >   的 header 集合里
+> - `token_meta_role_id` 是 Vault 内部给这个 role 分配的 ID；不同环境
+>   会不同，看到有值即可
 > - `token_policies` 只有 `default`，因为 role 没绑额外策略
 
 ## 2.4 验证当前 token 真是新签出来的那一枚
@@ -127,9 +123,10 @@ token_meta_role                  dev-role-iam
 vault token lookup
 ```
 
-应看到 `policies` 是 `[default]`、`meta` 里有 `client_arn` /
-`canonical_arn` / `auth_type` / `account_id` 等字段——这就是
-[4.3 章 §4](/ch4-aws) 讲过的"role 签出来的 token 自带 metadata"。
+应看到 `policies` 是 `[default]`，`meta` 里有 `account_id` /
+`auth_type` / `role_id` 等字段——这就是 [4.3 章 §4](/ch4-aws) 讲过
+的"role 签出来的 token 自带 metadata"。注意默认输出不一定回显
+`client_arn`；ARN 约束是否生效，看 Step 3 的拒绝 / 放行对照最直观。
 
 ## 2.5 回到 root，方便后面继续操作
 
@@ -155,8 +152,8 @@ AWS_ACCESS_KEY_ID=$DEV_AK AWS_SECRET_ACCESS_KEY=$DEV_SK AWS_DEFAULT_REGION=us-ea
         sts_region=us-east-1
 ```
 
-会被 Vault 端拒掉，错误信息里包含 `iam server id header values do
-not match`——签名里没带 `X-Vault-AWS-IAM-Server-ID` 这个 header，
+会被 Vault 端拒掉，错误信息里包含 `missing header
+"X-Vault-AWS-IAM-Server-ID"`——签名里没带这道额外防重放 header，
 Vault 在转发前就拦下。重新加上 `header_value=` 即可恢复正常。
 
 ## 2.7 这一步的核心闭环
