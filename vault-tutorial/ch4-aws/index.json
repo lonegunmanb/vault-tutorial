@@ -1,0 +1,43 @@
+{
+  "title": "AWS 认证：iam 完整链路 + ec2 配置面 + 运维端点 (MiniStack 模拟 AWS)",
+  "description": "在 Dev 模式 Vault (1.19.2) 上配合 MiniStack 把 AWS 认证方法跑一遍：(1) 启动 MiniStack、enable aws auth、用 sts_endpoint/iam_endpoint 把 Vault 指向本地 4566、设 iam_server_id_header_value (2) 建 iam role 并真实跑通 vault login -method=aws：客户端签 GetCallerIdentity → Vault 转发 STS → MiniStack 验签 → Vault 签 token (3) 在 MiniStack 上多建一个 IAM user，演示 bound_iam_principal_arn 精确匹配的拒绝与通配符匹配的通过 (4) 建 ec2 role 演示 mixing 拦截 + identity-accesslist / roletag-denylist / tidy 端点。MiniStack 不签 EC2 IID，所以 ec2 方法只演配置与拒绝路径。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 aws auth、用伪造凭据写 config/client、设 iam_server_id_header_value",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "建一个 iam role + 一个 ec2 role，对照可绑定约束",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Mixing 限制：用错 auth_type 去登 role 会被 Vault 直接拒",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "运维端点：identity-accesslist / roletag-denylist / tidy",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
