@@ -1,14 +1,14 @@
 # 恭喜完成 AWS 认证实验！🎉
 
-这一节你用 MiniStack 模拟 AWS，把 [4.3 章](/ch4-aws) 里 AWS 认证方
+这一节你用 LocalStack 模拟 AWS，把 [4.3 章](/ch4-aws) 里 AWS 认证方
 法**iam 完整链路 + ec2 配置面 + 运维端点**亲手敲了一遍。
 
 ## 本实验的核心收获
 
 | 阶段 | 你亲手验证的事实 |
 | :--- | :--- |
-| **MiniStack + config/client** | `iam_endpoint` 直连本地 4566；`sts_endpoint` 指向 4567 的 Content-Type shim；`iam_server_id_header_value` 也写在这里 |
-| **iam 真实登录链路** | `vault login -method=aws` → CLI 用 `dev-user` 凭据签 GetCallerIdentity → Vault 转给 MiniStack STS → STS 返回 ARN → Vault 据此签 token |
+| **LocalStack + config/client** | `iam_endpoint` / `sts_endpoint` 都指向本地 4566；`iam_server_id_header_value` 也写在这里 |
+| **iam 真实登录链路** | `vault login -method=aws` → CLI 用 `dev-user` 凭据签 GetCallerIdentity → Vault 转给 LocalStack STS → STS 返回 ARN → Vault 据此签 token |
 | **root ARN 限制** | `arn:aws:iam::000000000000:root` 只能证明 STS 可用；Vault iam 登录要用 `user/...` / `role/...` / `assumed-role/...` 这类普通 principal |
 | **header_value 这道防线** | 漏掉 `header_value=` 的登录在 Vault 端就被拒（`iam server id header values do not match`），不会发给 STS |
 | **bound_iam_principal_arn 精确匹配** | 用 `app-user` 登只绑定 `dev-user` 的 role 被拒（`IAM Principal ... does not belong to the role`） |

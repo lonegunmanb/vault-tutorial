@@ -4,7 +4,7 @@
 据签一次空的 `sts:GetCallerIdentity` 请求 → 把"已签好但还没发出"的
 请求四件套（method / URL / body / headers）提交给 Vault → Vault 重
 组并转发给 STS → STS 验签返回身份 → Vault 据此签 token。这一步把
-这条链路在 MiniStack 上**真正跑一遍**。
+这条链路在 LocalStack 上**真正跑一遍**。
 
 ## 2.1 建一个能登录的 IAM user
 
@@ -63,8 +63,8 @@ vault read auth/aws/role/dev-role-iam
 
 [4.3 章 §14](/ch4-aws) 讲过：Vault CLI 已经内建了 iam 登录支持，
 **自动用本地 AWS 凭据签请求**。我们用 `dev-user` 的凭据签名，并让
-CLI 指向 [Step 1.3](#) 那个 Content-Type 改写 shim（跟 [Step 1.5](#)
-里服务端 `config/client` 的 `sts_endpoint` 一致）：
+CLI 指向 LocalStack 的 STS 端点（跟 [Step 1.4](#) 里服务端
+`config/client` 的 `sts_endpoint` 一致）：
 
 ```bash
 unset VAULT_TOKEN
@@ -72,7 +72,7 @@ AWS_ACCESS_KEY_ID=$DEV_AK AWS_SECRET_ACCESS_KEY=$DEV_SK AWS_DEFAULT_REGION=us-ea
     vault login -method=aws \
         role=dev-role-iam \
         header_value=vault.example.com \
-        sts_endpoint=http://127.0.0.1:4567 \
+        sts_endpoint=http://127.0.0.1:4566 \
         sts_region=us-east-1
 ```
 
@@ -83,11 +83,7 @@ AWS_ACCESS_KEY_ID=$DEV_AK AWS_SECRET_ACCESS_KEY=$DEV_SK AWS_DEFAULT_REGION=us-ea
 
 > 两侧的 `sts_endpoint` **必须完全一致**（同样不带尾 `/`）——CLI
 > 签名覆盖的 URL、Host header 都会按这个值走，Vault 服务端重组
-> 转发时也走同一个。一旦 shim 路径上看到 `application/xml`，会
-> 重写为 `text/xml`，Vault 的 `submitCallerIdentityRequest` 才会接
-> 受这个响应。跳过 shim 直接指 4566 会被 Vault 拒为
-> `body of GetCallerIdentity is invalid`（误导性错误，实际是 response
-> Content-Type 不匹配）。
+> 转发时也走同一个。
 
 应输出：
 
@@ -119,8 +115,8 @@ token_meta_role                  dev-role-iam
 > - **登录成功了**：token helper 现在存的是 dev-role-iam 这个 role 签
 >   出来的 Vault token，而不是 root token
 > - `token_meta_client_arn` 正是 `dev-user` 的 ARN——证明 Vault 真的把
->   签名转给 MiniStack 验过了
-> - `header_value=vault.example.com` 必须和 Step 1.5 写的
+>   签名转给 LocalStack 验过了
+> - `header_value=vault.example.com` 必须和 Step 1.4 写的
 >   `iam_server_id_header_value` 一致——Vault CLI 会把它放进签名覆盖
 >   的 header 集合里
 > - `token_policies` 只有 `default`，因为 role 没绑额外策略
@@ -155,7 +151,7 @@ vault token lookup | head -3
 AWS_ACCESS_KEY_ID=$DEV_AK AWS_SECRET_ACCESS_KEY=$DEV_SK AWS_DEFAULT_REGION=us-east-1 \
     vault login -method=aws \
         role=dev-role-iam \
-        sts_endpoint=http://127.0.0.1:4567 \
+        sts_endpoint=http://127.0.0.1:4566 \
         sts_region=us-east-1
 ```
 
@@ -166,7 +162,7 @@ Vault 在转发前就拦下。重新加上 `header_value=` 即可恢复正常。
 ## 2.7 这一步的核心闭环
 
 iam 方法的"客户端签名 → Vault 转发 → AWS 验签 → Vault 签 token"四
-段链路在 MiniStack 上完整跑通；root ARN 不是可登录的普通 IAM
+段链路在 LocalStack 上完整跑通；root ARN 不是可登录的普通 IAM
 principal，真实登录要用 `user/...` 或 `role/...` 这类身份；额外防重放
 header 缺失会被 Vault 端拦掉，不会到达 STS。下一步去验证 ARN 绑定
 的精确匹配 / 通配符。

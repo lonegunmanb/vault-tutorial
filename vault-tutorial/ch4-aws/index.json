@@ -1,6 +1,6 @@
 {
-  "title": "AWS 认证：iam 完整链路 + ec2 配置面 + 运维端点 (MiniStack 模拟 AWS)",
-  "description": "在 Dev 模式 Vault (1.19.2) 上配合 MiniStack 把 AWS 认证方法跑一遍：(1) 启动 MiniStack、起 STS Content-Type shim、enable aws auth、用 sts_endpoint/iam_endpoint 把 Vault 指向本地 STS/IAM、设 iam_server_id_header_value (2) 建 IAM user + iam role 并真实跑通 vault login -method=aws：客户端签 GetCallerIdentity → Vault 转发 STS → MiniStack 验签 → Vault 签 token (3) 在 MiniStack 上多建一个 IAM user，演示 bound_iam_principal_arn 精确匹配的拒绝与通配符匹配的通过 (4) 建 ec2 role 演示 mixing 拦截 + identity-accesslist / roletag-denylist / tidy 端点。MiniStack 不签 EC2 IID，所以 ec2 方法只演配置与拒绝路径。",
+  "title": "AWS 认证：iam 完整链路 + ec2 配置面 + 运维端点 (LocalStack 模拟 AWS)",
+  "description": "在 Dev 模式 Vault (1.19.2) 上配合 LocalStack 把 AWS 认证方法跑一遍：(1) 启动 LocalStack、enable aws auth、用 sts_endpoint/iam_endpoint 把 Vault 指向本地 STS/IAM、设 iam_server_id_header_value (2) 建 IAM user + iam role 并真实跑通 vault login -method=aws：客户端签 GetCallerIdentity → Vault 转发 STS → LocalStack 验签 → Vault 签 token (3) 在 LocalStack 上多建一个 IAM user，演示 bound_iam_principal_arn 精确匹配的拒绝与通配符匹配的通过 (4) 建 ec2 role 演示 mixing 拦截 + identity-accesslist / roletag-denylist / tidy 端点。LocalStack 不签 EC2 IID，所以 ec2 方法只演配置与拒绝路径。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -9,7 +9,7 @@
     },
     "steps": [
       {
-        "title": "启动 MiniStack、起 STS shim、写 config/client",
+        "title": "启动 LocalStack、写 config/client",
         "text": "step1/text.md"
       },
       {

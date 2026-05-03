@@ -2,13 +2,13 @@
 
 [4.3 章 §4](/ch4-aws) 讲过：iam role 上的 `bound_iam_principal_arn`
 是列表，登录方 ARN 命中任一即通过；列表项可以**结尾通配**。这一步
-在 MiniStack 上多建一个 IAM user，用它的凭据登录、看 ARN 不匹配的
+在 LocalStack 上多建一个 IAM user，用它的凭据登录、看 ARN 不匹配的
 拒绝现场，再切通配符让它通过。
 
 > 每条命令都可能失败一次再成功——配置 / 凭据切换的过程要看清楚每一
 > 步当前用的是哪一对凭据。
 
-## 3.1 在 MiniStack 上建一个 IAM user
+## 3.1 在 LocalStack 上建一个 IAM user
 
 ```bash
 aws --endpoint-url=http://127.0.0.1:4566 iam create-user --user-name app-user
@@ -38,7 +38,7 @@ AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK AWS_DEFAULT_REGION=us-ea
   vault login -method=aws \
     role=dev-role-iam \
     header_value=vault.example.com \
-    sts_endpoint=http://127.0.0.1:4567 \
+    sts_endpoint=http://127.0.0.1:4566 \
     sts_region=us-east-1
 ```
 
@@ -73,7 +73,7 @@ vault write auth/aws/role/dev-role-iam \
 ```
 
 > 真 AWS 上用通配符必须给 Vault `iam:GetUser` + `iam:GetRole` 权限
-> 才能解析完整 path（[4.3 章 §4](/ch4-aws)）；MiniStack 上 `test/test`
+> 才能解析完整 path（[4.3 章 §4](/ch4-aws)）；LocalStack 上 `test/test`
 > 是 root，所有调用默认就放行。
 
 ## 3.4 用 app-user 凭据再登一次（这次应成功）
@@ -84,7 +84,7 @@ AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK AWS_DEFAULT_REGION=us-ea
   vault login -method=aws \
     role=dev-role-iam \
     header_value=vault.example.com \
-    sts_endpoint=http://127.0.0.1:4567 \
+    sts_endpoint=http://127.0.0.1:4566 \
     sts_region=us-east-1
 ```
 

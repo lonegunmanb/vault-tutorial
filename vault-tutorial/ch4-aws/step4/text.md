@@ -5,7 +5,7 @@
 `roletag-denylist` / 两个 `tidy` 端点。这一步把 ec2 role 的配置面
 与这些运维端点都跑一遍。
 
-> ⚠️ MiniStack **不模拟 EC2 instance identity document 的 PKCS#7
+> ⚠️ LocalStack **不模拟 EC2 instance identity document 的 PKCS#7
 > 签名**——所以 ec2 方法的 login 在本环境不可能真正成功；这一步只
 > 看配置面与拒绝路径。
 
@@ -75,7 +75,7 @@ AWS_ACCESS_KEY_ID=$DEV_AK AWS_SECRET_ACCESS_KEY=$DEV_SK AWS_DEFAULT_REGION=us-ea
     vault login -method=aws \
         role=dev-role-ec2 \
         header_value=vault.example.com \
-        sts_endpoint=http://127.0.0.1:4567 \
+        sts_endpoint=http://127.0.0.1:4566 \
         sts_region=us-east-1
 ```
 
@@ -106,7 +106,7 @@ vault write auth/aws/login \
 ```
 
 可能出现的错误关键词：`failed to verify the signature` / `unable to
-verify the PKCS#7 signature` ——MiniStack 不签 IID，伪造签名也通不过
+verify the PKCS#7 signature` ——LocalStack 不签 IID，伪造签名也通不过
 Vault 内置的 AWS 公钥验签。这正是 [4.3 章 §3](/ch4-aws) 那条 ec2 流
 程的第三步"Vault verifies the signature on the PKCS#7 document"在
 现场的样子。
@@ -168,11 +168,8 @@ mixing 拦截在写入侧 + 登录侧两道关都生效；ec2 方法的 PKCS#7 �
 # 关掉 aws 认证方法 = 撕掉所有它签出来的 token + 删 role / config / accesslist / denylist
 vault auth disable aws
 
-# 停掉 MiniStack 容器
-docker rm -f ministack
-
-# 停掉 STS Content-Type shim
-pkill -f /root/sts-shim.py || true
+# 停掉 LocalStack 容器
+docker rm -f localstack
 ```
 
 > [4.1 章](/ch4-auth-basic) 那张表里讲过的"禁用一个 Auth Method = 批
