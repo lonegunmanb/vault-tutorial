@@ -127,7 +127,7 @@ Code: 400. Errors:
 **收到登录请求后、走完 SecretID 校验流程之前**——压根不会触发"消耗
 一次 num_uses"的副作用。
 
-> 对比 step 2 的 `invalid secret id` 模糊错误：CIDR 拒绝是给的明确
+> 对比 step 2 的 `invalid role or secret ID` 模糊错误：CIDR 拒绝是给的明确
 > 错误，因为**源 IP 是个公开可见的事实**（Vault 收到请求时已经看见
 > 了）——告诉你"你这个 IP 不在白名单里"不会泄漏任何机密信息。
 
@@ -153,7 +153,7 @@ vault write auth/approle/role/my-role \
 | 字段 | 拦截位置 | 错误信息 |
 | :--- | :--- | :--- |
 | `bind_secret_id=true` 时缺 `secret_id` | 登录端点参数校验 | `missing secret_id` |
-| `secret_id` 已用完 (`num_uses` 耗尽) | SecretID 状态检查 | `invalid secret id`（模糊） |
+| `secret_id` 已用完 (`num_uses` 耗尽) | SecretID 状态检查 | `invalid role or secret ID`（模糊） |
 | 源 IP 不在 `secret_id_bound_cidrs` | CIDR 校验（早于 SecretID 校验） | `source address "..." unauthorized through CIDR restrictions on the secret ID`（精确） |
 | token 在错误 IP 上使用 | token 校验 | `invalid token` 或 `permission denied` |
 

@@ -225,36 +225,27 @@ _"agent 尝试 unwrap 一枚已经被使用过的 wrapping token 时被 Vault �
 
 ## 4.9 这一步的核心闭环
 
-```
-   admin               worker (broker)              runner
-     │                      │                          │
-     │ 1. write policies    │                          │
-     │ 2. token create      │                          │
-     │    -policy=broker ──▶│                          │
-     │                      │                          │
-     │                      │ 3. write -wrap-ttl=120s  │
-     │                      │    -f .../secret-id      │
-     │                      │ ◀── wrapping_token       │
-     │                      │                          │
-     │                      │ 4. (env / k8s / args)    │
-     │                      │ ─── wrapping_token ─────▶│
-     │                      │                          │
-     │                      │ 5. (env / image / TF)    │
-     │                      │ ─── ROLE_ID ────────────▶│
-     │                      │                          │
-     │                      │      6. unwrap ◀─────────│
-     │                      │      ◀── SECRET_ID       │
-     │                      │                          │
-     │                      │      7. login ◀──────────│
-     │                      │      ◀── token           │
-     │                      │                          │
-     │                      │      8. kv get ◀─────────│
-     │                      │      ◀── password        │
-```
+![Step 4 trusted-broker 闭环：admin / worker / runner 三方](../assets/step4-trusted-broker-loop.png)
 
 到这一步：admin 不接触 SecretID 与 wrapping token；broker 不接触
 SecretID 明文；runner 是**唯一**同时握有 RoleID 和 SecretID 的位置——
 完整对应 [4.2 章 §6](/ch4-app-role) 的 trusted broker 范式。
 
-下一步把 [4.2 章 §8](/ch4-app-role) 的三种反模式跟正确范式并排敲一
-次，做最后的对照与清理。
+本实验到此结束。如果想把这套实验从 Vault 上清掉：
+
+```bash
+# 关掉 approle 认证方法 = 撕掉所有它签出来的 token + 删掉所有 role 配置
+vault auth disable approle
+
+# 关掉 KV 引擎
+vault secrets disable kv
+
+# 删 step 4 留下的应用读策略 + broker 策略
+vault policy delete app-read-policy
+vault policy delete broker-policy
+```
+
+> 注意：[4.1 章](/ch4-auth-basic) 那张表里讲过的 "禁用一个 Auth
+> Method = 批量登出所有通过它登录的 Token" 在这里直接见效——执行
+> `vault auth disable approle` 会把 runner 拿到的应用 token 一并失效
+> （哪怕它还没到 TTL）。

@@ -79,13 +79,14 @@ Error writing data to auth/approle/login: Error making API request.
 URL: PUT http://127.0.0.1:8200/v1/auth/approle/login
 Code: 400. Errors:
 
-* invalid secret id
+* invalid role or secret ID
 ```
 
-> `invalid secret id` 是 Vault 故意给的"模糊"错误——它**不会告诉你
-> 到底是 SecretID 不存在、过期了、还是被用完了**，因为这些信息会让
-> 攻击者反推 SecretID 是否存在。任何"密码"型字段被拒，都建议给一致
-> 的错误消息——这是 Vault 在 API 层的标准做法。
+> `invalid role or secret ID` 是 Vault 故意给的"模糊"错误——它**不
+> 会告诉你到底是 RoleID 错了、SecretID 不存在、过期了、还是被用完
+> 了**，因为这些信息会让攻击者反推 RoleID/SecretID 是否存在。任何
+> "密码"型字段被拒，都建议给一致的错误消息——这是 Vault 在 API 层
+> 的标准做法。
 
 ## 2.5 关掉 bind_secret_id 试试纯 RoleID 登录
 
@@ -94,10 +95,37 @@ Code: 400. Errors:
 时才是合理设计——单独关掉等于把 SecretID 整个机制白送。我们这里只
 做演示。
 
+先试着把 `bind_secret_id` 单独关掉：
+
 ```bash
 vault write auth/approle/role/my-role \
     token_type=batch \
     bind_secret_id=false \
+    token_ttl=20m \
+    token_max_ttl=30m
+```
+
+立刻报错：
+
+```
+Code: 500. Errors:
+
+* 1 error occurred:
+        * at least one constraint should be enabled on the role
+```
+
+> Vault 在 role 写入这一层就拦下来了——一个 role 必须**至少挂一种约
+> 束**（`bind_secret_id`、`secret_id_bound_cidrs`、
+> `token_bound_cidrs` 任一），否则等于"任何人知道 RoleID 就能换
+> token"，Vault 直接拒绝创建这种 role。
+
+那就给它配一个 CIDR 约束，让它合法：
+
+```bash
+vault write auth/approle/role/my-role \
+    token_type=batch \
+    bind_secret_id=false \
+    token_bound_cidrs=127.0.0.1/32 \
     token_ttl=20m \
     token_max_ttl=30m
 ```
@@ -109,13 +137,14 @@ vault write auth/approle/login role_id=$ROLE_ID
 ```
 
 竟然成功了——返回里有 token。这就是 `bind_secret_id=false` 的字面
-意思：登录端点不再要求 `secret_id` 参数。
+意思：登录端点不再要求 `secret_id` 参数；身份证明完全靠"你这个请求
+是从允许的 IP 段发来的"。
 
-> **这个状态生产环境绝对不要用**——任何能拿到 RoleID（一个不被当作
-> 机密的 UUID）的人都能换出 token。`bind_secret_id=false` 只在一个
-> 场景下合理：和 `secret_id_bound_cidrs` 严格组合，让"只有来自指定
-> IP 段的客户端"才能换 token——也就是把"我是谁"的证明从 SecretID 转
-> 移到 IP 地址上。Step 3 会演示这个组合。
+> **这个状态生产环境要慎用**——把"我是谁"的证明从 SecretID 转移到
+> IP 地址上，意味着任何能从允许 CIDR 段内访问 Vault 的人，只要拿到
+> RoleID（一个不被当作机密的 UUID），就能换 token。这只在严格控制
+> 网络边界的场景下合理（比如 Vault 只允许某台 bastion 访问）。Step
+> 3 会更系统地演示 CIDR 约束。
 
 ## 2.6 把 bind_secret_id 改回去，role 复位
 

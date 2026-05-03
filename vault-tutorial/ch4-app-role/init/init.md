@@ -1,7 +1,7 @@
 # 实验：AppRole 认证完整动手
 
 [4.2 章](/ch4-app-role) 把 AppRole 的概念、字段、推荐使用范式与反模
-式都梳理了一遍。本实验在 5 个 step 里把这些纸面规则**亲手跑一次**：
+式都梳理了一遍。本实验在 4 个 step 里把这些纸面规则**亲手跑一次**：
 
 - **Step 1**：按 [官方 Configuration → Via the CLI](https://developer.hashicorp.com/vault/docs/auth/approle#via-the-cli)
   的最小步骤启用 approle、创建 role、取 RoleID + SecretID、用两半凭据登录拿到 token——**Pull 模式的最小可用闭环**
@@ -15,8 +15,6 @@
   发一枚带 `min_wrapping_ttl` / `max_wrapping_ttl` 的策略 token，让它
   只能取 wrapped SecretID；再演一次 **双重 unwrap 立刻失败**——这
   就是审计层用来识破"中途偷看"的根因
-- **Step 5**：把第 4.2 章 §8 的三种反模式与推荐范式并排敲一遍命令对
-  比；最后清理
 
 ## 实验环境会预先
 

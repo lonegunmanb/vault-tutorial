@@ -1,6 +1,6 @@
 {
-  "title": "AppRole 认证：Pull 模式、CIDR 约束、Response Wrapping、反模式对照",
-  "description": "在 Dev 模式 Vault (1.19.2) 上把 AppRole 认证方法的核心使用范式完整跑一遍：(1) 启用 approle 并按官方 CLI 步骤创建 role / 取出 RoleID 与 SecretID / 用两半凭据登录拿到 token (2) bind_secret_id 与 secret_id_num_uses=1：演示约束位与 SecretID 用完即焚 (3) secret_id_bound_cidrs / token_bound_cidrs：用一个不在 CIDR 段里的客户端 IP 触发 Vault 端拒收 (4) Response Wrapping 完整 trusted-broker 演练：worker token + min/max_wrapping_ttl 策略 + -wrap-ttl + 双重 unwrap 失败现场 (5) 反模式对照与清理。",
+  "title": "AppRole 认证：Pull 模式、CIDR 约束、Response Wrapping",
+  "description": "在 Dev 模式 Vault (1.19.2) 上把 AppRole 认证方法的核心使用范式完整跑一遍：(1) 启用 approle 并按官方 CLI 步骤创建 role / 取出 RoleID 与 SecretID / 用两半凭据登录拿到 token (2) bind_secret_id 与 secret_id_num_uses=1：演示约束位与 SecretID 用完即焚 (3) secret_id_bound_cidrs / token_bound_cidrs：用一个不在 CIDR 段里的客户端 IP 触发 Vault 端拒收 (4) Response Wrapping 完整 trusted-broker 演练：worker token + min/max_wrapping_ttl 策略 + -wrap-ttl + 双重 unwrap 失败现场。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -23,10 +23,6 @@
       {
         "title": "Response Wrapping：trusted-broker 工作流端到端",
         "text": "step4/text.md"
-      },
-      {
-        "title": "反模式对照与清理",
-        "text": "step5/text.md"
       }
     ],
     "finish": {

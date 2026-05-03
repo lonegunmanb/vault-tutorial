@@ -178,19 +178,7 @@ VAULT_TOKEN=$APP_TOKEN vault token lookup
 
 到这里你已经把 AppRole 的最小闭环跑通了：
 
-```
-   admin                               app
-     │                                  │
-     │ 1. enable approle                │
-     │ 2. write role/my-role            │
-     │ 3. read role-id  ───────────────▶│
-     │ 4. write -f secret-id ──────────▶│
-     │                                  │
-     │           5. write login ◀───────│  role_id + secret_id
-     │           ─────────────▶         │
-     │              6. token            │
-     │                                  │
-```
+![AppRole Pull 模式最小闭环：餐厅老板亲自把菜单和会员卡递给客人](../assets/step1-pull-mode-handoff.png)
 
 **问题**：上面这套交付，5 步里 admin 把 RoleID 和 SecretID 都直接
 甩给了 app——这本身**违反 [4.2 章 §6](/ch4-app-role) 那条 trusted
