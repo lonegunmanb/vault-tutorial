@@ -22,6 +22,7 @@
     { "path": "ch3-postgres" },
     { "path": "ch3-mysql" },
     { "path": "ch3-pki" },
+    { "path": "ch4-app-role" },
     { "path": "ch5-mount-migration" }
   ]
 }

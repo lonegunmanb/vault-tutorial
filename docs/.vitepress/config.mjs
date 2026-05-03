@@ -51,10 +51,19 @@ export default defineConfig({
              { text: '3.6 Identity 机密引擎：Vault 的身份中枢与 OIDC 提供商', link: '/ch3-identity' },
              { text: '3.10 LDAP 机密引擎：托管目录账号的密码轮转、动态创建与借出归还', link: '/ch3-ldap' },
              { text: '3.11 Kubernetes 机密引擎：让 Vault 为 K8s 集群签发动态 ServiceAccount Token', link: '/ch3-k8s' },
+             { text: '3.12 PKI 机密引擎：让 Vault 成为你的证书颁发机构', link: '/ch3-pki' },
              { text: '3.12 TOTP 机密引擎：让 Vault 同时充当生成器与校验端', link: '/ch3-totp' },
              { text: '3.13 Transit 机密引擎：加密即服务 (Encryption as a Service)', link: '/ch3-transit' },
              { text: '3.14 PostgreSQL 数据库机密引擎：动态账号、静态轮转与连接接管', link: '/ch3-postgres' },
              { text: '3.15 MySQL/MariaDB 数据库机密引擎：动态账号、通配授权与云 IAM', link: '/ch3-mysql' }
+           ]
+         },
+         {
+           text: '第 4 章：认证方法体系 (Auth Methods)',
+           collapsed: false,
+           items: [
+             { text: '4.1 认证方法（Auth Methods）总览：身份的入口', link: '/ch4-auth-basic' },
+             { text: '4.2 AppRole 认证：机器登录 Vault 的"用户名/密码"', link: '/ch4-app-role' }
            ]
          },
          {
