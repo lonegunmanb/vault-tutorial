@@ -1,5 +1,7 @@
 # 第四步：ec2 role + mixing 拦截 + 运维端点
 
+![Step 4 故事板：IAM 与 EC2 两条通道、混用拦截、PKCS#7 签名安检与清理柜台](../assets/step4-ec2-mixing-ops-story.png)
+
 [4.3 章 §6](/ch4-aws) 讲过单 role 只能选一种 auth_type；[4.3 章 §8 /
 §10](/ch4-aws) 讲过 ec2 方法的 `identity-accesslist` / role tag 的
 `roletag-denylist` / 两个 `tidy` 端点。这一步把 ec2 role 的配置面
@@ -42,11 +44,11 @@ vault write auth/aws/role/dev-role-iam \
     policies=default
 ```
 
-会立刻被 Vault 在写入时拒掉（关键词 `unable to use bound_ami_id with
-auth_type iam` 或 `cannot be used with auth_type iam`）：
+会立刻被 Vault 在写入时拒掉（关键词 `specified bound_ami_id`、
+`not specifying ec2 auth_type` 或 `inferring ec2_instance`）：
 
 ```
-* unable to use bound_ami_id with auth_type iam ...
+* specified bound_ami_id but not specifying ec2 auth_type or inferring ec2_instance
 ```
 
 > [4.3 章 §6](/ch4-aws)：Vault 主动拦"在选定 auth_type 下根本无法生
@@ -85,9 +87,9 @@ AWS_ACCESS_KEY_ID=$DEV_AK AWS_SECRET_ACCESS_KEY=$DEV_SK AWS_DEFAULT_REGION=us-ea
 * auth method iam is not allowed for role dev-role-ec2
 ```
 
-## 4.4 ec2 风格请求打 iam role
+## 4.4 ec2 风格请求先过 PKCS#7 解码
 
-ec2 风格的请求只有 `pkcs7` + `role`：
+ec2 风格的请求只有 `pkcs7` + `role`。这里故意传一个普通字符串：
 
 ```bash
 vault write auth/aws/login \
@@ -95,7 +97,14 @@ vault write auth/aws/login \
     pkcs7=fake-pkcs7-signature
 ```
 
-会看到 `auth method ec2 is not allowed for role dev-role-iam`。
+会先停在 PKCS#7 解码错误：
+
+```
+* failed to decode the PEM encoded PKCS#7 signature
+```
+
+也就是说，ec2 路径会先解析 instance identity document 的签名；只有
+`pkcs7` 是能解码的 PKCS#7 数据时，才会继续走验签和 role 约束。
 
 ## 4.5 ec2 真实登录的失败现场
 
@@ -105,11 +114,18 @@ vault write auth/aws/login \
     pkcs7=fake-pkcs7-signature
 ```
 
-可能出现的错误关键词：`failed to verify the signature` / `unable to
-verify the PKCS#7 signature` ——LocalStack 不签 IID，伪造签名也通不过
-Vault 内置的 AWS 公钥验签。这正是 [4.3 章 §3](/ch4-aws) 那条 ec2 流
-程的第三步"Vault verifies the signature on the PKCS#7 document"在
-现场的样子。
+同样会先看到解码错误：
+
+```
+* failed to decode the PEM encoded PKCS#7 signature
+```
+
+真正的 EC2 instance identity document 需要 AWS 提供 PKCS#7 签名；
+LocalStack 不签 IID，所以本环境做不到一次成功的 ec2 登录。如果换成
+能解码但签名不合法的 PKCS#7，下一层才会变成 `failed to verify the
+signature` / `unable to verify the PKCS#7 signature`。这正是
+[4.3 章 §3](/ch4-aws) 那条 ec2 流程的第三步"Vault verifies the
+signature on the PKCS#7 document"。
 
 ## 4.6 列出 identity-accesslist
 
@@ -157,8 +173,9 @@ vault write auth/aws/tidy/roletag-denylist safety_buffer=72h
 
 ## 4.10 这一步的核心闭环
 
-mixing 拦截在写入侧 + 登录侧两道关都生效；ec2 方法的 PKCS#7 验签
-是 Vault 自己做（不像 iam 那样转给 AWS）；运维端点
+mixing 拦截在写入侧，以及 iam 登录请求打 ec2 role 的登录侧都生效；
+ec2 方法会先做 PKCS#7 解码 / 验签，这一步是 Vault 自己做（不像 iam
+那样转给 AWS）；运维端点
 `identity-accesslist` / `roletag-denylist` / `tidy` 的语义与
 [4.3 章 §8 / §10](/ch4-aws) 完全对应。
 

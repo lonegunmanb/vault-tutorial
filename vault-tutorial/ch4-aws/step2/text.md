@@ -1,5 +1,7 @@
 # 第二步：建 IAM user + iam role + 真实跑通一次 iam 登录
 
+![Step 2 故事板：拿到工牌、通过 STS 验证、Vault 发放通行证](../assets/step2-iam-login-story.png)
+
 [4.3 章 §2](/ch4-aws) 描述的 iam 认证完整链路：客户端用本地 AWS 凭
 据签一次空的 `sts:GetCallerIdentity` 请求 → 把"已签好但还没发出"的
 请求四件套（method / URL / body / headers）提交给 Vault → Vault 重

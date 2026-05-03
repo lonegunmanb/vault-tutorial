@@ -1,5 +1,7 @@
 # 第三步：验证 `bound_iam_principal_arn` 的精确匹配与通配符
 
+![Step 3 故事板：精确名单拒绝 app-user，改成通配门票后放行](../assets/step3-arn-match-wildcard-story.png)
+
 [4.3 章 §4](/ch4-aws) 讲过：iam role 上的 `bound_iam_principal_arn`
 是列表，登录方 ARN 命中任一即通过；列表项可以**结尾通配**。这一步
 在 LocalStack 上多建一个 IAM user，用它的凭据登录、看 ARN 不匹配的
@@ -88,8 +90,14 @@ AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK AWS_DEFAULT_REGION=us-ea
     sts_region=us-east-1
 ```
 
-这次应输出 `Success! ...`，并带有 `token_meta_account_id=000000000000`、
-`token_meta_auth_type=iam`、`token_meta_role_id=...` 这类 metadata。
+这次应输出 `Success! ...`，并带有这些 metadata：
+
+```text
+token_meta_role_id       ...
+token_meta_account_id    000000000000
+token_meta_auth_type     iam
+```
+
 默认输出不一定回显 `app-user` 的 ARN；这一步的关键是：同一把
 `app-user` 凭据在 3.2 被精确绑定拒绝，改成通配符后立刻通过。
 
