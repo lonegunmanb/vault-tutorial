@@ -12,12 +12,6 @@
 
 ```bash
 aws --endpoint-url=http://127.0.0.1:4566 iam create-user --user-name app-user
-aws --endpoint-url=http://127.0.0.1:4566 iam create-access-key --user-name app-user
-```
-
-第二条会输出新建 user 的 access_key + secret_key——抓出来：
-
-```bash
 APP_KEY_JSON=$(aws --endpoint-url=http://127.0.0.1:4566 iam create-access-key --user-name app-user)
 APP_AK=$(echo "$APP_KEY_JSON" | jq -r '.AccessKey.AccessKeyId')
 APP_SK=$(echo "$APP_KEY_JSON" | jq -r '.AccessKey.SecretAccessKey')
@@ -28,7 +22,7 @@ echo "APP_SK=$APP_SK"
 确认这对凭据签出来的身份 ARN：
 
 ```bash
-AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK \
+AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK AWS_DEFAULT_REGION=us-east-1 \
   aws --endpoint-url=http://127.0.0.1:4566 sts get-caller-identity
 ```
 
@@ -36,15 +30,15 @@ AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK \
 
 ## 3.2 用 app-user 凭据登 dev-role-iam（应被拒）
 
-Step 2 那条 role 绑定的是 `arn:aws:iam::000000000000:root`，跟
-`user/app-user` **不匹配**——登录会被拒：
+Step 2 那条 role 绑定的是 `arn:aws:iam::000000000000:user/dev-user`，
+跟 `user/app-user` **不匹配**——登录会被拒：
 
 ```bash
-AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK \
+AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK AWS_DEFAULT_REGION=us-east-1 \
   vault login -method=aws \
     role=dev-role-iam \
     header_value=vault.example.com \
-    sts_endpoint=http://127.0.0.1:4566/ \
+    sts_endpoint=http://127.0.0.1:4567 \
     sts_region=us-east-1
 ```
 
@@ -85,11 +79,12 @@ vault write auth/aws/role/dev-role-iam \
 ## 3.4 用 app-user 凭据再登一次（这次应成功）
 
 ```bash
-AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK \
+unset VAULT_TOKEN
+AWS_ACCESS_KEY_ID=$APP_AK AWS_SECRET_ACCESS_KEY=$APP_SK AWS_DEFAULT_REGION=us-east-1 \
   vault login -method=aws \
     role=dev-role-iam \
     header_value=vault.example.com \
-    sts_endpoint=http://127.0.0.1:4566/ \
+    sts_endpoint=http://127.0.0.1:4567 \
     sts_region=us-east-1
 ```
 

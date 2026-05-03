@@ -67,15 +67,16 @@ vault write auth/aws/role/dev-role-iam \
 
 ## 4.3 登录侧 mixing 拦截：iam 风格请求打 ec2 role
 
-iam 风格请求需要四件套——伪造一组打 dev-role-ec2：
+用 Step 2 的 `dev-user` 凭据发一条真实 iam 登录请求，但故意指定
+`dev-role-ec2`：
 
 ```bash
-vault write auth/aws/login \
-    role=dev-role-ec2 \
-    iam_http_request_method=POST \
-    iam_request_url=$(echo -n 'http://127.0.0.1:4566/' | base64) \
-    iam_request_body=$(echo -n 'Action=GetCallerIdentity&Version=2011-06-15' | base64) \
-    iam_request_headers=$(echo -n '{}' | base64)
+AWS_ACCESS_KEY_ID=$DEV_AK AWS_SECRET_ACCESS_KEY=$DEV_SK AWS_DEFAULT_REGION=us-east-1 \
+    vault login -method=aws \
+        role=dev-role-ec2 \
+        header_value=vault.example.com \
+        sts_endpoint=http://127.0.0.1:4567 \
+        sts_region=us-east-1
 ```
 
 会看到（关键词 `auth method ... not allowed for role`）：
@@ -169,6 +170,9 @@ vault auth disable aws
 
 # 停掉 MiniStack 容器
 docker rm -f ministack
+
+# 停掉 STS Content-Type shim
+pkill -f /root/sts-shim.py || true
 ```
 
 > [4.1 章](/ch4-auth-basic) 那张表里讲过的"禁用一个 Auth Method = 批

@@ -7,12 +7,13 @@
 
 | 阶段 | 你亲手验证的事实 |
 | :--- | :--- |
-| **MiniStack + config/client** | `sts_endpoint` / `iam_endpoint` 把 Vault 的 AWS API 调用全部转到本地 4566；`iam_server_id_header_value` 也写在这里 |
-| **iam 真实登录链路** | `vault login -method=aws` → CLI 用本地 AWS 凭据签 GetCallerIdentity → Vault 转给 MiniStack STS → STS 返回 ARN → Vault 据此签 token |
+| **MiniStack + config/client** | `iam_endpoint` 直连本地 4566；`sts_endpoint` 指向 4567 的 Content-Type shim；`iam_server_id_header_value` 也写在这里 |
+| **iam 真实登录链路** | `vault login -method=aws` → CLI 用 `dev-user` 凭据签 GetCallerIdentity → Vault 转给 MiniStack STS → STS 返回 ARN → Vault 据此签 token |
+| **root ARN 限制** | `arn:aws:iam::000000000000:root` 只能证明 STS 可用；Vault iam 登录要用 `user/...` / `role/...` / `assumed-role/...` 这类普通 principal |
 | **header_value 这道防线** | 漏掉 `header_value=` 的登录在 Vault 端就被拒（`iam server id header values do not match`），不会发给 STS |
-| **bound_iam_principal_arn 精确匹配** | 用别的 IAM user 登 root-only role 被拒（`IAM Principal ... does not belong to the role`） |
+| **bound_iam_principal_arn 精确匹配** | 用 `app-user` 登只绑定 `dev-user` 的 role 被拒（`IAM Principal ... does not belong to the role`） |
 | **bound_iam_principal_arn 通配符** | 改成 `arn:aws:iam::000000000000:*` 后该账号下任意 principal 都能登 |
-| **resolve_aws_unique_ids** | 默认 true 会调 IAM 解析 unique ID；MiniStack 不支持解析 root，需要显式关掉 |
+| **resolve_aws_unique_ids** | 默认 true 会调 IAM 解析 unique ID；本实验显式关掉，直接演示 ARN 绑定与匹配 |
 | **写入侧 mixing 拦截** | iam role 加 `bound_ami_id`（未开 inferencing）/ ec2 role 加 `bound_iam_principal_arn` 都被 Vault 在写入时直接拒 |
 | **登录侧 mixing 拦截** | iam 风格请求打 ec2 role / 反之均报 `auth method ... is not allowed for role ...` |
 | **ec2 PKCS#7 验签** | iam 验签转给 AWS、ec2 验签 Vault 自己做——伪造 PKCS#7 在 Vault 这层就被拒 |
