@@ -1,5 +1,7 @@
 # 第 5 步：多 Issuer 与轮换原语 —— reissuance / cross-sign / default 切换
 
+![Step 5 故事板：一抽屉证书的故事](../assets/step5-issuer-rotation-story.png)
+
 模型见 [3.X §6](/ch3-pki)。自 Vault 1.11 起，**单个 mount 可以拥有多张 issuer 证书**——这是做证书轮换的基础设施。
 本步演示三件事：
 
@@ -16,15 +18,37 @@ vault list pki_int/issuers
 vault read pki_int/config/issuers
 ```
 
-应当只有一张 issuer，名为 `int-2026`（来自 Step 2）；`config/issuers` 里 `default` 指向它。
+应当看到 **2 张** issuer——这是因为 Step 2 里 `pki/root/sign-intermediate` 用 `format=pem_bundle` 返回的 `.data.certificate` 字段是**"intermediate + root" 拼成的 PEM bundle**，`set-signed` 把两张都导入了 `pki_int/`：一张是带内部私钥的 intermediate（与 mount 内的密钥配对，能用来签发），另一张是被顺带导入的 Root 副本。`default` 指向前者。
+
+> **（编者注）** Step 2 用 `pki_int/intermediate/generate/internal` 时即使传 `issuer_name="int-2026"` 也不会生效——这个端点不接受 issuer 名参数，issuer 名只能在 `set-signed` / `issuers/import/*` 时设置，或事后用 `vault write pki_int/issuer/<id> issuer_name=...` 补名。所以现在两张 issuer 都是匿名 UUID。
+
+可以用下面这条命令看清楚每张 issuer 的 subject 与 issuer 名，分辨谁是谁：
+
+```bash
+for id in $(vault list -format=json pki_int/issuers | jq -r '.[]'); do
+  echo "── $id ──"
+  vault read -field=certificate pki_int/issuer/$id \
+    | openssl x509 -noout -subject -issuer
+done
+```
+
+> **（编者注）** 这其实是 Step 2 的一个小副作用：如果只想保留 intermediate，可以在 `set-signed` 前用 `jq -r '.data.certificate' | awk '/BEGIN/{n++} n==1' > pki_int.crt` 只取第一张证书。本实验里保留两张正好为 5.2 演示"一个 mount 多个 issuer"提供了天然样本。
 
 ## 5.2 在 pki_int 上做一次 reissuance（同 subject + 同密钥）
 
 reissuance = 给同一个 subject 用同一份密钥重新签一张证书（通常 issuer 也是同一个 Root，但有效期延长）。
 
-先取出当前 intermediate 的 key reference：
+先按 subject 找出 intermediate 那张 issuer 的 ID（`pki_int/intermediate/generate/internal` 不接受 `issuer_name`，所以两张都是匿名 UUID，需要按证书内容辨认），并顺手给它命名 `int-2026`：
 
 ```bash
+INT_ISSUER_ID=$(for id in $(vault list -format=json pki_int/issuers | jq -r '.[]'); do
+  subj=$(vault read -field=certificate pki_int/issuer/$id | openssl x509 -noout -subject)
+  case "$subj" in *"example.com Intermediate"*) echo "$id"; break ;; esac
+done)
+echo "intermediate issuer id: $INT_ISSUER_ID"
+
+vault write pki_int/issuer/$INT_ISSUER_ID issuer_name="int-2026"
+
 KEY_REF=$(vault read -format=json pki_int/issuer/int-2026 | jq -r '.data.key_id')
 echo "reusing key: $KEY_REF"
 ```
@@ -61,16 +85,24 @@ vault write -format=json pki_int/issuers/import/cert \
 vault list pki_int/issuers
 ```
 
-应当看到现在有**两张 issuer**——同 subject、同公钥，但 serial 不同（即 reissuance）。
+应当看到现在有**三张 issuer**（5.1 的 2 张 + 这次导入的 reissue）——新导入的那张与原 intermediate 同 subject、同公钥，但 serial 不同（即 reissuance）。
 
 ## 5.3 给新 issuer 起名，并把它设为 default
 
-```bash
-NEW_ISSUER_ID=$(vault list -format=json pki_int/issuers | jq -r '.[]' | while read id; do
-  vault read -format=json pki_int/issuer/$id | jq -r 'select(.data.issuer_name=="" or .data.issuer_name==null) | .data.issuer_id' 2>/dev/null
-done | head -1)
+新导入那张目前还没名字。要在多张匿名 issuer 中挑出"subject 是 intermediate 且**不是** `int-2026`"的那张，按 subject + 名字双条件过滤：
 
-# 给它命名（如果还没名字）
+```bash
+NEW_ISSUER_ID=$(for id in $(vault list -format=json pki_int/issuers | jq -r '.[]'); do
+  info=$(vault read -format=json pki_int/issuer/$id)
+  name=$(echo "$info" | jq -r '.data.issuer_name')
+  subj=$(echo "$info" | jq -r '.data.certificate' | openssl x509 -noout -subject)
+  case "$subj" in
+    *"example.com Intermediate"*)
+      [ "$name" != "int-2026" ] && echo "$id" && break ;;
+  esac
+done)
+echo "new issuer id: $NEW_ISSUER_ID"
+
 vault write pki_int/issuer/$NEW_ISSUER_ID issuer_name="int-2026-v2"
 
 # 切换 default
@@ -120,7 +152,7 @@ cross-sign = 拿"已有 CA B 的 subject + 公钥"用"另一张 CA A"再签一�
 
 ## ✅ 验收
 
-- [ ] `vault list pki_int/issuers` 显示有 **2 张** issuer
+- [ ] `vault list pki_int/issuers` 显示有 **3 张** issuer（intermediate、被顺带导入的 Root 副本、reissue 的 intermediate）
 - [ ] 5.4 新签的 leaf 用的是新 issuer（serial 与 5.2 后导入的一致）
 - [ ] 5.5 切回旧 default 后再签发，issuer 又换回去
 - [ ] 你能解释为什么 reissuance 不会让历史 leaf 失效

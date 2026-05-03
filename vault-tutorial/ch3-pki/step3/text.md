@@ -24,10 +24,10 @@ vault write pki_int/roles/example-dot-com \
 ```bash
 vault write -format=json pki_int/issue/example-dot-com \
     common_name="api.example.com" \
-    ttl=24h | jq '.data | {expiration, serial_number}'
+    ttl=24h | jq '.data | {certificate, private_key, issuing_ca, ca_chain, serial_number, expiration}'
 ```
 
-应当返回 certificate / private_key / serial_number / expiration。
+应当看到 `certificate` / `private_key` / `issuing_ca` / `ca_chain` / `serial_number` / `expiration` 六个字段都有值——前四个是 PEM 文本（多行 `-----BEGIN .../-----END ...`），后两个是元数据。
 
 ## 3.3 ❌ 拒签 1：CN 不在 allowed_domains
 
