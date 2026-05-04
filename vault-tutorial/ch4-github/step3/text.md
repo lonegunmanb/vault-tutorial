@@ -236,13 +236,17 @@ VAULT_TOKEN=$DEV_TOKEN vault kv get secret/dev/api-key
 尝试越权操作（应被拒绝）：
 
 ```bash
-VAULT_TOKEN=$DEV_TOKEN vault kv put secret/dev/another value=should-fail 2>&1 | head -3
-VAULT_TOKEN=$DEV_TOKEN vault kv get secret/prod/api-key 2>&1 | head -3
+VAULT_TOKEN=$DEV_TOKEN vault kv put secret/dev/another value=should-fail 2>&1 | head -8
+echo '---'
+VAULT_TOKEN=$DEV_TOKEN vault kv get secret/prod/api-key 2>&1 | head -8
 ```
 
-第一条会返回 `permission denied`（dev-policy 未授予 update）；第二
-条会返回 `permission denied`（dev-policy 不覆盖
-`secret/data/prod/*`）。
+> `head -3` 会把关键的 `Code: 403 ... permission denied` 行截掉，所
+> 以这里截 8 行——往下能看到完整的错误码与原因。
+
+第一条会返回 `Code: 403 ... permission denied`（dev-policy 仅授予
+read + list，未授予 update）；第二条同样返回 `permission denied`
+（dev-policy 不覆盖 `secret/data/prod/*`）。
 
 ## 3.9 切回 root
 
