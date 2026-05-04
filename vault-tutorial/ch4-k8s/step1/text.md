@@ -43,9 +43,10 @@ ls -l "$K8S_CA_CERT"
 ```bash
 vault auth enable kubernetes
 vault auth list | grep kubernetes
+vault auth list -format=json | jq -r '."kubernetes/".accessor'
 ```
 
-应看到一行类似 `kubernetes/    kubernetes    auth_xxxxx` 的输出；其中 accessor 后续会用于模板化策略。
+`vault auth list` 的普通输出没有表头，容易看漏字段。以 `kubernetes/    kubernetes    auth_kubernetes_8c380951    n/a    n/a` 为例，第三列 `auth_kubernetes_8c380951` 就是 accessor。最后一条 JSON 命令会只打印 accessor 本身，后续模板化策略会用到这个值。
 
 ## 1.4 写入 `auth/kubernetes/config`
 

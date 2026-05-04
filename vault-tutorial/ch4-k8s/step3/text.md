@@ -1,5 +1,7 @@
 # 第三步：验证 ServiceAccount、namespace 与 audience 约束
 
+![Step 3 故事板：门卫按姓名、用途章和 namespace 标签逐项放行](../assets/step3-role-constraints-story.png)
+
 Kubernetes TokenReview 只证明“这个 JWT 属于哪个 Kubernetes 身份且仍然有效”；Vault role 还会继续检查 ServiceAccount 名称、namespace、namespace selector 与 audience 等授权约束。
 
 ## 3.1 同 namespace 的其他 ServiceAccount 应被拒绝

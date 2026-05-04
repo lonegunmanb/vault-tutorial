@@ -1,5 +1,7 @@
 # 第四步：使用注解 metadata 与模板化策略
 
+![Step 4 故事板：ServiceAccount 便签进入 Vault 档案并填入模板钥匙](../assets/step4-alias-template-story.png)
+
 官方工作流展示了一种更细的授权模式：把 Kubernetes ServiceAccount 注解写入 Vault Identity alias metadata，再在 Vault templated policy 中引用这些 metadata，让不同 ServiceAccount 自动落到不同 secret 路径。
 
 ## 4.1 给 ServiceAccount 添加 alias metadata 注解

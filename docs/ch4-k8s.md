@@ -44,7 +44,9 @@ TokenReview 是 Kubernetes 暴露的认证检查 API，它接收一个 bearer to
 
 ![Kubernetes 认证流程手绘示意](/images/ch4-k8s/kubernetes-auth-tokenreview-flow.png)
 
-该流程有一个容易被忽略的安全含义：Pod 的 ServiceAccount JWT 会通过网络交给 Vault；HashiCorp 文档把 Vault 视作可信计算基的一部分，因此这种共享在 Vault 的安全模型下是允许的，但普通 Kubernetes 应用不应把自己的 JWT 随意交给其他应用，因为这等同于允许第三方代表该 Pod 调用 Kubernetes API。
+该流程有一个容易被忽略的安全含义：Pod 的 ServiceAccount JWT 会通过网络交给 Vault；这里成立的前提是 Vault 不是普通应用，而是被纳入信任边界、专门负责身份验证与凭据签发的特殊安全组件。HashiCorp 文档把 Vault 视作可信计算基的一部分，因此 Pod 把 JWT 交给 Vault 是这套认证设计的一环；但普通 Kubernetes 应用不具备这种特殊地位，不应接收或转存其他 Pod 的 JWT，因为这等同于允许第三方代表该 Pod 调用 Kubernetes API。
+
+![ServiceAccount JWT 共享边界提醒漫画](/images/ch4-k8s/serviceaccount-jwt-sharing-warning.png)
 
 ---
 
@@ -56,7 +58,9 @@ Kubernetes 认证方法在使用前必须由运维或配置管理工具预先启
 
 如果 Vault 自己运行在 Kubernetes Pod 中，并且采用本地 ServiceAccount token 作为 reviewer JWT，那么 Vault 1.9.3 起会周期性重新读取本地 ServiceAccount token 文件，以适配短生命期 token；这种模式要求配置时省略 `token_reviewer_jwt` 与 `kubernetes_ca_cert`，只显式提供 `kubernetes_host`，Vault 会从默认挂载目录加载本地 token 与 CA 证书。
 
-如果显式设置 `disable_local_ca_jwt=true` 且未配置 `kubernetes_ca_cert`，Vault 的 Kubernetes auth 插件会使用系统信任库验证 Kubernetes API server 的 TLS 证书；这通常用于不希望从 Pod 本地挂载中默认读取 CA 与 JWT 的部署。
+`disable_local_ca_jwt=true` 可以理解为告诉 Vault：“不要自动使用 Pod 里默认挂载的那份 ServiceAccount JWT 和 Kubernetes CA 证书。”启用这个开关后，如果你又没有通过 `kubernetes_ca_cert` 明确提供 Kubernetes API server 的 CA 证书，Vault 就只能改用操作系统自己的系统信任库来验证 Kubernetes API server 的 TLS 证书。这个选项通常用于一种更刻意的部署方式：管理员不希望 Vault 插件悄悄依赖 Pod 本地挂载的身份材料，而是希望把 reviewer JWT、CA 证书或系统信任来源都明确纳入配置管理。
+
+这样做的主要收益是让信任来源可预期、可审计、可轮换：管理员可以清楚说明 Vault 用哪一个 reviewer JWT 调用 TokenReview、用哪一个 CA 证书或系统信任库校验 Kubernetes API server，而不是让插件根据运行环境中是否存在默认挂载文件自动决定。对于跨集群、受合规约束、由 GitOps 或配置管理系统统一下发的部署，这能减少环境差异带来的误判，也能避免 Pod 本地 token 的权限、轮换周期和使用边界变得不透明。
 
 ---
 
@@ -96,7 +100,9 @@ Vault 1.9.0 起，新的 Kubernetes auth mount 默认 `disable_iss_validation=tr
 
 ## 8. 四种短生命期 token 处理策略
 
-官方文档把短生命期 Kubernetes token 场景下的配置策略归纳为四类：使用 Vault Pod 的本地 token 作为 reviewer JWT、使用客户端提交的 JWT 作为 reviewer JWT、继续使用长期 reviewer token、或改用 JWT auth method 通过 Kubernetes OIDC Provider 验证。
+Kubernetes 1.21 以后，Pod 默认拿到的 ServiceAccount token 更像一张“短期通行证”：它会过期，也会跟 Pod 或 ServiceAccount 的生命周期绑定。于是 Vault 在调用 TokenReview 时，需要先决定一件事：它用哪一张“通行证”去问 Kubernetes API server“这个 Pod token 现在还有效吗？”这里的 reviewer JWT，就可以先理解为 Vault 用来向 Kubernetes 发起这次询问的凭据。
+
+围绕这个问题，官方文档给了四种常见选择：让 Vault 使用自己 Pod 里的本地 token；让客户端把自己的 JWT 交给 Vault，并由 Vault 用这枚 JWT 去做 TokenReview；继续使用一个手工准备的长期 reviewer token；或者不走 Kubernetes auth method，改用 JWT auth method 按 OIDC 的方式验证 Kubernetes token。
 
 | 策略 | 所有 token 是否短生命期 | 是否可提前撤销 | 主要代价 |
 | :--- | :--- | :--- | :--- |
@@ -105,7 +111,7 @@ Vault 1.9.0 起，新的 Kubernetes auth mount 默认 `disable_iss_validation=tr
 | 继续使用长期 reviewer token | 否 | 是 | 保持旧流程，但不能获得短生命期 token 的安全收益 |
 | 改用 JWT auth method | 是 | 否 | 不需要 reviewer JWT，但客户端 token 在 TTL 到期前不能被提前撤销 |
 
-这张表的核心不是给出唯一答案，而是提醒运维团队明确自己更重视哪项属性：是否彻底消除长期 reviewer JWT、是否需要删除 Pod 或 ServiceAccount 后立即使登录失败、以及是否愿意维护额外 RBAC 授权。
+这张表不是在说哪一种永远最好，而是在提醒你先想清楚取舍：能不能接受长期凭据；删除 Pod 或 ServiceAccount 后，是否必须立刻禁止它继续登录 Vault；以及是否愿意为客户端 ServiceAccount 额外配置 RBAC 权限。
 
 ![短生命期 token 策略地图](/images/ch4-k8s/kubernetes-reviewer-token-strategies.png)
 
