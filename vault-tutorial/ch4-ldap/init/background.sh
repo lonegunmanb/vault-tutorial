@@ -51,13 +51,6 @@ dn: ou=Groups,dc=example,dc=org
 objectClass: organizationalUnit
 ou: Groups
 
-dn: uid=vault-reader,ou=People,dc=example,dc=org
-objectClass: inetOrgPerson
-cn: Vault Reader
-sn: Reader
-uid: vault-reader
-userPassword: reader-pass
-
 dn: uid=alice,ou=People,dc=example,dc=org
 objectClass: inetOrgPerson
 cn: Alice Doe
@@ -120,7 +113,7 @@ for attempt in 1 2 3 4 5; do
   seed_ldap_entries > /tmp/ldap-auth-seed.log 2>&1 || true
   people=$(count_people)
   groups=$(count_groups)
-  if [ "$people" -ge 4 ] && [ "$groups" -ge 3 ]; then
+  if [ "$people" -ge 3 ] && [ "$groups" -ge 3 ]; then
     echo "Seeded $people people and $groups groups on attempt $attempt."
     break
   fi
@@ -128,7 +121,7 @@ for attempt in 1 2 3 4 5; do
   sleep 2
 done
 
-if [ "$(count_people)" -lt 4 ] || [ "$(count_groups)" -lt 3 ]; then
+if [ "$(count_people)" -lt 3 ] || [ "$(count_groups)" -lt 3 ]; then
   echo "ERROR: failed to seed LDAP auth entries. ldapadd log:"
   cat /tmp/ldap-auth-seed.log
 fi

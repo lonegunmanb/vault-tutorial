@@ -24,8 +24,8 @@ echo "$CAROL_LOGIN" | jq '.auth | {policies, metadata}'
 ```bash
 vault write auth/ldap/config \
   url="ldap://127.0.0.1:389" \
-  binddn="uid=vault-reader,ou=People,dc=example,dc=org" \
-  bindpass="reader-pass" \
+  binddn="cn=admin,dc=example,dc=org" \
+  bindpass="admin" \
   userdn="ou=People,dc=example,dc=org" \
   userattr="uid" \
   userfilter="(&(objectClass=inetOrgPerson)({{.UserAttr}}={{.Username}})(!(employeeType=Contractor)))" \

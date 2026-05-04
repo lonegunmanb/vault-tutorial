@@ -12,8 +12,7 @@
 
 - OpenLDAP 容器：`ldap://127.0.0.1:389`
 - Base DN：`dc=example,dc=org`
-- 管理员：`cn=admin,dc=example,dc=org` / `admin`
-- 查询账号：`uid=vault-reader,ou=People,dc=example,dc=org` / `reader-pass`
+- 管理员（也用作 Vault `binddn` 查询账号，简化实验环境的 ACL 配置；生产环境应使用最小权限的专用查询账号）：`cn=admin,dc=example,dc=org` / `admin`
 - 用户：`alice` / `alice-pass`、`bob` / `bob-pass`、`carol` / `carol-pass`
 - 组：`dev` 包含 Alice 和 Bob，`ops` 包含 Alice，`contractors` 包含 Carol
 - Vault Dev 模式：`VAULT_ADDR=http://127.0.0.1:8200`、`VAULT_TOKEN=root`

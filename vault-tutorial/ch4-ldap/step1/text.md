@@ -1,8 +1,6 @@
 # 第一步：启用 ldap auth 并配置 OpenLDAP 查询
 
-![Step 1 故事板：Vault 前台拿查询证去 LDAP 档案柜找用户和组](../assets/step1-ldap-config-story.svg)
-
-> 绘图提示词：手绘风格，现实事物比喻风格，彩色横向故事板，分成 5 格。第 1 格画管理员打开 Vault 的 `auth/ldap` 门；第 2 格画 OpenLDAP 档案柜，柜子分成 `ou=People` 和 `ou=Groups` 两层；第 3 格画管理员把 `vault-reader` 查询证交给 Vault 前台；第 4 格画 Vault 前台拿查询证到 `ou=People` 找 `uid` 用户，到 `ou=Groups` 找 `member` 组名单；第 5 格画 Vault 前台把“连接配置完成”章盖在配置表上。气泡方向必须明确：管理员对 Vault 说“启用 ldap auth”；管理员对 Vault 说“用 vault-reader 去查目录”；Vault 对 OpenLDAP 说“我只查用户和组”；OpenLDAP 对 Vault 回答“People 和 Groups 抽屉在这里”。所有气泡尾巴连接说话者，小箭头指向接收者。
+![Step 1 故事板：Vault 前台拿查询证去 LDAP 档案柜找用户和组](../assets/step1-ldap-config-story.png)
 
 LDAP auth 必须先启用并配置，Vault 才知道去哪个 LDAP 服务器、用哪个查询账号、在哪些目录分支下查用户和组。
 
@@ -22,7 +20,7 @@ ldapsearch -x -LLL -H ldap://127.0.0.1:389 \
   "(objectClass=groupOfNames)" cn member
 ```
 
-应能看到 `alice`、`bob`、`carol`、`vault-reader` 四个用户，以及 `dev`、`ops`、`contractors` 三个组。
+应能看到 `alice`、`bob`、`carol` 三个用户，以及 `dev`、`ops`、`contractors` 三个组。
 
 ## 1.2 直接验证一个 LDAP 密码
 
@@ -49,13 +47,13 @@ vault auth list | grep ldap
 
 ## 1.4 写入 LDAP 连接、用户搜索与组搜索配置
 
-这里使用 authenticated search：Vault 先用 `vault-reader` 搜索用户和组，再用登录用户自己的密码验证用户身份。
+这里使用 authenticated search：Vault 先用一个 LDAP 查询账号搜索用户和组，再用登录用户自己的密码验证用户身份。本实验为简化 OpenLDAP ACL 配置，直接使用 `cn=admin` 作为 `binddn`；生产环境应改用只具备搜索权限的最小权限账号。
 
 ```bash
 vault write auth/ldap/config \
   url="ldap://127.0.0.1:389" \
-  binddn="uid=vault-reader,ou=People,dc=example,dc=org" \
-  bindpass="reader-pass" \
+  binddn="cn=admin,dc=example,dc=org" \
+  bindpass="admin" \
   userdn="ou=People,dc=example,dc=org" \
   userattr="uid" \
   groupdn="ou=Groups,dc=example,dc=org" \
