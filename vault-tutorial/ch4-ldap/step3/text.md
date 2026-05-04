@@ -1,8 +1,6 @@
 # 第三步：用户映射与 token 创建时刻
 
-![Step 3 故事板：旧通行证不会自动长出新权限，重新登录才换新通行证](../assets/step3-ldap-user-mapping-story.svg)
-
-> 绘图提示词：手绘风格，现实事物比喻风格，彩色横向故事板，主题是“policy 在 token 创建时刻贴上去”。第 1 格画 Bob 拿旧 Vault token，只带 `dev-read` 贴纸；第 2 格画管理员在 Vault 本地用户映射柜 `auth/ldap/users/bob` 上补贴 `ops-read`；第 3 格画 Bob 拿旧 token 去 ops 保险柜仍被拦下，门卫指着旧贴纸说“这张通行证没有 ops-read”；第 4 格画 Bob 重新用 LDAP 密码登录；第 5 格画 Vault 发新 token，上面同时贴着 `dev-read` 和 `ops-read`；第 6 格画新 token 打开 ops 文件夹。气泡方向必须明确：管理员对 Vault 用户映射柜说“给 bob 追加 ops-read”；Bob 对 Vault 门卫说“我用旧 token 试试”；Vault 门卫对 Bob 回答“旧 token 不会自动变”；Bob 对 Vault 登录柜台说“我重新登录”；Vault 对 Bob 说“这是带新 policy 的 token”。气泡尾巴连接说话者，小箭头指向接收者。
+![Step 3 故事板：旧通行证不会自动长出新权限，重新登录才换新通行证](../assets/step3-ldap-user-mapping-story.png)
 
 Vault 的 LDAP user 映射可以给单个 LDAP 用户附加 policy；但官方文档提醒，policy 映射发生在 token 创建时，旧 token 不会因为映射变化自动更新。
 

@@ -1,8 +1,6 @@
 # 第四步：userfilter 拦截 contractors 并清理环境
 
-![Step 4 故事板：userfilter 像门口筛选牌，先把 contractors 拦在搜索阶段](../assets/step4-ldap-userfilter-story.svg)
-
-> 绘图提示词：手绘风格，现实事物比喻风格，彩色横向故事板，分成 6 格。第 1 格画 Carol 的 LDAP 工牌，上面写 `employeeType=Contractor`；第 2 格画 Vault 管理员把一块筛选牌挂到 LDAP 搜索窗口，上面写“不要 Contractor”；第 3 格画 Vault 搜索 `uid=carol` 时，筛选牌先拦住 Carol 的档案；第 4 格画 Carol 对 Vault 说“我有正确密码”，Vault 回答“搜索规则不允许你进入候选名单”；第 5 格画 Alice 的工牌写 `employeeType=Employee`，通过筛选后正常登录；第 6 格画管理员关闭 `auth/ldap` 并收拾 OpenLDAP 实验柜台。气泡方向必须明确：管理员对 Vault 说“加上 userfilter”；Vault 对 LDAP 搜索窗口说“只找非 Contractor 用户”；Carol 对 Vault 说“我的密码是对的”；Vault 对 Carol 说“但你被 userfilter 排除”；Vault 对 Alice 说“你通过筛选，可以继续认证”。所有气泡尾巴连接说话者，小箭头指向接收者。
+![Step 4 故事板：userfilter 像门口筛选牌，先把 contractors 拦在搜索阶段](../assets/step4-ldap-userfilter-story.png)
 
 `userfilter` 可以在用户搜索阶段附加限制；它不是改 LDAP 密码校验，而是先决定“这个用户名能否被搜索成一个允许登录的用户对象”。
 
