@@ -244,8 +244,8 @@ as the user that generated the access token."
 - `config/token_bound_cidrs` 限定 PAT 只允许从特定网段登录
 - 真正高敏感的运维操作应启用 [4.x MFA / 多因素] 章节会介绍的额外认
   证层
-- 长期方向：用 [OIDC](/ch4-oidc) 把 GitHub 接入企业 SSO，作为 PAT
-  的过渡方案
+- 长期方向：用 OIDC（后续 4.x 章节会展开）把 GitHub 接入企业
+  SSO，作为 PAT 的过渡方案
 
 > **不要把 PAT 写入 CI 系统的环境变量**——CI 自动化场景应当使用
 > `jwt`（GitHub Actions OIDC token）或 [`approle`](/ch4-app-role)，
