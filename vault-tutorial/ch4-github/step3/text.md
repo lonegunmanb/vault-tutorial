@@ -153,15 +153,58 @@ vault read identity/entity/id/$ENTITY_ID -format=json \
 应能看到 `aliases` 中含一条
 `{"name":"testuser", "mount_type":"github"}`。
 
-team 也会作为 group alias 创建——切回 root 查看：
+至于 team——Vault 在登录时确实把 `dev`、`ops` 当作 group alias 名
+塞进了 `auth.GroupAliases`，但**group alias 只有在绑定到一个事先
+创建好的 external identity group 时才会被持久化**——否则
+`vault list identity/group-alias/id` 会返回空：
 
 ```bash
 export VAULT_TOKEN=root
-vault list identity/group-alias/id 2>/dev/null | head -5
+vault list identity/group-alias/id 2>/dev/null
+# 默认情况下：No value found at identity/group-alias/id/
 ```
 
-（group alias 默认按 mount + group name 自动创建；具体细节由
-[2.5 章 identity entity](/ch2-identity-entity) 介绍。）
+这是 Vault identity 的设计：自动把任何 auth method 报上来的 group
+名都建一个 entity group 会泛滥成灾，因此 Vault 要求运维**先**显式
+建一个 `type=external` 的 group + alias，登录时 Vault 才会把对应
+的 entity 加进该 group 的 `member_entity_ids`。
+
+如果想看到完整效果，可以执行下面这段（**选学，跳过不影响后续步骤**）：
+
+```bash
+# 1. 取 github auth method 的 accessor（identity alias 必须挂在
+#    某个 mount accessor 上）
+GITHUB_ACCESSOR=$(vault auth list -format=json | jq -r '."github/".accessor')
+echo "GITHUB_ACCESSOR=$GITHUB_ACCESSOR"
+
+# 2. 建一个 external identity group，并直接给它绑 dev-policy
+GROUP_ID=$(vault write -format=json identity/group \
+    name=dev-from-github \
+    type=external \
+    policies=dev-policy \
+    | jq -r '.data.id')
+echo "GROUP_ID=$GROUP_ID"
+
+# 3. 给该 group 建 alias：name 必须 = GitHub 那边的 team 名 dev，
+#    canonical_id = 上一步的 group id，mount_accessor = github mount
+vault write identity/group-alias \
+    name=dev \
+    canonical_id=$GROUP_ID \
+    mount_accessor=$GITHUB_ACCESSOR
+
+# 4. 重新登录一次，让 Vault 把 testuser 的 entity 写进该 group
+unset VAULT_TOKEN
+vault login -method=github token=anything > /dev/null
+
+# 5. 现在 group-alias 与 group 都看得到了
+export VAULT_TOKEN=root
+vault list identity/group-alias/id
+vault read identity/group/name/dev-from-github \
+  | grep -E 'member_entity_ids|policies'
+```
+
+应能看到 `member_entity_ids` 里出现 testuser 对应的 entity id。
+具体细节由 [2.5 章 identity entity](/ch2-identity-entity) 介绍。
 
 ## 3.8 使用该 token 操作 secret/data/dev/*
 
