@@ -66,7 +66,8 @@ export default defineConfig({
              { text: '4.2 AppRole 认证：机器登录 Vault 的"用户名/密码"', link: '/ch4-app-role' },
              { text: '4.3 AWS 认证：用云平台身份直接登录 Vault', link: '/ch4-aws' },
              { text: '4.4 Kubernetes 认证：让 Pod 用 ServiceAccount 身份登录 Vault', link: '/ch4-k8s' },
-             { text: '4.5 GitHub 认证：用个人访问令牌登录 Vault', link: '/ch4-github' }
+             { text: '4.5 GitHub 认证：用个人访问令牌登录 Vault', link: '/ch4-github' },
+             { text: '4.6 LDAP 认证：让目录用户用账号密码登录 Vault', link: '/ch4-ldap' }
            ]
          },
          {

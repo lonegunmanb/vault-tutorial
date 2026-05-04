@@ -1,0 +1,43 @@
+{
+  "title": "LDAP 认证：OpenLDAP 用户登录、组映射与 userfilter",
+  "description": "在 Dev 模式 Vault (1.19.2) 与本地 OpenLDAP 容器上完整配置 auth/ldap：启用 LDAP auth、使用 binddn 执行 authenticated search、让 alice/bob 使用 LDAP 密码登录 Vault、把 LDAP dev/ops 组映射到 Vault policy、验证 Vault 本地 user 映射只对新 token 生效，并用 userfilter 拦截 contractors。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 ldap auth 并配置 OpenLDAP 查询",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "LDAP 组映射到 Vault policy 并完成登录",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "用户映射与 token 创建时刻",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "userfilter 拦截 contractors 并清理环境",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

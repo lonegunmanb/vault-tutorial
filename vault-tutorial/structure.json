@@ -26,6 +26,7 @@
     { "path": "ch4-aws" },
     { "path": "ch4-k8s" },
     { "path": "ch4-github" },
+    { "path": "ch4-ldap" },
     { "path": "ch5-mount-migration" }
   ]
 }
