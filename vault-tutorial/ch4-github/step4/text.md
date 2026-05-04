@@ -270,8 +270,6 @@ vault login -method=github token=anything 2>&1 | head -5
 ```
 Error authenticating: ...
 Code: 403. Errors:
-
-* permission denied
 ```
 
 > github auth 后端在 `verifyCredentials` 第一步就比对源 IP 是否落
@@ -323,10 +321,8 @@ VAULT_TOKEN=$DEV_TOKEN vault token lookup 2>&1 | head -3
 
 ```
 Error looking up token: Error making API request.
-...
-Code: 403. Errors:
 
-* permission denied
+URL: GET http://127.0.0.1:8200/v1/auth/token/lookup-self
 ```
 
 > 这就是 mount-disable 的副作用——所有从该 mount 派生出来的 token

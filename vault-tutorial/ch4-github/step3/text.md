@@ -241,9 +241,6 @@ echo '---'
 VAULT_TOKEN=$DEV_TOKEN vault kv get secret/prod/api-key 2>&1 | head -8
 ```
 
-> `head -3` 会把关键的 `Code: 403 ... permission denied` 行截掉，所
-> 以这里截 8 行——往下能看到完整的错误码与原因。
-
 第一条会返回 `Code: 403 ... permission denied`（dev-policy 仅授予
 read + list，未授予 update）；第二条同样返回 `permission denied`
 （dev-policy 不覆盖 `secret/data/prod/*`）。
