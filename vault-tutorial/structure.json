@@ -27,6 +27,8 @@
     { "path": "ch4-k8s" },
     { "path": "ch4-github" },
     { "path": "ch4-ldap" },
+    { "path": "ch4-cert" },
+    { "path": "ch4-userpass" },
     { "path": "ch5-mount-migration" }
   ]
 }

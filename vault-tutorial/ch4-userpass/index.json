@@ -1,0 +1,25 @@
+{
+  "title": "Userpass 认证：本地用户名密码、登录与用户维护",
+  "description": "启用 auth/userpass，创建本地用户并绑定 token policy，使用 CLI 和 API 登录，验证用户名小写归一化，更新密码和 policies，最后清理用户与 auth method。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      { "title": "启用 userpass 并准备 policy", "text": "step1/text.md" },
+      { "title": "创建用户并查看用户登记册", "text": "step2/text.md" },
+      { "title": "使用 CLI/API 登录并验证 token 权限", "text": "step3/text.md" },
+      { "title": "改密码、改 policy、验证小写归一化并清理", "text": "step4/text.md" }
+    ],
+    "finish": { "text": "finish/finish.md" },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": { "imageid": "ubuntu" },
+  "interface": { "layout": "editor-terminal" }
+}

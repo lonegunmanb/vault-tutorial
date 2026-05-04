@@ -67,7 +67,9 @@ export default defineConfig({
              { text: '4.3 AWS 认证：用云平台身份直接登录 Vault', link: '/ch4-aws' },
              { text: '4.4 Kubernetes 认证：让 Pod 用 ServiceAccount 身份登录 Vault', link: '/ch4-k8s' },
              { text: '4.5 GitHub 认证：用个人访问令牌登录 Vault', link: '/ch4-github' },
-             { text: '4.6 LDAP 认证：让目录用户用账号密码登录 Vault', link: '/ch4-ldap' }
+             { text: '4.6 LDAP 认证：让目录用户用账号密码登录 Vault', link: '/ch4-ldap' },
+             { text: '4.7 TLS 证书认证：用客户端证书登录 Vault', link: '/ch4-cert' },
+             { text: '4.8 Userpass 认证：Vault 内置用户名密码登录', link: '/ch4-userpass' }
            ]
          },
          {

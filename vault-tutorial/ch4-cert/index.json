@@ -1,0 +1,25 @@
+{
+  "title": "TLS 证书认证：HTTPS Vault、客户端证书与 role 约束",
+  "description": "在 TLS 模式 Vault 上完整配置 auth/cert：生成 Vault 服务端 TLS 证书与客户端 CA，启用 cert auth，登记 web role，使用客户端证书登录 Vault，验证 allowed_dns_sans / allowed_organizational_units 约束，并演示不受信 CA 与不匹配证书被拒绝。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      { "title": "认识 TLS Vault 与实验用证书", "text": "step1/text.md" },
+      { "title": "启用 cert auth 并登记 web 证书 role", "text": "step2/text.md" },
+      { "title": "使用客户端证书登录并读取 secret", "text": "step3/text.md" },
+      { "title": "验证失败场景并清理环境", "text": "step4/text.md" }
+    ],
+    "finish": { "text": "finish/finish.md" },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": { "imageid": "ubuntu" },
+  "interface": { "layout": "editor-terminal" }
+}
