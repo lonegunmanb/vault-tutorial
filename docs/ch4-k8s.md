@@ -1,0 +1,172 @@
+---
+order: 43
+title: 4.4 Kubernetes 认证：让 Pod 用 ServiceAccount 身份登录 Vault
+group: 第 4 章：认证方法体系 (Auth Methods)
+group_order: 40
+---
+
+# 4.4 Kubernetes 认证：让 Pod 用 ServiceAccount 身份登录 Vault
+
+> **核心结论**：Kubernetes 认证方法（`kubernetes`）让运行在 Kubernetes 中的工作负载使用自己的 ServiceAccount Token 登录 Vault，并由 Vault 签发一个受 Vault policy 约束的 Vault token；它的验证核心不是让 Vault 自己离线猜测 JWT 是否可信，而是让 Vault 调用 Kubernetes 的 TokenReview API 确认该 ServiceAccount Token 仍然有效、属于哪个 ServiceAccount、是否满足指定 role 的约束。 [来源：HashiCorp Vault 文档《Kubernetes auth method》开篇；HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes；Kubernetes 官方文档《TokenReview》§TokenReview]
+
+参考：
+- [Kubernetes Auth Method — Vault Docs](https://developer.hashicorp.com/vault/docs/auth/kubernetes)
+- [Kubernetes Auth API](https://developer.hashicorp.com/vault/api-docs/auth/kubernetes)
+- [Kubernetes Service Accounts](https://kubernetes.io/docs/concepts/security/service-accounts/)
+- [Kubernetes TokenReview API](https://kubernetes.io/docs/reference/kubernetes-api/authentication-resources/token-review-v1/)
+- [Killercoda Creator Documentation](https://killercoda.com/creators)
+
+---
+
+## 1. Kubernetes 认证在 Vault 体系里的位置
+
+回到 [4.1 章](/ch4-auth-basic) 的分类框架，Kubernetes 认证方法属于“平台/工作负载身份型”认证：调用者通常不是人，而是一个运行中的 Pod；Pod 携带 Kubernetes 为其 ServiceAccount 签发或挂载的 JWT，Vault 通过 Kubernetes API 验证该 JWT，再把它转换成 Vault 自己的 token。 [来源：HashiCorp Vault 文档《Kubernetes auth method》开篇；HashiCorp Vault 文档《Kubernetes auth method》§Authentication]
+
+ServiceAccount 是 Kubernetes 中面向非人类主体的账号类型，它为 Pod、系统组件或集群内外的自动化程序提供可被 Kubernetes API 识别的身份；与人类用户账号不同，ServiceAccount 是 Kubernetes API 中的对象，并且天然属于某个 namespace。 [来源：Kubernetes 官方文档《Service Accounts》§What are service accounts?]
+
+本章讨论的是“Pod 登录 Vault”的入站方向：JWT 从 Pod 流向 Vault，Vault 再签发 Vault token；这与第 3 章 Kubernetes 机密引擎“Vault 主动向 Kubernetes 申请 ServiceAccount Token”的出站方向相反，二者都使用 Kubernetes 身份材料，但信任方向与使用场景完全不同。 [来源：HashiCorp Vault 文档《Kubernetes auth method》开篇；HashiCorp Vault 文档《Kubernetes auth method》§Authentication；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Login]
+
+---
+
+## 2. 基本术语：ServiceAccount Token、JWT、TokenReview
+
+ServiceAccount Token 是 Kubernetes 为 ServiceAccount 生成的签名 JWT；JWT（JSON Web Token）是一种把声明、签名和有效期等信息编码在字符串中的令牌格式，Kubernetes 会在服务账号认证流程中检查签名、过期时间、对象引用、当前有效性以及 audience 等声明。 [来源：Kubernetes 官方文档《Service Accounts》§Authenticating service account credentials]
+
+TokenReview 是 Kubernetes 暴露的认证检查 API，它接收一个 bearer token，并尝试把该 token 认证为某个已知用户；返回结果中会包含 `authenticated`、`user.username`、`user.uid`、`user.groups` 与兼容的 `audiences` 等字段。 [来源：Kubernetes 官方文档《TokenReview》§TokenReview；Kubernetes 官方文档《TokenReview》§TokenReviewStatus]
+
+在 Vault 的 Kubernetes 认证方法里，Vault 自身不是 Kubernetes ServiceAccount Token 的最终权威；Vault 调用 TokenReview，由 Kubernetes API server 确认 token 是否仍然有效，再由 Vault 根据 role 中的 service account 名称、namespace、namespace selector、audience 与 token policy 配置决定是否签发 Vault token。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Login]
+
+---
+
+## 3. 一次登录的完整数据流
+
+一次标准登录可以拆成五步：Pod 读取自己挂载的 ServiceAccount JWT；Pod 将 `role` 与 `jwt` 提交到 `auth/kubernetes/login`；Vault 使用配置好的 Kubernetes 连接信息调用 TokenReview；Kubernetes API server 返回该 JWT 对应的 ServiceAccount 身份；Vault 检查 role 约束并签发 Vault token。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Authentication / Via the API；HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Login]
+
+![Kubernetes 认证流程手绘示意](/images/ch4-k8s/kubernetes-auth-tokenreview-flow.png)
+
+该流程有一个容易被忽略的安全含义：Pod 的 ServiceAccount JWT 会通过网络交给 Vault；HashiCorp 文档把 Vault 视作可信计算基的一部分，因此这种共享在 Vault 的安全模型下是允许的，但普通 Kubernetes 应用不应把自己的 JWT 随意交给其他应用，因为这等同于允许第三方代表该 Pod 调用 Kubernetes API。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration 注释]
+
+---
+
+## 4. 启用与基础配置
+
+Kubernetes 认证方法在使用前必须由运维或配置管理工具预先启用与配置；默认挂载路径是 `auth/kubernetes/`，启用命令是 `vault auth enable kubernetes`。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration]
+
+`auth/kubernetes/config` 通常需要让 Vault 知道 Kubernetes API server 的地址、用于校验 TLS 的 CA 证书，以及用于访问 TokenReview API 的 reviewer 凭据；不过 `token_reviewer_jwt` 并非总是显式必填，Vault 在 Kubernetes Pod 内运行时可以使用本地 ServiceAccount token，也可以在特定配置下使用客户端提交的 JWT 访问 TokenReview API。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration；HashiCorp Vault 文档《Kubernetes auth method》§How to work with short-lived Kubernetes tokens；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method / `token_reviewer_jwt`]
+
+如果 Vault 自己运行在 Kubernetes Pod 中，并且采用本地 ServiceAccount token 作为 reviewer JWT，那么 Vault 1.9.3 起会周期性重新读取本地 ServiceAccount token 文件，以适配短生命期 token；这种模式要求配置时省略 `token_reviewer_jwt` 与 `kubernetes_ca_cert`，只显式提供 `kubernetes_host`，Vault 会从默认挂载目录加载本地 token 与 CA 证书。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§How to work with short-lived Kubernetes tokens / Use local service account token as the reviewer JWT；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method / Caveats]
+
+如果显式设置 `disable_local_ca_jwt=true` 且未配置 `kubernetes_ca_cert`，Vault 的 Kubernetes auth 插件会使用系统信任库验证 Kubernetes API server 的 TLS 证书；这通常用于不希望从 Pod 本地挂载中默认读取 CA 与 JWT 的部署。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§How to work with short-lived Kubernetes tokens / Use local service account token as the reviewer JWT；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method / Caveats]
+
+---
+
+## 5. Role：把 Kubernetes 身份映射到 Vault policy
+
+Kubernetes auth 的 role 是 Vault 侧的授权边界：登录请求先经 TokenReview 证明“这是谁”，再由 role 判断“这个 ServiceAccount 是否允许以这个 Vault role 登录，以及登录后获得哪些 Vault policy”。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role]
+
+role 的必填身份约束是 `bound_service_account_names`；生产配置通常还会显式写明 `bound_service_account_namespaces` 或 `bound_service_account_namespace_selector` 之一，并配置 `token_policies`（旧字段为 `policies`）与 `token_ttl` 等 token 参数。HashiCorp 文档示例把名为 `myapp`、位于 `default` namespace 的 ServiceAccount 绑定到一个 `demo` role，并给它 `default` policy 与 1 小时 TTL。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role]
+
+`bound_service_account_names` 是必填约束，表示哪些 ServiceAccount 名称可以登录该 role；值为 `*` 时允许任意名称，但仍应配合 namespace、audience 或 policy 边界使用，否则 role 的授权面会过大。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role / Parameters]
+
+`bound_service_account_namespaces` 可以列出允许登录的 namespace，值为 `*` 时允许任意 namespace；`bound_service_account_namespace_selector` 可以使用 namespace label selector 选择允许登录的 namespace，并且当它与显式 namespace 列表同时配置时，两者之间是 OR 关系。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role / Parameters]
+
+`audience` 用来校验 JWT 的 audience claim，即“这个 token 原本是发给哪个接收方使用的”；Kubernetes TokenReview 也支持 audience 字段，并要求 audience-aware 的认证器返回与 token 兼容的 audience，因此在 Vault role 中设置 audience 可以降低 token 被跨系统误用的范围。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role / Parameters；Kubernetes 官方文档《TokenReview》§TokenReviewSpec]
+
+---
+
+## 6. Reviewer JWT 与 RBAC 权限
+
+Vault 调用 TokenReview API 时必须持有一个能创建 TokenReview 的 Kubernetes 凭据；在启用 RBAC 的集群中，文档示例通过把某个 ServiceAccount 绑定到内置 `system:auth-delegator` ClusterRole 来授予这项权限。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes]
+
+Kubernetes API server 应启用 `--service-account-lookup`，该选项从 Kubernetes 1.7 起默认为 true；如果没有启用，已删除的 token 可能无法被正确撤销，从而仍能通过 Kubernetes auth 登录 Vault。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes]
+
+当 role 使用 namespace selector 时，Vault 必须能读取 Kubernetes namespace；当配置 `use_annotations_as_alias_metadata=true` 时，Vault 必须能读取 ServiceAccount，因为它需要从 ServiceAccount 注解中提取 alias metadata。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role / Parameters；HashiCorp Vault 文档《Kubernetes auth method》§Workflows / Working with templated policies]
+
+---
+
+## 7. Kubernetes 1.21+：短生命期 token 与 issuer 变化
+
+Kubernetes 1.21 起，`BoundServiceAccountTokenVolume` 特性默认启用；这改变了容器中默认挂载的 ServiceAccount JWT：它具有过期时间，并且绑定到 Pod 与 ServiceAccount 的生命周期，同时 JWT 的 `iss` claim 取决于集群自身配置。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Kubernetes 1.21]
+
+Vault 1.9.0 起，新的 Kubernetes auth mount 默认 `disable_iss_validation=true`，并且 `issuer` 与 `disable_iss_validation` 字段已被标记为弃用；官方解释是 Kubernetes API 在 TokenReview 时已经执行 issuer 相关校验，Vault 侧重复校验会让同一套配置难以同时兼容 Kubernetes 1.20 与 1.21 的默认 token。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Kubernetes 1.21；HashiCorp Vault 文档《Kubernetes auth method》§Discovering the service account issuer；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method / Deprecated parameters]
+
+如果你确实启用了 Vault 侧 issuer 校验，Kubernetes 1.21+ 集群可能需要把 Vault 配置中的 `issuer` 设置为 kube-apiserver `--service-account-issuer` 的值；文档给出两种发现方式：解码一个 TokenRequest 返回的 JWT，或读取集群的 `/.well-known/openid-configuration`。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Discovering the service account issuer]
+
+---
+
+## 8. 四种短生命期 token 处理策略
+
+官方文档把短生命期 Kubernetes token 场景下的配置策略归纳为四类：使用 Vault Pod 的本地 token 作为 reviewer JWT、使用客户端提交的 JWT 作为 reviewer JWT、继续使用长期 reviewer token、或改用 JWT auth method 通过 Kubernetes OIDC Provider 验证。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§How to work with short-lived Kubernetes tokens]
+
+| 策略 | 所有 token 是否短生命期 | 是否可提前撤销 | 主要代价 |
+| :--- | :--- | :--- | :--- |
+| 使用 Vault 本地 ServiceAccount token 作为 reviewer JWT | 是 | 是 | Vault 需要运行在 Kubernetes 集群中，并要求 Vault 1.9.3+ 才能周期性重读本地 token |
+| 使用客户端 JWT 作为 reviewer JWT | 是 | 是 | 每个允许登录 Vault 的客户端 ServiceAccount 都需要具备 `system:auth-delegator` 权限 |
+| 继续使用长期 reviewer token | 否 | 是 | 保持旧流程，但不能获得短生命期 token 的安全收益 |
+| 改用 JWT auth method | 是 | 否 | 不需要 reviewer JWT，但客户端 token 在 TTL 到期前不能被提前撤销 |
+
+这张表的核心不是给出唯一答案，而是提醒运维团队明确自己更重视哪项属性：是否彻底消除长期 reviewer JWT、是否需要删除 Pod 或 ServiceAccount 后立即使登录失败、以及是否愿意维护额外 RBAC 授权。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§How to work with short-lived Kubernetes tokens；Kubernetes 官方文档《Service Accounts》§Authenticating service account credentials in your own code]
+
+![短生命期 token 策略地图](/images/ch4-k8s/kubernetes-reviewer-token-strategies.png)
+
+---
+
+## 9. Identity alias：UID 默认更安全，名称映射更可控
+
+Kubernetes auth role 的 `alias_name_source` 控制 Vault Identity alias 的生成方式；默认值是 `serviceaccount_uid`，官方将其描述为推荐且更安全的方式，因为 UID 是 Kubernetes 为对象生成的机器标识，同名 ServiceAccount 被删除后重建也会得到不同 UID。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role / Parameters；Kubernetes 官方文档《TokenReview》§TokenReviewStatus]
+
+`alias_name_source=serviceaccount_name` 会使用 ServiceAccount 的 namespace 与名称作为 alias name，例如 `vault/vault-auth`；官方仅建议在明确接受风险或能通过强控制缓解 ServiceAccount 创建、删除与访问风险时使用，因为同名对象重建可能影响 Vault 身份映射的语义。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role / Parameters]
+
+---
+
+## 10. 注解到 alias metadata：把 Kubernetes 标签信息带入 Vault policy
+
+当 `use_annotations_as_alias_metadata=true` 时，Vault 会把客户端 token 对应 ServiceAccount 上以 `vault.hashicorp.com/alias-metadata-` 为前缀的注解写入 Vault alias metadata；注解键去掉前缀后的部分成为 metadata key，注解值成为 metadata value。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Workflows / Working with templated policies；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method / Parameters]
+
+由于 Vault alias metadata 本身存在取值长度限制，官方要求这些注解值不超过 512 个字符；超过该限制会导致注解无法作为 alias metadata 使用。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method / `use_annotations_as_alias_metadata`]
+
+这项能力常与 templated policy 配合使用：例如把 ServiceAccount 注解 `vault.hashicorp.com/alias-metadata-env: demo/app` 写入 alias metadata 后，可以在 Vault policy 中通过 `identity.entity.aliases.<mount accessor>.metadata.env` 渲染出该工作负载专属的 KV 路径。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Workflows / Working with templated policies]
+
+官方同时指出，启用注解到 alias metadata 时 Vault 必须有权限读取 Kubernetes ServiceAccount；这是因为 Vault 需要在登录过程中查询 ServiceAccount 对象并读取其注解。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Workflows / Working with templated policies；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method / Parameters]
+
+---
+
+## 11. CLI 与 API 登录形式
+
+CLI 层面，默认路径是 `/kubernetes`，可以直接写入登录端点：`vault write auth/kubernetes/login role=demo jwt=...`；如果认证方法挂载在其他路径，命令中的 `kubernetes` 需要替换为实际 mount path。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Authentication / Via the CLI]
+
+API 层面，默认端点是 `POST /v1/auth/kubernetes/login`，请求体包含 `role` 与 `jwt`；如果认证方法挂载在其他路径，API 路径中的 `kubernetes` 同样需要替换为实际 mount path；响应中的 Vault token 位于 `auth.client_token`，metadata 会包含 role、ServiceAccount 名称、namespace、secret name 与 UID 等信息。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Authentication / Via the API；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Login]
+
+官方 Go 示例使用 Vault API 客户端中的 Kubernetes auth helper 读取 ServiceAccount token 文件并登录 Vault；这反映了实际应用中的常见方式：应用从默认挂载路径或管理员指定路径读取本 Pod 的 token，然后把它交给 Vault。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Code example]
+
+---
+
+## 12. 生产使用时的边界条件
+
+Kubernetes auth 方法专门围绕 Kubernetes TokenReview API 设计；同一枚 Kubernetes ServiceAccount Token 也可以通过 Vault JWT auth method 作为 OIDC token 验证，但 JWT auth 的重要差异是客户端 token 在 TTL 到期前不能被提前撤销，因此官方建议在采用该方案时保持 TTL 较短。 [来源：HashiCorp Vault 文档《Kubernetes auth method》开篇；HashiCorp Vault 文档《Kubernetes auth method》§How to work with short-lived Kubernetes tokens / Use JWT auth]
+
+长期 ServiceAccount token 仍可通过手工创建 `kubernetes.io/service-account-token` Secret 得到，并可继续作为 `token_reviewer_jwt` 使用；但 HashiCorp 文档明确说明这种做法只是维持旧工作流，并不能获得短生命期 token 的安全姿态收益。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§How to work with short-lived Kubernetes tokens / Continue using long-lived tokens]
+
+Kubernetes 官方文档也不推荐把长期 bearer token 作为外部应用的默认认证方式，因为一旦泄露便可被滥用；更推荐 TokenRequest 这类短生命期 token，或采用受良好保护的证书、私钥、认证 webhook 等替代方式。 [来源：Kubernetes 官方文档《Service Accounts》§How to use service accounts / Note]
+
+---
+
+## 13. 本章实验设计
+
+Killercoda Creator 文档提供 `kubernetes-kubeadm-1node` 后端环境，它包含一个 kubeadm 单节点集群，control plane 的 taint 已移除，可以直接调度工作负载；本章实验选择这个环境，以便在真实 Kubernetes API server 上运行 TokenReview，而不是用静态字符串模拟登录。 [来源：Killercoda Creator Documentation §Environments]
+
+Killercoda 场景使用 `index.json` 描述标题、intro、steps、finish、backend 与界面布局；本章实验沿用项目既有格式，把环境准备放在 intro 的 background/foreground 脚本里，把学习流程拆成四个 step。 [来源：Killercoda Creator Documentation §Scenario Examples；Killercoda Creator Documentation §Foreground and Background Scripts]
+
+实验会依次完成：启用 `auth/kubernetes` 并配置 reviewer JWT；创建 `myapp` ServiceAccount 并完成一次真实登录；验证 ServiceAccount 名称、namespace selector 与 audience 约束；最后启用 annotation alias metadata 与 templated policy，让 Kubernetes 注解参与 Vault policy 渲染。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role；HashiCorp Vault 文档《Kubernetes auth method》§Workflows / Working with templated policies]
+
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch4-k8s" title="实验：Kubernetes 认证完整动手——TokenReview、ServiceAccount 约束、audience 与模板化策略" />
+
+---
+
+## 参考文档
+
+- [Kubernetes Auth Method — Vault Docs](https://developer.hashicorp.com/vault/docs/auth/kubernetes)
+- [Kubernetes Auth API](https://developer.hashicorp.com/vault/api-docs/auth/kubernetes)
+- [Kubernetes Service Accounts](https://kubernetes.io/docs/concepts/security/service-accounts/)
+- [Kubernetes TokenReview API](https://kubernetes.io/docs/reference/kubernetes-api/authentication-resources/token-review-v1/)
+- [Killercoda Creator Documentation](https://killercoda.com/creators)

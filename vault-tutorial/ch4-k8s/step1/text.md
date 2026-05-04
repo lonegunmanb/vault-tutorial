@@ -1,0 +1,71 @@
+# 第一步：启用 kubernetes auth 并配置 TokenReview
+
+Kubernetes auth 必须先启用并配置，Vault 才能接受 Pod 或 ServiceAccount 提交的 JWT；本实验选择显式提供 Kubernetes API server 地址、CA 证书以及用于调用 TokenReview API 的 reviewer token。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method]
+
+## 1.1 创建 reviewer ServiceAccount
+
+先创建一个专门给 Vault 调用 TokenReview 的 ServiceAccount： [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes]
+
+```bash
+kubectl create namespace vault-system
+kubectl create serviceaccount vault-reviewer -n vault-system
+```
+
+在启用 RBAC 的集群中，reviewer ServiceAccount 需要访问 TokenReview API；HashiCorp 文档示例使用内置 `system:auth-delegator` ClusterRole 授权。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes]
+
+```bash
+kubectl create clusterrolebinding vault-reviewer-tokenreview \
+  --clusterrole=system:auth-delegator \
+  --serviceaccount=vault-system:vault-reviewer
+```
+
+## 1.2 生成 reviewer JWT 与 Kubernetes 连接参数
+
+本实验使用 `kubectl create token` 为 reviewer ServiceAccount 生成一枚短生命期 token；Kubernetes 官方推荐 TokenRequest 这类短生命期 token，因为它可以自动过期并避免长期 bearer token 的泄露风险。 [来源：Kubernetes 官方文档《Service Accounts》§How to use service accounts / Manually retrieve ServiceAccount credentials；Kubernetes 官方文档《Service Accounts》§How to use service accounts / Note]
+
+```bash
+REVIEWER_JWT=$(kubectl create token vault-reviewer -n vault-system --duration=1h)
+K8S_HOST=$(kubectl config view --minify -o 'jsonpath={.clusters[0].cluster.server}')
+K8S_CA_CERT=/tmp/k8s-ca.crt
+kubectl config view --raw --minify -o 'jsonpath={.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$K8S_CA_CERT"
+
+echo "$K8S_HOST"
+echo "$REVIEWER_JWT" | cut -c 1-40 && echo "..."
+ls -l "$K8S_CA_CERT"
+```
+
+`K8S_HOST` 是 Kubernetes API server 的地址，`K8S_CA_CERT` 是保存 CA 证书的本地文件路径，`REVIEWER_JWT` 是 Vault 调用 TokenReview API 时使用的 bearer token。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Configure method]
+
+## 1.3 启用 Kubernetes 认证方法
+
+默认挂载路径是 `auth/kubernetes/`，后续所有命令都按默认路径书写。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Authentication；HashiCorp Vault 文档《Kubernetes auth method》§Configuration]
+
+```bash
+vault auth enable kubernetes
+vault auth list | grep kubernetes
+```
+
+应看到一行类似 `kubernetes/    kubernetes    auth_xxxxx` 的输出；其中 accessor 后续会用于模板化策略。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Workflows / Working with templated policies]
+
+## 1.4 写入 `auth/kubernetes/config`
+
+把 reviewer JWT、API server 地址与 CA 证书写入配置端点： [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration]
+
+```bash
+vault write auth/kubernetes/config \
+  token_reviewer_jwt="$REVIEWER_JWT" \
+  kubernetes_host="$K8S_HOST" \
+  kubernetes_ca_cert=@"$K8S_CA_CERT"
+```
+
+回读配置时，Vault 不会回显 reviewer JWT 的明文，而是用 `token_reviewer_jwt_set` 表示是否已配置凭据。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Read config]
+
+```bash
+vault read auth/kubernetes/config
+```
+
+应看到 `token_reviewer_jwt_set    true`，并能看到 `kubernetes_host` 与 CA 相关配置。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Read config]
+
+## 1.5 这一步的核心闭环
+
+到这里，Vault 已经具备调用 Kubernetes TokenReview API 的能力；下一步将创建实际登录用的 `demo/myapp` ServiceAccount，并把它映射到一个 Vault role。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Login]

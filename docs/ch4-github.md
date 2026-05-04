@@ -1,11 +1,11 @@
 ---
-order: 43
-title: 4.4 GitHub 认证：用个人访问令牌登录 Vault
+order: 44
+title: 4.5 GitHub 认证：用个人访问令牌登录 Vault
 group: 第 4 章：认证方法体系 (Auth Methods)
 group_order: 40
 ---
 
-# 4.4 GitHub 认证：用个人访问令牌登录 Vault
+# 4.5 GitHub 认证：用个人访问令牌登录 Vault
 
 > **核心结论**：GitHub 认证方法（`github`）让运维 / 开发者**使用
 > 一枚 GitHub Personal Access Token（PAT）**登录 Vault——它属于

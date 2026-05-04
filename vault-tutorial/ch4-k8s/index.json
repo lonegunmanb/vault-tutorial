@@ -1,0 +1,43 @@
+{
+  "title": "Kubernetes 认证：TokenReview、ServiceAccount 约束与模板化策略",
+  "description": "在 Killercoda 预置的 kubeadm 单节点 Kubernetes 集群上运行 Vault 1.19.2 (Dev 模式)，亲手配置 auth/kubernetes：创建 reviewer ServiceAccount + system:auth-delegator，写入 Kubernetes API 连接配置，使用 myapp ServiceAccount Token 真实登录 Vault，验证 ServiceAccount 名称、namespace selector、audience 约束，并启用 annotation alias metadata + templated policy，让 Kubernetes 注解决定工作负载可读取的 Vault KV 路径。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 kubernetes auth 并配置 TokenReview",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "创建 myapp ServiceAccount 并登录 Vault",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "验证 ServiceAccount、namespace 与 audience 约束",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "使用注解 metadata 与模板化策略",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "kubernetes-kubeadm-1node"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
