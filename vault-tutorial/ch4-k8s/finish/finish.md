@@ -1,6 +1,6 @@
 # 恭喜完成 Kubernetes 认证实验！
 
-这一节你在真实 kubeadm 单节点集群上配置了 Vault Kubernetes auth method，并让 ServiceAccount JWT 通过 Kubernetes TokenReview 转换成 Vault token。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Login]
+这一节你在真实 kubeadm 单节点集群上配置了 Vault Kubernetes auth method，并让 ServiceAccount JWT 通过 Kubernetes TokenReview 转换成 Vault token。
 
 ## 本实验的核心收获
 
@@ -14,7 +14,7 @@
 | annotation metadata | `vault.hashicorp.com/alias-metadata-*` 注解可以进入 Vault alias metadata |
 | templated policy | Vault policy 可以引用 alias metadata 渲染工作负载专属 secret 路径 |
 
-这些结论对应 HashiCorp 文档中的配置、登录、role 参数与 templated policy 工作流。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuration；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role；HashiCorp Vault 文档《Kubernetes auth method》§Workflows / Working with templated policies]
+这些结论对应 HashiCorp 文档中的配置、登录、role 参数与 templated policy 工作流。
 
 ## 一张图总结本章
 
@@ -42,8 +42,8 @@ Vault role constraints:
 Vault token
 ```
 
-本图的主线是：Kubernetes 负责证明 JWT 是否属于某个仍然有效的 ServiceAccount，Vault 负责把该身份映射到自身 policy 与 token 生命周期。 [来源：HashiCorp Vault 文档《Kubernetes auth method》§Configuring kubernetes；HashiCorp Vault API 文档《Kubernetes auth method (API)》§Login]
+本图的主线是：Kubernetes 负责证明 JWT 是否属于某个仍然有效的 ServiceAccount，Vault 负责把该身份映射到自身 policy 与 token 生命周期。
 
 ## 回到正文
 
-回到 [4.4 章正文](/ch4-k8s) 后，建议重点复查 §5 的 role 约束、§8 的短生命期 token 策略、§10 的 annotation alias metadata 与 templated policy；这三处是生产落地时最容易影响权限边界的配置点。 [来源：HashiCorp Vault API 文档《Kubernetes auth method (API)》§Create/Update role；HashiCorp Vault 文档《Kubernetes auth method》§How to work with short-lived Kubernetes tokens；HashiCorp Vault 文档《Kubernetes auth method》§Workflows / Working with templated policies]
+回到 [4.4 章正文](/ch4-k8s) 后，建议重点复查 §5 的 role 约束、§8 的短生命期 token 策略、§10 的 annotation alias metadata 与 templated policy；这三处是生产落地时最容易影响权限边界的配置点。

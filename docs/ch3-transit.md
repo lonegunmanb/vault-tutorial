@@ -427,27 +427,27 @@ Transit 的几条**默认就严**的安全设定：
 
 ## 11. BYOK 导入与 Key Wrapping
 
-Transit 也支持 **Bring Your Own Key (BYOK)**：也就是把 Vault 外部生成的 key material 导入 Transit，让这把外部 key 后续像普通 Transit key 一样参与加密 / 解密。官方 key wrapping guide 的定位不是讲 `rewrap` 旧密文，而是讲“导入外部 key 之前，如何把目标 key 包装成 Vault 可接受的 import ciphertext”。[来源：key-wrapping-guide.mdx「import」开篇：BYOK allows users to import keys generated outside Vault；document describes wrapping an externally-generated key for import]
+Transit 也支持 **Bring Your Own Key (BYOK)**：也就是把 Vault 外部生成的 key material 导入 Transit，让这把外部 key 后续像普通 Transit key 一样参与加密 / 解密。官方 key wrapping guide 的定位不是讲 `rewrap` 旧密文，而是讲“导入外部 key 之前，如何把目标 key 包装成 Vault 可接受的 import ciphertext”。
 
-第一步仍然是启用 Transit 引擎；如果引擎已经启用，可以跳过这步。[来源：key-wrapping-guide.mdx「Mount the secrets engine」段]
+第一步仍然是启用 Transit 引擎；如果引擎已经启用，可以跳过这步。
 
 ```bash
 # 来源：key-wrapping-guide.mdx「Mount the secrets engine」命令示例
 vault secrets enable transit
 ```
 
-然后读取 Transit 的 wrapping public key：`transit/wrapping_key` 会返回一把 4096-bit RSA 公钥。后续流程取决于目标 key 存在软件里，还是存在 HSM 里。[来源：key-wrapping-guide.mdx「Retrieve the transit wrapping key」段：vault read transit/wrapping_key；This returns a 4096-bit RSA key；steps depend on software or HSM]
+然后读取 Transit 的 wrapping public key：`transit/wrapping_key` 会返回一把 4096-bit RSA 公钥。后续流程取决于目标 key 存在软件里，还是存在 HSM 里。
 
 ```bash
 # 来源：key-wrapping-guide.mdx「Retrieve the transit wrapping key」命令示例
 vault read transit/wrapping_key
 ```
 
-软件场景下，官方 Go 示例的核心流程是：解析 PEM 格式的 wrapping key，生成一把临时 AES key，用 AES-KWP 包装目标 key，再用 Transit 的 RSA wrapping key 通过 RSA-OAEP 包装这把临时 AES key。[来源：key-wrapping-guide.mdx「Software example (Go)」段：parse wrapping key with encoding/pem and crypto/x509；generate an ephemeral AES key；Tink KWP wraps target key；rsa.EncryptOAEP wraps ephemeral AES key]
+软件场景下，官方 Go 示例的核心流程是：解析 PEM 格式的 wrapping key，生成一把临时 AES key，用 AES-KWP 包装目标 key，再用 Transit 的 RSA wrapping key 通过 RSA-OAEP 包装这把临时 AES key。
 
-临时 AES key 用完后要安全删除；官方示例特别提醒这一点，因为它短暂持有“能解开目标 key 包装层”的能力。[来源：key-wrapping-guide.mdx「Software example (Go)」note：Be sure to securely delete the ephemeral AES key once it has been used]
+临时 AES key 用完后要安全删除；官方示例特别提醒这一点，因为它短暂持有“能解开目标 key 包装层”的能力。
 
-软件包装完成后，把 `wrappedAESKey` 和 `wrappedTargetKey` 拼接成一个字节串：最左边 4096 bits 是被 RSA-OAEP 包过的 AES key，剩余部分是被 AES-KWP 包过的目标 key；最后把整个字节串 base64 编码，作为 import 的 `ciphertext` 参数。[来源：key-wrapping-guide.mdx「Software example (Go)」段：concatenate wrapped keys；leftmost 4096 bits wrapped AES key；remaining bits wrapped target key；base64-encode]
+软件包装完成后，把 `wrappedAESKey` 和 `wrappedTargetKey` 拼接成一个字节串：最左边 4096 bits 是被 RSA-OAEP 包过的 AES key，剩余部分是被 AES-KWP 包过的目标 key；最后把整个字节串 base64 编码，作为 import 的 `ciphertext` 参数。
 
 ```bash
 # 来源：key-wrapping-guide.mdx「Software example (Go)」import 命令示例
@@ -457,23 +457,23 @@ vault write transit/keys/test-key/import \
   type=$KEY_TYPE
 ```
 
-这里的 `hash_function` 要和包装临时 AES key 时 RSA-OAEP 使用的 hash 一致；官方 Go 示例用 `SHA256`，也说明 Vault 支持 `SHA1`、`SHA384`、`SHA512` 等选项。[来源：key-wrapping-guide.mdx「Software example (Go)」段：example uses SHA256；Vault also supports SHA1, SHA384, or SHA512；hash function must be provided when importing]
+这里的 `hash_function` 要和包装临时 AES key 时 RSA-OAEP 使用的 hash 一致；官方 Go 示例用 `SHA256`，也说明 Vault 支持 `SHA1`、`SHA384`、`SHA512` 等选项。
 
-HSM 场景下，官方以 AWS CloudHSM 为例：先把 Transit 的 wrapping public key 写入 HSM，形成一个可用于 wrap 的 RSA public key object；如果使用别的 HSM 工具，也要确保 wrapping key 的用途包含 `CKA_WRAP`。[来源：key-wrapping-guide.mdx「AWS CloudHSM example」段：write transit wrapping key to HSM；importPubKey；usage includes CKA_WRAP]
+HSM 场景下，官方以 AWS CloudHSM 为例：先把 Transit 的 wrapping public key 写入 HSM，形成一个可用于 wrap 的 RSA public key object；如果使用别的 HSM 工具，也要确保 wrapping key 的用途包含 `CKA_WRAP`。
 
 ```bash
 # 来源：key-wrapping-guide.mdx「AWS CloudHSM example」importPubKey 命令示例
 importPubKey -f wrapping_key.pem -l "vault-transit-wrapping-key"
 ```
 
-之后在 HSM 内用 wrapping key 包目标 key；AWS CloudHSM 示例里的 `wrapKey -noheader ... -m 7` 使用 `CKM_AES_RSA_KEY_WRAP` 机制，`-t 3` 表示 `SHA256`，`-out ciphertext.key` 输出二进制包装结果。[来源：key-wrapping-guide.mdx「AWS CloudHSM example」wrapKey 段：wrap target key using wrapping key；-m 7 corresponds to CKM_AES_RSA_KEY_WRAP；-t 3 specifies SHA256；output ciphertext.key；noheader removes AWS-specific header]
+之后在 HSM 内用 wrapping key 包目标 key；AWS CloudHSM 示例里的 `wrapKey -noheader ... -m 7` 使用 `CKM_AES_RSA_KEY_WRAP` 机制，`-t 3` 表示 `SHA256`，`-out ciphertext.key` 输出二进制包装结果。
 
 ```bash
 # 来源：key-wrapping-guide.mdx「AWS CloudHSM example」wrapKey 命令示例
 wrapKey -noheader -k 1 -w 2 -t 3 -m 7 -out ciphertext.key
 ```
 
-HSM 输出通常是二进制文件，交给 Vault 前同样需要 base64 编码，再把结果作为 `ciphertext` 传给 `transit/keys/<name>/import`；导入完成后，这把 key 就可以像其它 Transit key 一样使用。[来源：key-wrapping-guide.mdx「AWS CloudHSM example」导入段：binary output needs base64-encoded；vault write transit/keys/test-key/import；Once imported, it can be used like any other transit key]
+HSM 输出通常是二进制文件，交给 Vault 前同样需要 base64 编码，再把结果作为 `ciphertext` 传给 `transit/keys/<name>/import`；导入完成后，这把 key 就可以像其它 Transit key 一样使用。
 
 ```bash
 # 来源：key-wrapping-guide.mdx「AWS CloudHSM example」base64 与 import 命令示例
@@ -484,7 +484,7 @@ vault write transit/keys/test-key/import \
   type=$KEY_TYPE
 ```
 
-这套流程的重点是：Vault 不要求你把外部 key material 明文发给它，而是先用 Transit 的 wrapping public key 和约定的包装格式构造 `ciphertext`，再走 import endpoint；软件 key 与 HSM key 的差别主要在“包装动作由谁执行”。[来源：key-wrapping-guide.mdx「Software example (Go)」与「AWS CloudHSM example」整体流程：software uses Go crypto/Tink；HSM uses key_mgmt_util；both produce base64 ciphertext for transit/keys/test-key/import]
+这套流程的重点是：Vault 不要求你把外部 key material 明文发给它，而是先用 Transit 的 wrapping public key 和约定的包装格式构造 `ciphertext`，再走 import endpoint；软件 key 与 HSM key 的差别主要在“包装动作由谁执行”。
 
 ---
 
