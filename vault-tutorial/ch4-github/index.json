@@ -1,0 +1,46 @@
+{
+  "title": "GitHub 认证完整动手 (Prism + Nginx + 自签证书 + hosts 劫持搭建假 GitHub)",
+  "description": "在 Dev 模式 Vault (1.19.2) 上完成 GitHub 认证：(1) 用 Prism 4.10.5 mock GitHub 的几条 API、Nginx 在 :443 上做 TLS 反向代理、自签证书 CN=api.github.com 安装到 /usr/local/share/ca-certificates、/etc/hosts 把 api.github.com 重定向到 127.0.0.1——搭建一个 Vault 完全无法分辨真伪的 'api.github.com' (2) enable github auth、写入 organization=hashicorp、观察 Vault 实时 TOFU 把 organization_id=761456 学回 storage (3) 编写 dev-policy、map team dev → dev-policy，vault login -method=github 完整执行登录链路调用、签发携带 username/org/policies 的 token (4) 修改 mock spec 构造跨 org 失败 / team 缺失 / org rename 等失败现场，最后 disable auth 验证级联吊销。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "搭假 GitHub：自签证书 + hosts 劫持 + Prism + Nginx TLS",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "启用 github auth、TOFU 学回 organization_id",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "team / user 双映射 + 真实登录、看 token metadata",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "失败现场：跨 org / 缺 team / org 不存在 + 级联吊销",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"},
+        {"file": "github-mock.yaml", "target": "/root", "chmod": "+r"},
+        {"file": "openssl-san.cnf", "target": "/root", "chmod": "+r"},
+        {"file": "nginx-fakegh.conf", "target": "/root", "chmod": "+r"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

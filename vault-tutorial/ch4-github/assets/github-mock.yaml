@@ -1,0 +1,175 @@
+openapi: 3.0.3
+info:
+  title: GitHub API (mock subset for Vault github auth)
+  version: 1.0.0
+servers:
+  - url: https://api.github.com
+paths:
+  /orgs/{org}:
+    get:
+      operationId: getOrg
+      parameters:
+        - name: org
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.github.v3+json:
+              example:
+                login: hashicorp
+                id: 761456
+                node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                url: https://api.github.com/orgs/hashicorp
+                type: Organization
+            application/json:
+              example:
+                login: hashicorp
+                id: 761456
+                node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                url: https://api.github.com/orgs/hashicorp
+                type: Organization
+  /user:
+    get:
+      operationId: getAuthenticatedUser
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.github.v3+json:
+              example:
+                login: testuser
+                id: 1001
+                node_id: MDQ6VXNlcjEwMDE=
+                url: https://api.github.com/users/testuser
+                type: User
+                site_admin: false
+            application/json:
+              example:
+                login: testuser
+                id: 1001
+                node_id: MDQ6VXNlcjEwMDE=
+                url: https://api.github.com/users/testuser
+                type: User
+                site_admin: false
+  /user/orgs:
+    get:
+      operationId: listAuthenticatedUserOrgs
+      parameters:
+        - name: per_page
+          in: query
+          schema: { type: integer }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.github.v3+json:
+              example:
+                - login: hashicorp
+                  id: 761456
+                  node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                  url: https://api.github.com/orgs/hashicorp
+            application/json:
+              example:
+                - login: hashicorp
+                  id: 761456
+                  node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                  url: https://api.github.com/orgs/hashicorp
+  /user/teams:
+    get:
+      operationId: listAuthenticatedUserTeams
+      parameters:
+        - name: per_page
+          in: query
+          schema: { type: integer }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/vnd.github.hellcat-preview+json:
+              example:
+                - id: 2001
+                  node_id: MDQ6VGVhbTIwMDE=
+                  name: dev
+                  slug: dev
+                  description: Development team
+                  permission: pull
+                  url: https://api.github.com/teams/2001
+                  organization:
+                    login: hashicorp
+                    id: 761456
+                    node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                    url: https://api.github.com/orgs/hashicorp
+                - id: 2002
+                  node_id: MDQ6VGVhbTIwMDI=
+                  name: ops
+                  slug: ops
+                  description: Operations team
+                  permission: pull
+                  url: https://api.github.com/teams/2002
+                  organization:
+                    login: hashicorp
+                    id: 761456
+                    node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                    url: https://api.github.com/orgs/hashicorp
+            application/vnd.github.v3+json:
+              example:
+                - id: 2001
+                  node_id: MDQ6VGVhbTIwMDE=
+                  name: dev
+                  slug: dev
+                  description: Development team
+                  permission: pull
+                  url: https://api.github.com/teams/2001
+                  organization:
+                    login: hashicorp
+                    id: 761456
+                    node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                    url: https://api.github.com/orgs/hashicorp
+                - id: 2002
+                  node_id: MDQ6VGVhbTIwMDI=
+                  name: ops
+                  slug: ops
+                  description: Operations team
+                  permission: pull
+                  url: https://api.github.com/teams/2002
+                  organization:
+                    login: hashicorp
+                    id: 761456
+                    node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                    url: https://api.github.com/orgs/hashicorp
+            application/json:
+              example:
+                - id: 2001
+                  node_id: MDQ6VGVhbTIwMDE=
+                  name: dev
+                  slug: dev
+                  description: Development team
+                  permission: pull
+                  url: https://api.github.com/teams/2001
+                  organization:
+                    login: hashicorp
+                    id: 761456
+                    node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                    url: https://api.github.com/orgs/hashicorp
+                - id: 2002
+                  node_id: MDQ6VGVhbTIwMDI=
+                  name: ops
+                  slug: ops
+                  description: Operations team
+                  permission: pull
+                  url: https://api.github.com/teams/2002
+                  organization:
+                    login: hashicorp
+                    id: 761456
+                    node_id: MDEyOk9yZ2FuaXphdGlvbjc2MTQ1Ng==
+                    url: https://api.github.com/orgs/hashicorp

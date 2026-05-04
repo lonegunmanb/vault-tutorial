@@ -63,7 +63,9 @@ export default defineConfig({
            collapsed: false,
            items: [
              { text: '4.1 认证方法（Auth Methods）总览：身份的入口', link: '/ch4-auth-basic' },
-             { text: '4.2 AppRole 认证：机器登录 Vault 的"用户名/密码"', link: '/ch4-app-role' }
+             { text: '4.2 AppRole 认证：机器登录 Vault 的"用户名/密码"', link: '/ch4-app-role' },
+             { text: '4.3 AWS 认证：用云平台身份直接登录 Vault', link: '/ch4-aws' },
+             { text: '4.4 GitHub 认证：用个人访问令牌登录 Vault', link: '/ch4-github' }
            ]
          },
          {
