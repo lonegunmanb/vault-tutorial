@@ -73,25 +73,30 @@ tail -5 /var/log/nginx/access.log
 > - `ua=go-github`——SDK 内置 User-Agent，与上一步 curl 留下的
 >   `ua=curl/...` 形成鲜明对比
 
-## 2.5 反演（一）：故意指定一个不存在的 org
+## 2.5 反演（一）：故意指定一个不存在的 org（mock 行为说明）
 
 [4.4 章 §4](/ch4-github) 中提到："写 `config` 时如果填的
 `organization` 在 GitHub 上**不存在**，Vault 会直接拒绝，错误信息
-形如 `unable to fetch the organization_id`"——我们的 mock 仅为
-`hashicorp` 这一个 org 准备了 `id`。先临时删除再尝试：
+形如 `unable to fetch the organization_id`"。在真实 GitHub 上，
+`GET /orgs/nonexistent-org-xyz` 会返回 404，Vault 会把错误透出来。
+
+但是——本实验用的 Prism mock spec 仅声明了 `200` 响应、并对**任意**
+org 名都返回同一份 example `{"login":"hashicorp","id":761456,...}`
+（spec 中 path 参数 `{org}` 未参与区分），因此下面这两条命令在本
+环境里**都会成功**：
 
 ```bash
 vault delete auth/github/config 2>/dev/null || true
 vault write auth/github/config organization=hashicorp
-# 上面这条应再次成功；下面这条按理应失败：
+# 在真 GitHub 上下面这条会失败；在本实验 mock 下也会成功
+# 因为 mock 对任何 org 名都返回同一份 example
 vault write auth/github/config organization=nonexistent-org-xyz
+vault read auth/github/config | grep -E 'organization|base_url'
 ```
 
-> 注意：本实验的 mock 对**任何** org 名都返回同一份
-> `{"login":"hashicorp","id":761456,...}`（spec 中 path 参数未参与
-> 区分，仅返回 example）——因此严格意义上 mock 并不会拒绝。真正的
-> 失败现象会在 Step 4 出现——那一步会修改 mock spec，让 `/orgs/{org}`
-> 在某些条件下返回 404。
+`organization_id` 仍然会被学到 `761456`——这是 mock 的简化行为，
+不是 Vault 行为。Step 4 会通过修改 mock spec 让 `/orgs/{org}` 在
+特定条件下返回错误，到那时才能在本地复现真实失败现场。
 
 把 config 还原为 `hashicorp`：
 
