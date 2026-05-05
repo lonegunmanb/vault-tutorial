@@ -20,11 +20,25 @@ fi
 
 source /root/setup-common.sh
 
-echo "Installing Vault and client tools..."
-install_vault &
-INSTALL_VAULT_PID=$!
+install_lab_packages() {
+  for attempt in 1 2 3 4 5; do
+    echo "Installing client tools, attempt $attempt/5..."
+    if DEBIAN_FRONTEND=noninteractive apt-get update -qq \
+      && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq postgresql-client sshpass openssh-client; then
+      return 0
+    fi
+    echo "Client tool installation failed on attempt $attempt; retrying in 5 seconds..."
+    sleep 5
+  done
+  echo "ERROR: failed to install jq, postgresql-client, sshpass and openssh-client."
+  return 1
+}
 
-timeout 240s bash -c 'apt-get update -qq && apt-get install -y -qq jq postgresql-client sshpass openssh-client' > /dev/null
+echo "Installing Vault..."
+install_vault
+
+echo "Installing client tools..."
+install_lab_packages
 
 if ! command -v docker > /dev/null 2>&1; then
   echo "ERROR: docker is not available, but this lab needs a local PostgreSQL container for lease exercises."
@@ -35,7 +49,6 @@ echo "Pulling PostgreSQL image and starting database..."
 timeout 240s docker pull postgres:16 > /dev/null
 start_postgres
 
-wait "$INSTALL_VAULT_PID"
 start_vault_dev
 
 export VAULT_ADDR='http://127.0.0.1:8200'
