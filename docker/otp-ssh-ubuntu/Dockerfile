@@ -56,8 +56,13 @@ RUN curl --connect-timeout 10 --max-time 120 -fsSL \
     && chmod +x /usr/local/bin/vault-ssh-helper \
     && rm -f /tmp/vault-ssh-helper.zip
 
-RUN useradd -m -s /bin/bash vaultlab && passwd -d vaultlab \
-    && useradd -m -s /bin/bash ubuntu && passwd -d ubuntu
+RUN set -eux; \
+    for user in vaultlab ubuntu; do \
+        if ! id "$user" > /dev/null 2>&1; then \
+            useradd -m -s /bin/bash "$user"; \
+        fi; \
+        passwd -d "$user"; \
+    done
 
 RUN mkdir -p /var/run/sshd && ssh-keygen -A
 
