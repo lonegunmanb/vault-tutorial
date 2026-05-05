@@ -96,6 +96,37 @@ PY
   return 1
 }
 
+ensure_postgres_readonly_role() {
+  local pg_log="/tmp/ch5-other-commands-pg-role.log"
+
+  echo "Ensuring PostgreSQL read-only role exists..."
+  for attempt in 1 2 3 4 5; do
+    if docker exec -i learn-postgres psql -U root -d postgres -v ON_ERROR_STOP=1 <<'SQL' > "$pg_log" 2>&1
+DO
+$do$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'ro') THEN
+    CREATE ROLE ro NOINHERIT;
+  END IF;
+END
+$do$;
+GRANT USAGE ON SCHEMA public TO ro;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO ro;
+SQL
+    then
+      echo "PostgreSQL read-only role is ready."
+      return 0
+    fi
+
+    echo "Read-only role setup failed on attempt $attempt; retrying in 2 seconds..."
+    sleep 2
+  done
+
+  echo "ERROR: failed to prepare PostgreSQL read-only role; recent psql log follows:"
+  tail -40 "$pg_log" 2>/dev/null || true
+  return 1
+}
+
 if ! command -v docker > /dev/null 2>&1; then
   echo "ERROR: docker is not available, but this lab needs a local PostgreSQL container for lease exercises."
   fail_setup
@@ -115,6 +146,7 @@ wait "$PULL_POSTGRES_PID"
 
 echo "Starting PostgreSQL database..."
 start_postgres
+ensure_postgres_readonly_role
 
 start_vault_dev
 
