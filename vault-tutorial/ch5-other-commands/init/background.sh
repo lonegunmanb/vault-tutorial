@@ -21,23 +21,37 @@ fi
 source /root/setup-common.sh
 
 install_lab_packages() {
-  for attempt in 1 2 3 4 5; do
-    echo "Installing client tools, attempt $attempt/5..."
-    if DEBIAN_FRONTEND=noninteractive apt-get update -qq \
-      && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq postgresql-client sshpass openssh-client; then
+  if command -v jq > /dev/null 2>&1 \
+    && command -v psql > /dev/null 2>&1 \
+    && command -v sshpass > /dev/null 2>&1 \
+    && command -v ssh > /dev/null 2>&1 \
+    && command -v unzip > /dev/null 2>&1; then
+    echo "Client tools and prerequisites are already installed."
+    return 0
+  fi
+
+  for attempt in 1 2; do
+    echo "Installing client tools and prerequisites, attempt $attempt/2..."
+    if timeout 45s env DEBIAN_FRONTEND=noninteractive apt-get \
+        -o DPkg::Lock::Timeout=30 \
+        -o Acquire::Retries=3 \
+        update -qq \
+      && timeout 90s env DEBIAN_FRONTEND=noninteractive apt-get \
+        -o DPkg::Lock::Timeout=30 \
+        -o Acquire::Retries=3 \
+        install -y -qq jq postgresql-client sshpass openssh-client unzip; then
       return 0
     fi
-    echo "Client tool installation failed on attempt $attempt; retrying in 5 seconds..."
-    sleep 5
+    if [ "$attempt" != "2" ]; then
+      echo "Client tool installation failed on attempt $attempt; retrying in 5 seconds..."
+      sleep 5
+    fi
   done
-  echo "ERROR: failed to install jq, postgresql-client, sshpass and openssh-client."
+  echo "ERROR: failed to install jq, postgresql-client, sshpass, openssh-client and unzip."
   return 1
 }
 
-echo "Installing Vault..."
-install_vault
-
-echo "Installing client tools..."
+echo "Installing client tools and prerequisites..."
 install_lab_packages
 
 if ! command -v docker > /dev/null 2>&1; then
@@ -45,8 +59,16 @@ if ! command -v docker > /dev/null 2>&1; then
   fail_setup
 fi
 
-echo "Pulling PostgreSQL image and starting database..."
-timeout 240s docker pull postgres:16 > /dev/null
+echo "Installing Vault and pulling PostgreSQL image..."
+install_vault &
+INSTALL_VAULT_PID=$!
+timeout 240s docker pull postgres:16 > /dev/null &
+PULL_POSTGRES_PID=$!
+
+wait "$INSTALL_VAULT_PID"
+wait "$PULL_POSTGRES_PID"
+
+echo "Starting PostgreSQL database..."
 start_postgres
 
 start_vault_dev
