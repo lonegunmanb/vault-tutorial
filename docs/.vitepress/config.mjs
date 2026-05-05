@@ -80,7 +80,9 @@ export default defineConfig({
              { text: '5.2 认证与生命周期管控：login, auth, token 复杂参数体系', link: '/ch5-auth-token-lifecycle' },
              { text: '5.3 访问策略与底层引擎挂载管理：policy, secrets 生命周期运维', link: '/ch5-policy-secrets' },
              { text: '5.4 静态 KV 引擎专属高级指令：get, put, metadata 管理与历史版本 rollback', link: '/ch5-kv-commands' },
-             { text: '5.7 底层引擎挂载点无损热迁移（Mount Migration）技术剖析', link: '/ch5-mount-migration' }
+             { text: '5.5 另一些重要命令：lease / unwrap / ssh / path-help', link: '/ch5-other-commands' },
+             { text: '5.7 轻量级代理服务指令：vault proxy 的配置文件解析与进程调试', link: '/ch5-vault-proxy' },
+             { text: '5.8 底层引擎挂载点无损热迁移（Mount Migration）技术剖析', link: '/ch5-mount-migration' }
            ]
          }
         ],

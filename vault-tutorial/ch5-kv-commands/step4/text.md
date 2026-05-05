@@ -20,7 +20,7 @@ vault kv delete -mount=secret training/delete-demo
 vault kv get -mount=secret training/delete-demo
 ```
 
-`get` 预计不再返回最新版本的数据，因为最新版本已经被标记为删除。
+`get` 仍会显示第 3 版的 Metadata，并在 `deletion_time` 中标出删除时间；但不再显示 Data 区块或 `value`，因为最新版本已经被标记为删除。
 
 恢复第 3 版：
 
@@ -36,7 +36,7 @@ vault kv delete -mount=secret -versions=2 training/delete-demo
 vault kv get -mount=secret -version=2 training/delete-demo
 ```
 
-第 2 版预计无法被普通 `get` 返回。再执行恢复：
+此时读取第 2 版应只看到带删除时间的 Metadata，不会看到 Data 中的 `value`。再执行恢复：
 
 ```bash
 vault kv undelete -mount=secret -versions=2 training/delete-demo

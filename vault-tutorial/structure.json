@@ -33,6 +33,8 @@
     { "path": "ch5-auth-token-lifecycle" },
     { "path": "ch5-policy-secrets" },
     { "path": "ch5-kv-commands" },
+    { "path": "ch5-other-commands" },
+    { "path": "ch5-vault-proxy" },
     { "path": "ch5-mount-migration" }
   ]
 }

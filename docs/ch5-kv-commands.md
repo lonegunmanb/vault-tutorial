@@ -39,8 +39,6 @@ group_order: 50
 
 ![KV v2 的挂载路径与真实 API 路径像档案柜抽屉和内部夹层](/images/ch5-kv-commands/kv-mount-data-metadata-cabinet.png)
 
-绘图提示词：手绘风格，真实办公室档案柜比喻，一个大抽屉标签写着 secret，抽屉打开后内部有 data 和 metadata 两个夹层；左侧是一张命令卡片写着 vault kv get -mount=secret creds，右侧是一张较细的 API 路径卡片写着 secret/data/creds；画面应像课程讲义插图，线条清晰，色彩克制，避免卡通化。
-
 ---
 
 ## 2. `enable-versioning`：把已有 KV v1 挂载点切换为版本化 KV
@@ -75,9 +73,9 @@ KV v2 的 `get` 输出包含 Metadata 和 Data 两部分，Metadata 中有版本
 
 ## 4. KV v2 的删除不是一种动作，而是三种状态管理
 
-KV v2 把删除拆成三类不同强度的动作。`vault kv delete` 会删除给定路径的数据；如果使用 KV v2，版本化数据不会被完全移除，而是被标记为 deleted，普通 `get` 不再返回该版本。
+KV v2 把删除拆成三类不同强度的动作。`vault kv delete` 会删除给定路径的数据；如果使用 KV v2，版本化数据不会被完全移除，而是被标记为 deleted。此时 `get` 可能仍显示带 `deletion_time` 的 Metadata，但不会返回该版本的 Data 内容。
 
-`vault kv delete -mount=secret creds` 删除的是最新版本；`vault kv delete -mount=secret -versions=11 creds` 删除的是指定版本。官方文档注明，`-versions` 选项只适用于 KV v2，并且被删除的版本化数据不会物理删除，只是不再被普通 get 请求返回。
+`vault kv delete -mount=secret creds` 删除的是最新版本；`vault kv delete -mount=secret -versions=11 creds` 删除的是指定版本。官方文档注明，`-versions` 选项只适用于 KV v2，并且被删除的版本化数据不会物理删除，只是不再通过普通 `get` 请求返回 Data 内容。
 
 `vault kv undelete` 用于撤销指定版本的软删除状态，使该版本的数据重新可以被 `get` 返回；它不能恢复已经被 `destroy` 永久移除的数据。该命令只适用于 KV v2，不适用于 KV v1。
 
@@ -93,8 +91,6 @@ KV v2 把删除拆成三类不同强度的动作。`vault kv delete` 会删除�
 | `vault kv metadata delete` | 所有版本和 metadata | 不可恢复 | 彻底下线某条 key |
 
 ![KV v2 删除三态像档案上的便签、碎纸和注销登记本](/images/ch5-kv-commands/kv-delete-states-office-analogy.png)
-
-绘图提示词：手绘风格，真实办公室档案管理比喻，左侧是一份文件贴上“暂不借阅”的便签表示 soft delete，中间是某一页被碎纸机销毁表示 destroy 指定版本，右侧是档案目录卡和整份档案都被盖“注销”章表示 metadata delete；画面应清楚表达三种删除强度从轻到重，纸张、档案盒、印章都用真实物件风格。
 
 ---
 

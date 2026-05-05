@@ -1,0 +1,47 @@
+{
+  "title": "另一些重要命令：lease / unwrap / ssh / path-help",
+  "description": "在一个已解封的 Vault dev server 上，实战演练四类容易被忽略但非常实用的 CLI 命令：path-help 查看路径内置帮助，lease 管理动态机密租约，unwrap 取出响应封装内容，ssh 使用 SSH 机密引擎生成登录凭据",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "用 path-help 读取当前路由帮助",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "管理单条动态机密 lease",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "按前缀批量撤销 lease",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "unwrap 一次性取出封装响应",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "用 vault ssh 生成 SSH OTP 凭据",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

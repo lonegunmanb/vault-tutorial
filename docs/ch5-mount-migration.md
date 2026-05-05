@@ -1,11 +1,11 @@
 ---
-order: 57
-title: 5.7 底层引擎挂载点无损热迁移（Mount Migration）技术剖析
+order: 58
+title: 5.8 底层引擎挂载点无损热迁移（Mount Migration）技术剖析
 group: 第 5 章：现代命令行工具与高级管理实战 (CLI)
 group_order: 50
 ---
 
-# 5.7 底层引擎挂载点无损热迁移（Mount Migration）技术剖析
+# 5.8 底层引擎挂载点无损热迁移（Mount Migration）技术剖析
 
 > **核心结论**：`vault secrets move` / `vault auth move`（底层 API
 > `POST /sys/remount`）能把一个机密引擎或认证方法连同其所有数据、角色、

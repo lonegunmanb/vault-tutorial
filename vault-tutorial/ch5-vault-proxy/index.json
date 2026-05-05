@@ -1,0 +1,43 @@
+{
+  "title": "Vault Proxy 配置、Auto-auth 与 API 代理",
+  "description": "在一个已解封的 Vault dev server 上，实战演练 vault proxy：阅读配置文件、通过 AppRole Auto-auth 自动取得 token、使用本地 listener 代理 Vault API 请求，并观察请求头保护、强制 token 模式、缓存清理 API 与日志排错方法",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "阅读 Proxy 配置与预置身份",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "启动 vault proxy 并观察 Auto-auth",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "通过 Proxy 代理 Vault API 请求",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "缓存清理、日志与错误定位",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
