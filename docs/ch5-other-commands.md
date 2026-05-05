@@ -100,7 +100,7 @@ vault unwrap "$WRAP_TOKEN"
 
 `vault ssh` 会使用某个 SSH secrets engine 的角色生成登录凭据，并自动建立到目标主机的 SSH 连接。官方文档列出三种认证模式：`ca`、`dynamic` 与 `otp`，对应 `-mode` 选项的可选值。
 
-OTP 模式的官方示例为 `vault ssh -mode=otp -role=my-role user@1.2.3.4`，并说明如果要完整自动化该模式，需要本机安装 `sshpass`。在教学环境中，可以配合 `-no-exec` 只打印生成的凭据而不真正建立连接，这样便于观察 Vault 与 SSH 引擎之间的交互。
+OTP 模式的官方示例为 `vault ssh -mode=otp -role=my-role user@1.2.3.4`，并说明如果要完整自动化该模式，需要本机安装 `sshpass`。在教学环境中，可以用容器运行一个配置了 `vault-ssh-helper` 的 sshd，让 `vault ssh` 真正完成“申请 OTP、调用 SSH、目标主机回调 Vault 校验 OTP、登录成功”的完整链路。
 
 CA 模式的官方示例为 `vault ssh -mode=ca -role=my-role user@1.2.3.4`。该模式通常使用本机公钥向 Vault 申请签名，常用选项包括 `-public-key-path` 与 `-private-key-path`；文档说明私钥路径必须对应要发送给 Vault 签名的公钥路径。
 
@@ -108,10 +108,10 @@ CA 模式的官方示例为 `vault ssh -mode=ca -role=my-role user@1.2.3.4`。�
 
 CA 模式还可以让 Vault 辅助生成用于主机密钥校验的 `known_hosts` 文件。设置 `-host-key-mount-point` 后，Vault 会使用提供的 SSH secrets engine 挂载点为主机密钥校验生成委派信息；文档说明这会强制 strict key host checking，并忽略自定义 user known hosts file。
 
-下面示例展示两类常见命令形态。第一条使用 OTP 模式并避免真正连接，适合在课程中观察生成结果；第二条展示 CA 模式下显式传入公钥和私钥路径的写法。
+下面示例展示两类常见命令形态。第一条使用 OTP 模式连接一个目标主机；第二条展示 CA 模式下显式传入公钥和私钥路径的写法。
 
 ```bash
-vault ssh -mode=otp -mount-point=ssh-otp -role=training-otp -no-exec vaultlab@127.0.0.1
+vault ssh -mode=otp -mount-point=ssh-otp -role=training-otp vaultlab@172.17.0.2
 
 vault ssh \
   -mode=ca \
@@ -146,12 +146,12 @@ vault path-help sys/leases/lookup
 
 ## 6. 互动实验
 
-本节配套实验会在一个 Vault dev server 中完成五组操作：使用 `path-help` 读取当前后端的路径说明；生成 PostgreSQL 动态凭据并用 `lease lookup`、`lease renew`、`lease revoke` 管理它的生命周期；用 `-prefix` 和 `-sync` 批量回收同一前缀下的租约；创建 response wrapping token 并用 `vault unwrap` 取出内容；最后配置一个最小 SSH OTP 角色，用 `vault ssh -no-exec` 观察 Vault 为 SSH 登录生成的凭据。
+本节配套实验会在一个 Vault dev server 中完成五组操作：使用 `path-help` 读取当前后端的路径说明；生成 PostgreSQL 动态凭据并用 `lease lookup`、`lease renew`、`lease revoke` 管理它的生命周期；用 `-prefix` 和 `-sync` 批量回收同一前缀下的租约；创建 response wrapping token 并用 `vault unwrap` 取出内容；最后启动一个 SSH 目标容器，用 `vault ssh` 申请 OTP 并完成真实登录。
 
 - **Step 1**：使用 `vault path-help` 查看后端和具体路径的内置帮助。
 - **Step 2**：读取动态数据库凭据，并对其 lease 执行查询、续期与撤销。
 - **Step 3**：生成多条动态凭据，使用 `lease revoke -prefix -sync` 批量回收。
 - **Step 4**：用响应封装交付一份 KV 响应，再用 `vault unwrap` 一次性取出。
-- **Step 5**：用 `vault ssh -mode=otp -no-exec` 观察 SSH OTP 凭据生成。
+- **Step 5**：用 `vault ssh -mode=otp` 登录配置了 `vault-ssh-helper` 的目标容器。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch5-other-commands" title="实验：lease / unwrap / ssh / path-help 重要命令实战" />

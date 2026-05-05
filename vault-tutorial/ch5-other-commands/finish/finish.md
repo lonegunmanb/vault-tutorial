@@ -12,7 +12,7 @@
 | `lease revoke` | 撤销 lease 会使底层动态机密失效 |
 | `lease revoke -prefix -sync` | 可以按路径前缀同步批量回收租约 |
 | `unwrap` | response wrapping token 可以取出封装响应 |
-| `vault ssh -no-exec` | SSH 命令可以只生成凭据而不真正建立连接 |
+| `vault ssh` | SSH 命令可以先向 Vault 申请 OTP，再调用 OpenSSH 登录目标容器 |
 
 ## 关键心智模型
 

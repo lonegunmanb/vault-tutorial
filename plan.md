@@ -292,11 +292,10 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
 
 *(本章不再重复第 4 章已经覆盖的 Userpass、AppRole、GitHub、LDAP、Kubernetes、TLS Cert、AWS 等认证方法入门实验，而是聚焦开源版中可复现的高级身份协议与治理能力。)*
 
-* 7.1 JWT 认证方法：本地签名 JWT、JWKS / 静态公钥验证、`bound_audiences` 与 `user_claim` 陷阱  
-* 7.2 OIDC 认证方法：接入本地 Keycloak / Dex，跑通 Authorization Code Flow、CLI callback 与 groups claim 映射  
+* 7.1 JWT 认证方法与声明映射：本地签名 JWT、JWKS / 静态公钥验证、`bound_audiences`、`user_claim`、claims 到 Entity / Policy 的映射  
+* 7.2 OIDC 认证方法与组治理：接入本地 Keycloak / Dex，跑通 Authorization Code Flow、CLI callback、groups claim 与 Vault Group 映射  
 * 7.3 原生内核级防暴力破解：User Lockout 防御基线、挂载级参数调优与锁定用户排查  
-* 7.4 端到端 SSO 应用集成：用一个最小 Web 应用接入 Vault OIDC Provider，验证登录跳转、ID Token、UserInfo 与 assignment 拒绝路径  
-* 7.5 身份声明治理：把 JWT/OIDC claims、Identity Entity、Group 与模板化 Policy 串成一条可审计链路
+* 7.4 端到端 SSO 应用集成：用一个最小 Web 应用接入 Vault OIDC Provider，验证登录跳转、ID Token、UserInfo 与 assignment 拒绝路径
 
 ## **第 8 章：应用自动化接入与现代 Kubernetes 云原生集成生态 【架构重大重构】**
 

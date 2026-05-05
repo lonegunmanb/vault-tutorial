@@ -1,6 +1,6 @@
 {
   "title": "另一些重要命令：lease / unwrap / ssh / path-help",
-  "description": "在一个已解封的 Vault dev server 上，实战演练四类容易被忽略但非常实用的 CLI 命令：path-help 查看路径内置帮助，lease 管理动态机密租约，unwrap 取出响应封装内容，ssh 使用 SSH 机密引擎生成登录凭据",
+  "description": "在一个已解封的 Vault dev server 上，实战演练四类容易被忽略但非常实用的 CLI 命令：path-help 查看路径内置帮助，lease 管理动态机密租约，unwrap 取出响应封装内容，ssh 使用 SSH 机密引擎生成 OTP 并登录目标容器",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -25,7 +25,7 @@
         "text": "step4/text.md"
       },
       {
-        "title": "用 vault ssh 生成 SSH OTP 凭据",
+        "title": "用 vault ssh 登录 SSH OTP 目标容器",
         "text": "step5/text.md"
       }
     ],
@@ -34,7 +34,8 @@
     },
     "assets": {
       "host01": [
-        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"},
+        {"file": "setup-otp-target.sh", "target": "/root", "chmod": "+x"}
       ]
     }
   },

@@ -96,6 +96,60 @@ PY
   return 1
 }
 
+ensure_vault_ssh_client_tools() {
+  if ! command -v ssh > /dev/null 2>&1; then
+    echo "Installing OpenSSH client for vault ssh..."
+    timeout 120s env DEBIAN_FRONTEND=noninteractive apt-get \
+      -o DPkg::Lock::Timeout=45 \
+      -o Acquire::Retries=3 \
+      update -qq
+    timeout 120s env DEBIAN_FRONTEND=noninteractive apt-get \
+      -o DPkg::Lock::Timeout=45 \
+      -o Acquire::Retries=3 \
+      install -y -qq --no-install-recommends openssh-client
+  fi
+
+  if command -v sshpass > /dev/null 2>&1; then
+    echo "sshpass is already available."
+    return 0
+  fi
+
+  echo "Installing sshpass-compatible helper for vault ssh OTP automation..."
+  cat > /usr/local/bin/sshpass <<'EOF'
+#!/bin/sh
+case "$1" in
+  -p)
+    password=$2
+    shift 2
+    ;;
+  -p*)
+    password=${1#-p}
+    shift
+    ;;
+  *)
+    echo "sshpass compatibility wrapper supports only -p PASSWORD" >&2
+    exit 2
+    ;;
+esac
+
+askpass=$(mktemp /tmp/vault-sshpass.XXXXXX) || exit 1
+trap 'rm -f "$askpass"' EXIT INT TERM
+cat > "$askpass" <<'ASKPASS'
+#!/bin/sh
+printf '%s\n' "$SSHPASS_PASSWORD"
+ASKPASS
+chmod 700 "$askpass"
+
+SSHPASS_PASSWORD=$password
+export SSHPASS_PASSWORD
+if command -v setsid > /dev/null 2>&1; then
+  exec setsid env SSH_ASKPASS="$askpass" SSH_ASKPASS_REQUIRE=force DISPLAY="${DISPLAY:-:0}" "$@"
+fi
+exec env SSH_ASKPASS="$askpass" SSH_ASKPASS_REQUIRE=force DISPLAY="${DISPLAY:-:0}" "$@"
+EOF
+  chmod +x /usr/local/bin/sshpass
+}
+
 ensure_postgres_readonly_role() {
   local pg_log="/tmp/ch5-other-commands-pg-role.log"
 
@@ -132,17 +186,22 @@ if ! command -v docker > /dev/null 2>&1; then
   fail_setup
 fi
 
-echo "Preparing jq, Vault and PostgreSQL image..."
+echo "Preparing jq, Vault and container images..."
 install_jq &
 INSTALL_JQ_PID=$!
 install_vault_for_lab &
 INSTALL_VAULT_PID=$!
 timeout 240s docker pull postgres:16 > /dev/null &
 PULL_POSTGRES_PID=$!
+timeout 240s docker pull ubuntu:24.04 > /dev/null &
+PULL_UBUNTU_PID=$!
 
 wait "$INSTALL_JQ_PID"
 wait "$INSTALL_VAULT_PID"
 wait "$PULL_POSTGRES_PID"
+wait "$PULL_UBUNTU_PID"
+
+ensure_vault_ssh_client_tools
 
 echo "Starting PostgreSQL database..."
 start_postgres
@@ -178,7 +237,7 @@ vault write ssh-otp/roles/training-otp \
   key_type=otp \
   default_user=vaultlab \
   allowed_users="vaultlab,root,ubuntu,student" \
-  cidr_list="127.0.0.1/32,10.0.0.0/8" > /dev/null
+  cidr_list="127.0.0.1/32,10.0.0.0/8,172.16.0.0/12" > /dev/null
 
 vault kv put secret/training/wrapped \
   username="student" \
