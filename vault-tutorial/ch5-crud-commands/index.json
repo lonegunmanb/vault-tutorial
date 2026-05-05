@@ -1,0 +1,43 @@
+{
+  "title": "核心 CRUD 交互指令：read / write / delete / list / patch",
+  "description": "在一个已解封的 Vault dev server 上，实战演练最接近 HTTP API 的五个通用 CLI 命令：读取、写入、列目录、删除和局部更新，理解路径、输入、输出与后端语义之间的关系",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "路径即 API 入口：read 与 list",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "写入数据：key=value、文件、stdin 与 -force",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "删除对象：delete 的后端语义",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "局部更新：patch 只改指定字段",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

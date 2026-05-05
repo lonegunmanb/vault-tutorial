@@ -76,6 +76,7 @@ export default defineConfig({
            text: '第 5 章：现代命令行工具与高级管理实战 (CLI)',
            collapsed: false,
            items: [
+             { text: '5.1 核心 CRUD 交互指令：read, write, delete, list, patch 深度应用', link: '/ch5-crud-commands' },
              { text: '5.7 底层引擎挂载点无损热迁移（Mount Migration）技术剖析', link: '/ch5-mount-migration' }
            ]
          }
