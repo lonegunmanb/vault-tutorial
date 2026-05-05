@@ -2,12 +2,15 @@
 
 本步骤会启动一个独立容器作为 SSH 目标主机，并在容器内安装 `vault-ssh-helper`。随后使用 `vault ssh` 申请 OTP，并真正登录到这个容器中执行命令。
 
-先确认客户端侧命令已经就绪。OTP 模式完整自动化需要本机有 `ssh`，并能通过 `sshpass` 把一次性密码交给 OpenSSH：
+先确认客户端侧命令已经就绪。OTP 模式完整自动化需要本机有 `ssh`，并能通过 `sshpass -e` 把一次性密码交给 OpenSSH。`vault ssh` 内部会把 OTP 放进 `SSHPASS` 环境变量，再调用 `sshpass -e ssh ...`：
 
 ```bash
 command -v ssh
 command -v sshpass
+SSHPASS=test sshpass -e true
 ```
+
+如果第三条命令报出 `sshpass compatibility wrapper supports only -p PASSWORD`，说明实验环境里残留了旧版兼容脚本。新版初始化脚本会自动修正；当前会话也可以使用后面的兜底命令继续验证登录链路。
 
 再查看初始化阶段已经准备好的 SSH OTP 角色：
 
@@ -74,6 +77,32 @@ vault ssh \
 ```
 
 输出中应看到远端用户 `vaultlab`、容器主机名，以及 helper 日志里的认证记录。这说明 `vault ssh` 已经完成了“向 Vault 申请 OTP → 调用 SSH → 目标容器用 helper 回调 Vault 校验 OTP → 登录成功”的闭环。
+
+如果当前会话还在使用旧版 `sshpass` 兼容脚本，可以改成两段式执行。第一段仍然用 `vault ssh` 申请 OTP，只是不让它直接启动 SSH：
+
+```bash
+OTP=$(vault ssh \
+  -mode=otp \
+  -mount-point=ssh-otp \
+  -role=training-otp \
+  -no-exec \
+  -field=key \
+  vaultlab@$TARGET_IP)
+```
+
+第二段用旧脚本支持的 `sshpass -p` 调用 OpenSSH：
+
+```bash
+sshpass -p "$OTP" ssh \
+  -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null \
+  -o PreferredAuthentications=keyboard-interactive,password \
+  -o PubkeyAuthentication=no \
+  vaultlab@$TARGET_IP \
+  "whoami; hostname; echo --- helper log ---; tail -10 /tmp/vault-ssh.log 2>/dev/null"
+```
+
+这条兜底路径与 `vault ssh` 的自动路径使用同一枚 OTP，只是把“调用 OpenSSH”这一步显式拆出来，适合处理旧版 `sshpass` wrapper 只支持 `-p` 的环境。
 
 如果想进入交互式 shell，可以去掉最后的远端命令：
 

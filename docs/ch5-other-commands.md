@@ -100,7 +100,7 @@ vault unwrap "$WRAP_TOKEN"
 
 `vault ssh` 会使用某个 SSH secrets engine 的角色生成登录凭据，并自动建立到目标主机的 SSH 连接。官方文档列出三种认证模式：`ca`、`dynamic` 与 `otp`，对应 `-mode` 选项的可选值。
 
-OTP 模式的官方示例为 `vault ssh -mode=otp -role=my-role user@1.2.3.4`，并说明如果要完整自动化该模式，需要本机安装 `sshpass`。在教学环境中，可以用容器运行一个配置了 `vault-ssh-helper` 的 sshd，让 `vault ssh` 真正完成“申请 OTP、调用 SSH、目标主机回调 Vault 校验 OTP、登录成功”的完整链路。
+OTP 模式的官方示例为 `vault ssh -mode=otp -role=my-role user@1.2.3.4`，并说明如果要完整自动化该模式，需要本机安装 `sshpass`。Vault CLI 会把 OTP 放在 `SSHPASS` 环境变量中并调用 `sshpass -e ssh ...`，所以客户端侧的 `sshpass` 需要支持 `-e`。在教学环境中，可以用容器运行一个配置了 `vault-ssh-helper` 的 sshd，让 `vault ssh` 真正完成“申请 OTP、调用 SSH、目标主机回调 Vault 校验 OTP、登录成功”的完整链路。
 
 CA 模式的官方示例为 `vault ssh -mode=ca -role=my-role user@1.2.3.4`。该模式通常使用本机公钥向 Vault 申请签名，常用选项包括 `-public-key-path` 与 `-private-key-path`；文档说明私钥路径必须对应要发送给 Vault 签名的公钥路径。
 

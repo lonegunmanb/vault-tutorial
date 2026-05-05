@@ -110,14 +110,22 @@ ensure_vault_ssh_client_tools() {
   fi
 
   if command -v sshpass > /dev/null 2>&1; then
-    echo "sshpass is already available."
-    return 0
+    if SSHPASS=test sshpass -e true > /dev/null 2>&1; then
+      echo "sshpass is already available."
+      return 0
+    fi
+
+    echo "Existing sshpass command does not support -e; replacing it with a compatible helper..."
   fi
 
   echo "Installing sshpass-compatible helper for vault ssh OTP automation..."
   cat > /usr/local/bin/sshpass <<'EOF'
 #!/bin/sh
 case "$1" in
+  -e)
+    password=${SSHPASS:-}
+    shift
+    ;;
   -p)
     password=$2
     shift 2
@@ -127,10 +135,15 @@ case "$1" in
     shift
     ;;
   *)
-    echo "sshpass compatibility wrapper supports only -p PASSWORD" >&2
+    echo "sshpass compatibility wrapper supports only -e or -p PASSWORD" >&2
     exit 2
     ;;
 esac
+
+if [ "$#" -eq 0 ]; then
+  echo "sshpass compatibility wrapper requires a command to run" >&2
+  exit 2
+fi
 
 askpass=$(mktemp /tmp/vault-sshpass.XXXXXX) || exit 1
 trap 'rm -f "$askpass"' EXIT INT TERM
