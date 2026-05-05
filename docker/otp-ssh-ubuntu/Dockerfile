@@ -17,11 +17,18 @@ ARG VAULT_SSH_HELPER_VERSION=0.2.1
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Avoid transient noble-backports 5xx errors during build; we don't need that pocket.
-RUN sed -i '/noble-backports/d' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true \
-    && rm -f /etc/apt/sources.list.d/ubuntu.sources.bak \
-    && if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
-         sed -i '/noble-backports/,/^$/d' /etc/apt/sources.list.d/ubuntu.sources; \
-       fi
+# Handle both legacy /etc/apt/sources.list and the new deb822 /etc/apt/sources.list.d/ubuntu.sources.
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list ]; then \
+        sed -i '/noble-backports/d' /etc/apt/sources.list; \
+    fi; \
+    for f in /etc/apt/sources.list.d/*.list; do \
+        [ -e "$f" ] && sed -i '/noble-backports/d' "$f"; \
+    done; \
+    if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+        sed -i 's/[[:space:]]*noble-backports//g' /etc/apt/sources.list.d/ubuntu.sources; \
+    fi; \
+    true
 
 RUN set -eux; \
     for attempt in 1 2 3 4 5; do \
