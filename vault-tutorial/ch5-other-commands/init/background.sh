@@ -20,51 +20,96 @@ fi
 
 source /root/setup-common.sh
 
-install_lab_packages() {
-  if command -v jq > /dev/null 2>&1 \
-    && command -v psql > /dev/null 2>&1 \
-    && command -v sshpass > /dev/null 2>&1 \
-    && command -v ssh > /dev/null 2>&1 \
-    && command -v unzip > /dev/null 2>&1; then
-    echo "Client tools and prerequisites are already installed."
+install_jq() {
+  if command -v jq > /dev/null 2>&1; then
+    echo "jq is already installed."
     return 0
   fi
 
-  for attempt in 1 2; do
-    echo "Installing client tools and prerequisites, attempt $attempt/2..."
-    if timeout 45s env DEBIAN_FRONTEND=noninteractive apt-get \
-        -o DPkg::Lock::Timeout=30 \
+  echo "Installing jq standalone binary..."
+  if curl --connect-timeout 10 --max-time 60 -fsSL \
+      "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64" \
+      -o /usr/local/bin/jq \
+      && chmod +x /usr/local/bin/jq \
+      && jq --version; then
+    return 0
+  fi
+
+  local apt_log="/tmp/ch5-other-commands-apt.log"
+  rm -f "$apt_log"
+
+  echo "Standalone jq download failed; installing jq with apt..."
+  if timeout 90s env DEBIAN_FRONTEND=noninteractive apt-get \
+        -o DPkg::Lock::Timeout=45 \
         -o Acquire::Retries=3 \
-        update -qq \
+        install -y -qq --no-install-recommends jq >> "$apt_log" 2>&1; then
+    return 0
+  fi
+
+  echo "Direct jq install failed; refreshing apt metadata and retrying once..."
+  if timeout 90s env DEBIAN_FRONTEND=noninteractive apt-get \
+        -o DPkg::Lock::Timeout=45 \
+        -o Acquire::Retries=3 \
+        update -qq >> "$apt_log" 2>&1 \
       && timeout 90s env DEBIAN_FRONTEND=noninteractive apt-get \
-        -o DPkg::Lock::Timeout=30 \
+        -o DPkg::Lock::Timeout=45 \
         -o Acquire::Retries=3 \
-        install -y -qq jq postgresql-client sshpass openssh-client unzip; then
-      return 0
-    fi
-    if [ "$attempt" != "2" ]; then
-      echo "Client tool installation failed on attempt $attempt; retrying in 5 seconds..."
-      sleep 5
-    fi
-  done
-  echo "ERROR: failed to install jq, postgresql-client, sshpass, openssh-client and unzip."
+        install -y -qq --no-install-recommends jq >> "$apt_log" 2>&1; then
+    return 0
+  fi
+
+  echo "apt could not install jq; recent apt log follows:"
+  tail -40 "$apt_log" 2>/dev/null || true
   return 1
 }
 
-echo "Installing client tools and prerequisites..."
-install_lab_packages
+install_vault_for_lab() {
+  if command -v vault > /dev/null 2>&1 \
+     && vault version 2>/dev/null | grep -q "v${VAULT_VERSION}"; then
+    echo "vault ${VAULT_VERSION} already installed, skipping download."
+    return 0
+  fi
+
+  if command -v unzip > /dev/null 2>&1; then
+    install_vault
+    return 0
+  fi
+
+  if command -v python3 > /dev/null 2>&1; then
+    echo "Installing Vault with Python zip extraction..."
+    curl --connect-timeout 10 --max-time 120 -fsSL \
+      "https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip" \
+      -o /tmp/vault.zip
+    python3 - <<'PY'
+import zipfile
+
+with zipfile.ZipFile('/tmp/vault.zip') as archive:
+    archive.extract('vault', '/usr/local/bin')
+PY
+    chmod +x /usr/local/bin/vault
+    rm -f /tmp/vault.zip
+    vault version
+    return 0
+  fi
+
+  echo "ERROR: neither unzip nor python3 is available to extract Vault."
+  return 1
+}
 
 if ! command -v docker > /dev/null 2>&1; then
   echo "ERROR: docker is not available, but this lab needs a local PostgreSQL container for lease exercises."
   fail_setup
 fi
 
-echo "Installing Vault and pulling PostgreSQL image..."
-install_vault &
+echo "Preparing jq, Vault and PostgreSQL image..."
+install_jq &
+INSTALL_JQ_PID=$!
+install_vault_for_lab &
 INSTALL_VAULT_PID=$!
 timeout 240s docker pull postgres:16 > /dev/null &
 PULL_POSTGRES_PID=$!
 
+wait "$INSTALL_JQ_PID"
 wait "$INSTALL_VAULT_PID"
 wait "$PULL_POSTGRES_PID"
 
