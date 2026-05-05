@@ -1,13 +1,38 @@
 #!/bin/bash
-set +e
+set -Eeuo pipefail
+
+SETUP_LOG="/tmp/ch5-other-commands-setup.log"
+rm -f /tmp/.setup-done /tmp/.setup-failed "$SETUP_LOG"
+exec > >(tee -a "$SETUP_LOG") 2>&1
+
+fail_setup() {
+  echo "ERROR: ch5-other-commands setup failed. See $SETUP_LOG for details."
+  touch /tmp/.setup-failed
+  exit 1
+}
+
+trap 'echo "ERROR: setup failed near line $LINENO"; touch /tmp/.setup-failed' ERR
+
+if [ ! -f /root/setup-common.sh ]; then
+  echo "ERROR: /root/setup-common.sh is missing. The scenario asset was not copied into the lab host."
+  fail_setup
+fi
 
 source /root/setup-common.sh
 
+echo "Installing Vault and client tools..."
 install_vault &
 INSTALL_VAULT_PID=$!
 
-apt-get update -qq && apt-get install -y -qq jq postgresql-client sshpass openssh-client > /dev/null 2>&1
+timeout 240s bash -c 'apt-get update -qq && apt-get install -y -qq jq postgresql-client sshpass openssh-client' > /dev/null
 
+if ! command -v docker > /dev/null 2>&1; then
+  echo "ERROR: docker is not available, but this lab needs a local PostgreSQL container for lease exercises."
+  fail_setup
+fi
+
+echo "Pulling PostgreSQL image and starting database..."
+timeout 240s docker pull postgres:16 > /dev/null
 start_postgres
 
 wait "$INSTALL_VAULT_PID"
@@ -50,3 +75,4 @@ vault kv put secret/training/wrapped \
 
 cd /root
 finish_setup
+echo "ch5-other-commands setup complete."
