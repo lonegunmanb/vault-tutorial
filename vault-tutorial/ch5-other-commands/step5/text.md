@@ -17,37 +17,22 @@ vault read ssh-otp/roles/training-otp
 
 ## 5.1 启动目标容器
 
-先启动一个干净的 Ubuntu 容器。这个容器代表一台需要通过 SSH 登录的目标主机；实验不会修改宿主机的 sshd 配置。
+实验镜像 `ghcr.io/lonegunmanb/vault-tutorial-otp-ssh-ubuntu` 已经预装好 `vault-ssh-helper`、PAM 配置与 sshd 配置。容器启动时只需要通过环境变量告诉它访问哪个 Vault 地址、使用哪个 SSH 引擎挂载点，无需在容器里再跑 apt：
 
 ```bash
 docker rm -f ssh-target-otp > /dev/null 2>&1 || true
 
 docker run -d --name ssh-target-otp \
-  ubuntu:24.04 sleep infinity
-```
-
-把初始化脚本复制进容器，并让它安装 `vault-ssh-helper`、配置 PAM 和 sshd。容器访问宿主机 Vault 时使用 Docker bridge 网关地址 `172.17.0.1`：
-
-```bash
-docker cp /root/setup-otp-target.sh ssh-target-otp:/root/setup-otp-target.sh
-
-docker exec \
   -e VAULT_ADDR_FROM_CONTAINER=http://172.17.0.1:8200 \
   -e SSH_MOUNT_POINT=ssh-otp \
-  -e OTP_LOGIN_USER=vaultlab \
-  ssh-target-otp \
-  bash /root/setup-otp-target.sh
+  ghcr.io/lonegunmanb/vault-tutorial-otp-ssh-ubuntu:latest
 ```
 
-正常输出中应看到 `vault-ssh-helper verified successfully` 或相近的成功信息。它说明容器里的 helper 能访问 Vault，并能找到 `ssh-otp/` 挂载点。
+容器入口脚本会自动写入 `/etc/vault-ssh-helper.d/config.hcl`，运行 `vault-ssh-helper -verify-only` 自检，并在前台启动 sshd。
 
-> 该脚本第一次执行时会在容器里运行 `apt-get update/install`，并下载 `vault-ssh-helper`，通常需要 1–2 分钟。如果看到 `Installing target SSH packages, attempt 1/3...` 长时间没有继续，请耐心等待；脚本会在每次失败后打印 apt 日志摘要，便于定位问题。
-
-启动容器里的 sshd，并等待进程出现：
+等 sshd 出现：
 
 ```bash
-docker exec -d ssh-target-otp /usr/sbin/sshd -D -e
-
 for i in $(seq 1 30); do
   docker exec ssh-target-otp pgrep -x sshd > /dev/null 2>&1 && break
   sleep 1
@@ -55,6 +40,14 @@ done
 
 docker exec ssh-target-otp pgrep -a sshd
 ```
+
+如果想确认入口脚本的自检结果，可以查看容器日志：
+
+```bash
+docker logs ssh-target-otp | head -20
+```
+
+正常情况下能看到 `vault-ssh-helper verified successfully` 或类似信息，并伴随 `Starting sshd on port 22...`。这说明容器里的 helper 能访问宿主机 Vault，并能找到 `ssh-otp/` 挂载点。
 
 ## 5.2 用 `vault ssh` 真正登录
 

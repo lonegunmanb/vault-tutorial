@@ -37,42 +37,36 @@ vault write ssh/roles/otp_key_role \
 ## 4.2 启动 OTP 目标容器
 
 容器要做三件事：装 `vault-ssh-helper`、写 helper 配置、改 PAM 与
-sshd_config。这些都封装在 `/root/setup-otp-target.sh` 里
-（init/assets 已经下发到宿主机），通过 `docker cp` 进容器、`docker
-exec` 执行。
-
-### 4.2.1 起 sshd 容器（裸 ubuntu 镜像）
+sshd_config。本教程提供了一个预构建镜像
+`ghcr.io/lonegunmanb/vault-tutorial-otp-ssh-ubuntu`，已经把上述三项
+全部烤进镜像。Dockerfile 与构建工作流位于仓库的 `docker/otp-ssh-ubuntu/`
+目录下，可以查看具体细节。
 
 容器需要能从内部访问宿主机的 Vault。Linux 上 docker bridge 的网关
 默认是 `172.17.0.1`，所以容器里的 helper 直接访问
-`http://172.17.0.1:8200` 即可。
+`http://172.17.0.1:8200` 即可。镜像入口脚本会在启动时把
+`VAULT_ADDR_FROM_CONTAINER` 与 `SSH_MOUNT_POINT` 写进
+`/etc/vault-ssh-helper.d/config.hcl`，运行 `vault-ssh-helper -verify-only`
+自检，然后在前台启动 sshd：
 
 ```bash
 docker rm -f ssh-target-otp > /dev/null 2>&1 || true
 
 docker run -d --name ssh-target-otp \
-  ubuntu:24.04 sleep infinity
+  -e VAULT_ADDR_FROM_CONTAINER=http://172.17.0.1:8200 \
+  -e SSH_MOUNT_POINT=ssh \
+  ghcr.io/lonegunmanb/vault-tutorial-otp-ssh-ubuntu:latest
 ```
 
 > 这里**不映射端口**——后面 §4.4 我们会用容器的内部 IP 直接 ssh
 > 进去（vault-ssh-helper 校验 OTP 时是用"目标主机本机网卡 IP"
 > 做匹配，所以走 docker 内部 IP 比走 `127.0.0.1:2223` 端口映射
 > 简单得多）。
->
-> 同时先 `sleep infinity` 把容器 hold 住——下一小节先把 helper 装
-> 进去、改完配置，再手动起 sshd。这样可以避免"sshd 已经在跑、PAM
-> 还没改好"的中间态。
 
-### 4.2.2 跑 setup-otp-target.sh 把 helper 与 PAM 配好
+确认入口脚本的 `vault-ssh-helper -verify-only` 自检通过：
 
 ```bash
-docker cp /root/setup-otp-target.sh ssh-target-otp:/root/setup-otp-target.sh
-
-docker exec \
-  -e VAULT_ADDR_FROM_CONTAINER=http://172.17.0.1:8200 \
-  -e SSH_MOUNT_POINT=ssh \
-  ssh-target-otp \
-  bash /root/setup-otp-target.sh
+docker logs ssh-target-otp | head -30
 ```
 
 正常会看到（**没有 `[ERROR]`**）：
@@ -81,13 +75,13 @@ docker exec \
 --- vault-ssh-helper -verify-only ---
 ==> WARNING: Dev mode is enabled!
 [some output] ... vault-ssh-helper verified successfully!
-OTP target ready. Start sshd with: /usr/sbin/sshd -D
+Starting sshd on port 22...
 ```
 
 > 如果看到 `[ERROR]: unsupported scheme. use 'dev' mode`，说明
 > helper 没启用 dev 模式——`vault-ssh-helper` 默认拒绝
 > `http://` 的 Vault 地址（防止 OTP 明文上传），必须给它加 `-dev`
-> 才行。脚本里 `-verify-only` 和 PAM 那条 `pam_exec.so` 调用 helper
+> 才行。镜像里 `-verify-only` 与 PAM 那条 `pam_exec.so` 调用 helper
 > 都已经带上了 `-dev`。
 
 > `-verify-only` 让 helper 自检 Vault 可达 + ssh 引擎挂载存在。如果
@@ -95,13 +89,13 @@ OTP target ready. Start sshd with: /usr/sbin/sshd -D
 > Vault——检查 `VAULT_ADDR_FROM_CONTAINER` 是否真的能从容器内
 > reach。
 
-### 4.2.3 后台起 sshd
+确认 sshd 已经在监听 22：
 
 ```bash
-docker exec -d ssh-target-otp /usr/sbin/sshd -D -e
-
-# 等 sshd 起来（确认 22 端口在监听）
-sleep 2
+for i in $(seq 1 30); do
+  docker exec ssh-target-otp pgrep -x sshd > /dev/null 2>&1 && break
+  sleep 1
+done
 docker exec ssh-target-otp ss -ltnp 2>/dev/null | grep :22
 ```
 

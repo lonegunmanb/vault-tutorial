@@ -14,12 +14,15 @@ if ! command -v docker > /dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq docker.io > /dev/null 2>&1
 fi
 
-# 预热拉取目标主机镜像，让 step2 启动容器时秒级响应
+# 预热拉取目标主机镜像，让 step2 / step4 启动容器时秒级响应
 docker pull ubuntu:24.04 > /dev/null 2>&1 &
 PULL_PID=$!
+docker pull ghcr.io/lonegunmanb/vault-tutorial-otp-ssh-ubuntu:latest > /dev/null 2>&1 &
+PULL_OTP_PID=$!
 
 wait "$INSTALL_VAULT_PID"
 wait "$PULL_PID" 2>/dev/null
+wait "$PULL_OTP_PID" 2>/dev/null
 
 start_vault_dev
 

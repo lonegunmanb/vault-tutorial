@@ -193,13 +193,13 @@ install_vault_for_lab &
 INSTALL_VAULT_PID=$!
 timeout 240s docker pull postgres:16 > /dev/null &
 PULL_POSTGRES_PID=$!
-timeout 240s docker pull ubuntu:24.04 > /dev/null &
-PULL_UBUNTU_PID=$!
+timeout 240s docker pull ghcr.io/lonegunmanb/vault-tutorial-otp-ssh-ubuntu:latest > /dev/null &
+PULL_OTP_IMAGE_PID=$!
 
 wait "$INSTALL_JQ_PID"
 wait "$INSTALL_VAULT_PID"
 wait "$PULL_POSTGRES_PID"
-wait "$PULL_UBUNTU_PID"
+wait "$PULL_OTP_IMAGE_PID"
 
 ensure_vault_ssh_client_tools
 
