@@ -36,11 +36,11 @@ group_order: 50
 
 ---
 
-## 2. 先认 API 路径，再决定是否使用专用 CLI
+## 2. 先认 API 路径，再决定是否改用专用子命令
 
 通用命令要求你写出真实 API 路径。官方 `read` 示例中特别说明：如果 KV v2 挂载在 `secret/`，用通用命令读取 `customers` 时路径是 `secret/data/customers`，等价 HTTP 请求是 `GET $VAULT_ADDR/v1/secret/data/customers`。
 
-同一件事也可以用专用命令完成：`vault kv get -mount=secret customers` 会读取同一份数据。差别在于输出形态：`vault read` 默认输出 key-value 表格，`curl` 输出 JSON，而 `vault kv get` 针对 KV 引擎做了更容易阅读的结构化展示。
+同一件事也可以用面向 KV 的专用子命令完成：`vault kv get -mount=secret customers` 会读取同一份数据。差别在于输出形态：`vault read` 默认输出 key-value 表格，`curl` 输出 JSON，而 `vault kv get` 针对 KV 引擎做了更容易阅读的结构化展示。
 
 `write` 也有同样的分层。`vault write auth/token/create policies="admin" ttl=8h num_uses=3` 是直接调用 Token API 路径；而常见的令牌创建任务，可以改用 `vault token create -policy=admin -ttl=8h -use-limit=3` 这样的专用子命令。
 
@@ -58,7 +58,7 @@ vault read aws/creds/my-role
 vault read secret/data/customers
 ```
 
-默认输出适合人阅读；做脚本时优先考虑 `-format=json`、`-format=yaml` 或 `-field=<name>`。其中 `-field` 只打印指定字段，并且不会在末尾额外输出换行，方便把结果直接管道给其他进程。
+默认输出适合人类阅读；做脚本时优先考虑 `-format=json`、`-format=yaml` 或 `-field=<name>`。其中 `-field` 只打印指定字段，并且不会在末尾额外输出换行，方便把结果直接管道给其他进程。
 
 ```bash
 vault read -format=json auth/token/lookup-self

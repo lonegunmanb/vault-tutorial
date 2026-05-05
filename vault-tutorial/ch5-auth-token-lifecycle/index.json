@@ -1,0 +1,47 @@
+{
+  "title": "认证与生命周期管控：login / auth / token",
+  "description": "在一个已解封的 Vault dev server 上，实战演练 login、auth 与 token 三组 CLI 命令：启用与调优认证方法、登录取得不落盘 token、创建与查询 token、检查路径能力、续期、撤销，以及禁用 auth method 后的批量 token 回收",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用和调优认证方法挂载点",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "使用 login 获取不落盘 token",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "创建 token 并诊断权限",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "续期与撤销：token 值和 accessor",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "禁用 auth method 触发批量撤销",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
