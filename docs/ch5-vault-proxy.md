@@ -159,6 +159,8 @@ listener "tcp" {
 
 如果请求返回 403，应查询 Auto-auth token 的 policy 和请求路径是否匹配。尤其在 `use_auto_auth_token = "force"` 时，请求中自带的 `X-Vault-Token` 不会决定最终身份，最终权限来自 Proxy 的 Auto-auth token。
 
+`/proxy/v1/cache-clear` 是 Proxy 自己的管理 API。判断它是否成功时，先看 `curl` 返回的 HTTP 状态码；看到 `200 OK` 就表示请求成功。Proxy 日志主要用于确认 Auto-auth 是否成功，以及普通 Vault API 请求是否经过 `api_proxy` 转发，不要把“日志里没有 cache-clear 行”当成失败。
+
 如果观察到缓存没有命中，应先确认请求属于 Proxy 可缓存范围。动态机密和 token 缓存依赖通过 Proxy 创建并由 Proxy 管理的 token 或 lease；普通 KV 读取不会因为出现空 `cache {}` 块就自动成为静态机密缓存实验。
 
 ---
@@ -170,6 +172,6 @@ listener "tcp" {
 - **Step 1**：查看预置 AppRole、最小权限 Policy 和 Proxy 配置文件。
 - **Step 2**：启动 `vault proxy`，确认 Auto-auth 成功并写入 sink token。
 - **Step 3**：通过 Proxy 读取 KV 机密，验证 `X-Vault-Request` 与 `use_auto_auth_token = "force"`。
-- **Step 4**：调用 cache-clear API，查看日志，并用 403 与 412 区分 Proxy 拒绝和 Vault 权限拒绝。
+- **Step 4**：调用 cache-clear API，用状态码确认结果，再结合日志区分 Auto-auth、API proxy 转发、412 与 403。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch5-vault-proxy" title="实验：Vault Proxy 配置、Auto-auth 与 API 代理" />
