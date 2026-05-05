@@ -2,8 +2,6 @@
 
 ![Step 4 故事板：维护本地用户登记册](../assets/step4-userpass-maintenance-story.png)
 
-> 绘图提示词：手绘风格，现实事物比喻风格，彩色横向故事板。画管理员维护 `auth/userpass/users` 登记册：第一格给 alice 换密码锁，旧钥匙被打叉；第二格把 bob 的 policy 贴纸从 `team-operator` 换成 `team-reader`；第三格 Mary、MARY、mary 三个名牌被归到同一行 `mary`；第四格管理员删除临时用户并关闭 userpass 窗口。气泡方向必须非常细致：第一格管理员气泡放在 alice 行左上方，尾巴连接到 password 小锁，台词“更新 password 端点”；第一格旧钥匙气泡放在被打叉的旧钥匙旁，尾巴直接连到旧钥匙，台词“旧密码不能再登录”；第二格 bob 气泡放在 bob 行右侧，尾巴连接到从 `team-operator` 撕下再贴成 `team-reader` 的 policy 贴纸，台词“新登录会拿新 policy”；第三格 Mary 名牌气泡放在三个名牌上方，尾巴分三叉分别连到 Mary、MARY、mary，再汇入登记册里的 `mary` 行，台词“提交用户名会小写化”；第四格清理气泡放在关闭的 userpass 窗口外侧，尾巴连接到删除按钮和关闭门把手，台词“删除用户并禁用 mount”。每一格的气泡都留在本格内部，不跨格，不遮挡用户名和 policy 贴纸。
-
 userpass API 为维护动作提供了独立端点：改密码、改 policies、删除用户、列出用户都不是同一个语义。
 
 ## 4.1 更新 alice 密码
