@@ -41,6 +41,8 @@ docker exec \
 
 正常输出中应看到 `vault-ssh-helper verified successfully` 或相近的成功信息。它说明容器里的 helper 能访问 Vault，并能找到 `ssh-otp/` 挂载点。
 
+> 该脚本第一次执行时会在容器里运行 `apt-get update/install`，并下载 `vault-ssh-helper`，通常需要 1–2 分钟。如果看到 `Installing target SSH packages, attempt 1/3...` 长时间没有继续，请耐心等待；脚本会在每次失败后打印 apt 日志摘要，便于定位问题。
+
 启动容器里的 sshd，并等待进程出现：
 
 ```bash

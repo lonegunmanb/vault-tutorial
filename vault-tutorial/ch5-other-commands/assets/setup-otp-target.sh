@@ -5,17 +5,30 @@ VAULT_SSH_HELPER_VERSION="${VAULT_SSH_HELPER_VERSION:-0.2.1}"
 OTP_LOGIN_USER="${OTP_LOGIN_USER:-vaultlab}"
 
 install_target_packages() {
+  local apt_log="/tmp/setup-otp-target-apt.log"
+  rm -f "$apt_log"
+
   for attempt in 1 2 3; do
-    echo "Installing target SSH packages, attempt $attempt/3..."
-    if timeout 120s env DEBIAN_FRONTEND=noninteractive apt-get update -qq \
-      && timeout 180s env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        --no-install-recommends openssh-server unzip curl ca-certificates > /dev/null; then
+    echo "Installing target SSH packages, attempt $attempt/3 (this may take a minute on first run)..."
+    if timeout 240s env DEBIAN_FRONTEND=noninteractive apt-get \
+        -o Acquire::Retries=3 \
+        -o Acquire::http::Timeout=30 \
+        update >> "$apt_log" 2>&1 \
+      && timeout 360s env DEBIAN_FRONTEND=noninteractive apt-get \
+        -o Acquire::Retries=3 \
+        -o Acquire::http::Timeout=30 \
+        install -y --no-install-recommends \
+        openssh-server unzip curl ca-certificates >> "$apt_log" 2>&1; then
       return 0
     fi
-    echo "Target package installation failed on attempt $attempt; retrying in 5 seconds..."
-    sleep 5
+    echo "Target package installation failed on attempt $attempt; recent apt log follows:"
+    tail -40 "$apt_log" 2>/dev/null || true
+    if [ "$attempt" != "3" ]; then
+      echo "Retrying in 5 seconds..."
+      sleep 5
+    fi
   done
-  echo "ERROR: failed to install target SSH packages."
+  echo "ERROR: failed to install target SSH packages. Full log: $apt_log (inside the container)."
   return 1
 }
 
