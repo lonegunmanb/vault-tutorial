@@ -78,6 +78,7 @@ export default defineConfig({
            items: [
              { text: '5.1 核心 CRUD 交互指令：read, write, delete, list, patch 深度应用', link: '/ch5-crud-commands' },
              { text: '5.2 认证与生命周期管控：login, auth, token 复杂参数体系', link: '/ch5-auth-token-lifecycle' },
+             { text: '5.3 访问策略与底层引擎挂载管理：policy, secrets 生命周期运维', link: '/ch5-policy-secrets' },
              { text: '5.7 底层引擎挂载点无损热迁移（Mount Migration）技术剖析', link: '/ch5-mount-migration' }
            ]
          }

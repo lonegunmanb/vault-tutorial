@@ -31,6 +31,7 @@
     { "path": "ch4-userpass" },
     { "path": "ch5-crud-commands" },
     { "path": "ch5-auth-token-lifecycle" },
+    { "path": "ch5-policy-secrets" },
     { "path": "ch5-mount-migration" }
   ]
 }

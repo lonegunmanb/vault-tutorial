@@ -1,0 +1,47 @@
+{
+  "title": "访问策略与机密引擎挂载管理：policy / secrets",
+  "description": "在一个已解封的 Vault dev server 上，实战演练 policy 与 secrets 两组 CLI 命令：启用、盘点、调优、迁移和禁用机密引擎，格式化、写入、读取、列出和删除策略，并通过受限 token 观察策略对访问路径的实际影响",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "盘点现状并启用机密引擎",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "调优、迁移与禁用机密引擎",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "格式化、写入与读取策略",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "用受限 token 验证策略效果",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "删除策略并卸载机密引擎",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
