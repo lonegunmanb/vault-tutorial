@@ -16,10 +16,31 @@ ARG VAULT_SSH_HELPER_VERSION=0.2.1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        openssh-server unzip curl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Avoid transient noble-backports 5xx errors during build; we don't need that pocket.
+RUN sed -i '/noble-backports/d' /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2>/dev/null || true \
+    && rm -f /etc/apt/sources.list.d/ubuntu.sources.bak \
+    && if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+         sed -i '/noble-backports/,/^$/d' /etc/apt/sources.list.d/ubuntu.sources; \
+       fi
+
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+        echo "apt attempt $attempt"; \
+        if apt-get update \
+                -o Acquire::Retries=5 \
+                -o Acquire::http::Timeout=30 \
+            && apt-get install -y --no-install-recommends \
+                -o Acquire::Retries=5 \
+                -o Acquire::http::Timeout=30 \
+                openssh-server unzip curl ca-certificates; then \
+            rm -rf /var/lib/apt/lists/*; \
+            exit 0; \
+        fi; \
+        echo "apt attempt $attempt failed, retrying in 10s..."; \
+        sleep 10; \
+    done; \
+    echo "apt failed after retries" >&2; \
+    exit 1
 
 RUN curl --connect-timeout 10 --max-time 120 -fsSL \
         "https://releases.hashicorp.com/vault-ssh-helper/${VAULT_SSH_HELPER_VERSION}/vault-ssh-helper_${VAULT_SSH_HELPER_VERSION}_linux_amd64.zip" \
