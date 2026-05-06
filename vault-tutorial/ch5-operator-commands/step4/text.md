@@ -1,6 +1,6 @@
 # 第四步：观测三节点 Raft 集群与 Autopilot
 
-现在启动一个三节点 Integrated Storage Raft 小集群。脚本会启动三个 Vault 进程，初始化 `raft-1`，让 `raft-2` 与 `raft-3` 加入，再解封所有节点。
+现在启动一个三节点 Integrated Storage Raft 小集群。脚本会启动 `raft-1`，初始化并激活它，再启动 `raft-2` 与 `raft-3` 加入这个已有集群，最后为后续命令写入环境变量。
 
 ```bash
 cd /root/operator-lab

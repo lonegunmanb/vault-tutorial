@@ -196,6 +196,27 @@ VAULT_ADDR=http://127.0.0.1:8400 vault operator init \
   -key-threshold=1 \
   -format=json > raft-init.json
 
+UNSEAL_KEY=$(jq -r '.unseal_keys_b64[0]' raft-init.json)
+ROOT_TOKEN=$(jq -r '.root_token' raft-init.json)
+
+echo "Activating raft-1 before joining follower nodes ..."
+curl -sS --request PUT --data "$(jq -n --arg key "$UNSEAL_KEY" '{key:$key}')" http://127.0.0.1:8400/v1/sys/unseal > /dev/null
+
+leader_sealed="true"
+for i in $(seq 1 30); do
+  leader_sealed=$(curl -sS http://127.0.0.1:8400/v1/sys/seal-status | jq -r '.sealed' 2>/dev/null || echo "true")
+  if [ "$leader_sealed" = "false" ]; then
+    break
+  fi
+  sleep 1
+done
+
+if [ "$leader_sealed" != "false" ]; then
+  echo "raft-1 did not become active. Last log lines:"
+  tail -40 logs/raft1.log || true
+  exit 1
+fi
+
 vault server -config="$PWD/raft2.hcl" > "$PWD/logs/raft2.log" 2>&1 &
 echo $! > raft2.pid
 vault server -config="$PWD/raft3.hcl" > "$PWD/logs/raft3.log" 2>&1 &
@@ -215,12 +236,27 @@ done
 VAULT_ADDR=http://127.0.0.1:8410 vault operator raft join http://127.0.0.1:8400 > /dev/null
 VAULT_ADDR=http://127.0.0.1:8420 vault operator raft join http://127.0.0.1:8400 > /dev/null
 
-UNSEAL_KEY=$(jq -r '.unseal_keys_b64[0]' raft-init.json)
-ROOT_TOKEN=$(jq -r '.root_token' raft-init.json)
-
-for addr in http://127.0.0.1:8400 http://127.0.0.1:8410 http://127.0.0.1:8420; do
+echo "Activating raft-2 and raft-3 ..."
+for addr in http://127.0.0.1:8410 http://127.0.0.1:8420; do
   curl -sS --request PUT --data "$(jq -n --arg key "$UNSEAL_KEY" '{key:$key}')" "$addr/v1/sys/unseal" > /dev/null
 done
+
+echo "Waiting for the Raft cluster to report all peers ..."
+cluster_ready="false"
+for i in $(seq 1 30); do
+  peers=$(VAULT_ADDR=http://127.0.0.1:8400 VAULT_TOKEN="$ROOT_TOKEN" vault operator raft list-peers 2>/dev/null || true)
+  if echo "$peers" | grep -q "raft-2" && echo "$peers" | grep -q "raft-3"; then
+    cluster_ready="true"
+    break
+  fi
+  sleep 1
+done
+
+if [ "$cluster_ready" != "true" ]; then
+  echo "Raft peers did not become ready. Last log lines:"
+  tail -40 logs/raft1.log logs/raft2.log logs/raft3.log || true
+  exit 1
+fi
 
 cat > raft-env.sh <<EOF
 export VAULT_ADDR='http://127.0.0.1:8400'
