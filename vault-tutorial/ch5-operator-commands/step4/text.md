@@ -1,6 +1,6 @@
 # 第四步：观测三节点 Raft 集群与 Autopilot
 
-现在启动一个三节点 Integrated Storage Raft 小集群。脚本会启动 `raft-1`，初始化并激活它，再启动 `raft-2` 与 `raft-3` 加入这个已有集群，最后为后续命令写入环境变量。
+现在启动一个三节点 Integrated Storage Raft 小集群。脚本会启动 `raft-1`，初始化并激活它，再启动 `raft-2` 与 `raft-3` 加入这个已有集群，并等待两个新节点从临时 non-voter 提升为 voter，最后为后续命令写入环境变量。
 
 ```bash
 cd /root/operator-lab
@@ -14,7 +14,7 @@ source /root/operator-lab/raft-env.sh
 vault operator raft list-peers
 ```
 
-输出中重点观察 `node_id`、`leader` 与 `voter`。在开源版三节点集群中，这三个节点都应是 voter，其中一个是 leader。
+输出中重点观察 `Node`、`State` 与 `Voter`。新节点刚加入 Raft 时可能短暂显示为 `Voter=false`，Autopilot 会在节点稳定后把它们提升为 voter；脚本正常结束后，这三个节点都应是 `Voter=true`，其中一个是 leader。
 
 查看 HA 成员信息：
 

@@ -241,11 +241,16 @@ for addr in http://127.0.0.1:8410 http://127.0.0.1:8420; do
   curl -sS --request PUT --data "$(jq -n --arg key "$UNSEAL_KEY" '{key:$key}')" "$addr/v1/sys/unseal" > /dev/null
 done
 
-echo "Waiting for the Raft cluster to report all peers ..."
+echo "Waiting for raft-2 and raft-3 to become voting peers ..."
 cluster_ready="false"
-for i in $(seq 1 30); do
+for i in $(seq 1 90); do
   peers=$(VAULT_ADDR=http://127.0.0.1:8400 VAULT_TOKEN="$ROOT_TOKEN" vault operator raft list-peers 2>/dev/null || true)
-  if echo "$peers" | grep -q "raft-2" && echo "$peers" | grep -q "raft-3"; then
+  if echo "$peers" | awk '
+    $1 == "raft-1" && $4 == "true" { raft1 = 1 }
+    $1 == "raft-2" && $4 == "true" { raft2 = 1 }
+    $1 == "raft-3" && $4 == "true" { raft3 = 1 }
+    END { exit !(raft1 && raft2 && raft3) }
+  '; then
     cluster_ready="true"
     break
   fi
@@ -253,7 +258,9 @@ for i in $(seq 1 30); do
 done
 
 if [ "$cluster_ready" != "true" ]; then
-  echo "Raft peers did not become ready. Last log lines:"
+  echo "Raft peers did not all become voters. Current peer list:"
+  printf '%s\n' "$peers"
+  echo "Last log lines:"
   tail -40 logs/raft1.log logs/raft2.log logs/raft3.log || true
   exit 1
 fi
