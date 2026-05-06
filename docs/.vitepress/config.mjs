@@ -85,6 +85,13 @@ export default defineConfig({
              { text: '5.7 集群底层运维手术刀：operator 指令簇全解', link: '/ch5-operator-commands' },
              { text: '5.8 底层引擎挂载点无损热迁移（Mount Migration）技术剖析', link: '/ch5-mount-migration' }
            ]
+         },
+         {
+           text: '第 6 章：集群配置文件调优与高可用自动化运维',
+           collapsed: false,
+           items: [
+             { text: '6.1 配置文件架构纵览与现代 HCL 语法规范', link: '/ch6-config-overview' }
+           ]
          }
         ],
       },

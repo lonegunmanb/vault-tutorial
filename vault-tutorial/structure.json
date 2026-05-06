@@ -36,6 +36,7 @@
     { "path": "ch5-other-commands" },
     { "path": "ch5-vault-proxy" },
     { "path": "ch5-operator-commands" },
-    { "path": "ch5-mount-migration" }
+    { "path": "ch5-mount-migration" },
+    { "path": "ch6-config-overview" }
   ]
 }
