@@ -1,11 +1,11 @@
 ---
-order: 57
-title: 5.7 轻量级代理服务指令：vault proxy 的配置文件解析与进程调试
+order: 56
+title: 5.6 轻量级代理服务指令：vault proxy 的配置文件解析与进程调试
 group: 第 5 章：现代命令行工具与高级管理实战 (CLI)
 group_order: 50
 ---
 
-# 5.7 轻量级代理服务指令：vault proxy 的配置文件解析与进程调试
+# 5.6 轻量级代理服务指令：vault proxy 的配置文件解析与进程调试
 
 > **核心结论**：`vault proxy` 用同一个 Vault 二进制启动一个靠近应用运行的代理守护进程。它通过本地 listener 接收应用请求，再把请求转发到真正的 Vault 服务端；如果配置了 Auto-auth，还可以由 Proxy 自动登录、续期并向被代理请求附加 token，从而减少应用直接管理 Vault token 的负担。
 

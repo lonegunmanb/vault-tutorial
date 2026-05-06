@@ -38,7 +38,7 @@ KV v2 给每次写入都保留一个**带版本号的快照**，并允许定向�
 > **二者不能互相 in-place 升级**：v1 与 v2 是两套不同的 API 形态，
 > `vault secrets move` 只改路由表里的挂载路径、**不会**改引擎类型或
 > options（参见 [3.1 §3.4](/ch3-secrets-engines#34-move-原子重命名挂载路径)
-> 与 [5.7 Mount Migration](/ch5-mount-migration) 中的"不能跨类型"限制）。
+> 与 [5.8 Mount Migration](/ch5-mount-migration) 中的"不能跨类型"限制）。
 > 要从 v1 切到 v2，唯一的办法是：在新路径起一个 v2 实例，写脚本把 v1
 > 的数据逐条读出来再写进 v2，确认后再 `disable` 掉旧的 v1（注意
 > `disable` 是销毁式的，迁移完成前别动它）。
@@ -376,7 +376,7 @@ path "kv/metadata/app/*"         { capabilities = ["delete"] }   # 元数据销�
 
 ---
 
-## 8. 与 5.7 Mount Migration 的衔接
+## 8. 与 5.8 Mount Migration 的衔接
 
 KV v2 既然是把数据存进 Vault 的最常见入口，它也是**最常被 `vault
 secrets move` 搬动的引擎**——尤其是从 dev 环境的默认 `secret/` 搬到
@@ -384,7 +384,7 @@ secrets move` 搬动的引擎**——尤其是从 dev 环境的默认 `secret/` 
 
 - 搬完之后 Accessor / UUID / 版本历史 / `max_versions` 都不变
 - Policy 里写死的 `secret/data/...` **不会**变成 `kv-prod/data/...`，
-  搬完得手动同步——这正是 [5.7 Mount Migration](/ch5-mount-migration)
+  搬完得手动同步——这正是 [5.8 Mount Migration](/ch5-mount-migration)
   里反复演示的"Policy 断裂 → 403"故事
 
 ---

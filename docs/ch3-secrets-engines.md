@@ -133,7 +133,7 @@ vault secrets move legacy-kv/ archive/
 - 该引擎下所有动态 Lease 会被撤销（因为 Lease 与签发时的路径绑定）
 - **Policy 中引用旧路径的规则不会自动跟着改**，必须手动同步
 
-`move` 的完整深度剖析放在 [5.7 Mount Migration](/ch5-mount-migration)
+`move` 的完整深度剖析放在 [5.8 Mount Migration](/ch5-mount-migration)
 章节，本节只需要知道它的存在与"它不会自动改 Policy"这一点即可。
 
 ---

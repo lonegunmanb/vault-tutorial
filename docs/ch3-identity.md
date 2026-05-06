@@ -130,7 +130,7 @@ vault auth list -format=json | jq -r 'to_entries[] | "\(.key) \(.value.accessor)
 ```
 
 `mount_accessor` 字段填的是后面那串 `auth_userpass_...`。这就是为什么
-即使把 auth mount 改名（[5.7 Mount Migration](/ch5-mount-migration)），
+即使把 auth mount 改名（[5.8 Mount Migration](/ch5-mount-migration)），
 身份归并不会断——绑的是 accessor 不是 path。
 
 ### 2.2 "同名自动归并" vs "手动归并"
@@ -462,7 +462,7 @@ vault write identity/oidc/client/admin-portal \
   Entity"。
 - **[7.11 / 7.12 Vault 作为 OIDC Provider](/)**：本节 §3–4 给的"引擎
   侧基础"，那两节给"端到端 SSO 实战"。
-- **[5.7 Mount Migration](/ch5-mount-migration)**：迁移 auth mount
+- **[5.8 Mount Migration](/ch5-mount-migration)**：迁移 auth mount
   时身份归并不会断的原因（accessor 不变）就是本节 §2.1 那条规律。
 
 ---

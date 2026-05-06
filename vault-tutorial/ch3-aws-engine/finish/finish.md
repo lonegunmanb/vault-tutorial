@@ -52,5 +52,5 @@ vault secrets disable aws
   智模型在 Database / SSH / PKI 上几乎完全复用
 - 回顾 [2.3 Lease](/ch2-lease)——你刚才的每一次 `lease revoke` 都
   是那一章理论的实战演示
-- 跳到 [5.7 Mount Migration](/ch5-mount-migration) 看怎么把 `aws/`
+- 跳到 [5.8 Mount Migration](/ch5-mount-migration) 看怎么把 `aws/`
   搬到 `aws-prod/` 的同时保住所有 Role 和已有 Lease

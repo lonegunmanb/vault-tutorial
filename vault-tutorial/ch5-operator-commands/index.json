@@ -1,0 +1,47 @@
+{
+  "title": "operator 初始化、密钥轮换与 Raft 集群观测",
+  "description": "在本地 Vault 与三节点 Integrated Storage Raft 小集群中，实战演练 vault operator init、key-status、rotate、generate-root、raft、members、diagnose、usage 与 migrate 配置阅读",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "初始化一个未初始化的 Vault",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "观察加密密钥轮换",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "使用 generate-root 生成应急 root token",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "观测三节点 Raft 集群与 Autopilot",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "运行 diagnose、usage 并阅读 migrate 配置",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

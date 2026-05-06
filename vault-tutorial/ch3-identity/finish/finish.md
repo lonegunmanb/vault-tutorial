@@ -31,7 +31,7 @@ Step 3: 再在外层加 oidc/provider + oidc/client + oidc/assignment
 
 1. **Alias 没绑 `mount_accessor` 就写 entity-alias** → Vault 直接拒
    绝。永远记得：alias 绑 accessor，**不是** mount path（这也是
-   [5.7 Mount Migration](/ch5-mount-migration) 之所以能不打断身份归
+   [5.8 Mount Migration](/ch5-mount-migration) 之所以能不打断身份归
    并的原因）。
 2. **建好 OIDC client 就以为能用了** → `assignments` 默认是空数组、
    等于全拒；或者忘了把 client_id 加到 provider 的 `allowed_client_ids`

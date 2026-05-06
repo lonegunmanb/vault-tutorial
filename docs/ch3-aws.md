@@ -393,7 +393,7 @@ path "aws/config/rotate-root" {
   生命周期。`vault lease revoke` 在 AWS 引擎上就是真的去删 IAM User /
   让 STS 失效——把那一章的"租约即生命周期"理论落到了实处
 - **[3.1 §3.4 move](/ch3-secrets-engines#34-move-原子重命名挂载路径)
-  与 [5.7 Mount Migration](/ch5-mount-migration)**：AWS 引擎的所有
+  与 [5.8 Mount Migration](/ch5-mount-migration)**：AWS 引擎的所有
   `roles/<name>` 配置在 `move` 时**会**被一起搬走，但 Policy 里写死
   的 `aws/creds/...` 路径**不会**被改——和 KV v2 的 `data/...` 段一
   样要手动同步
