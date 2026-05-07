@@ -46,6 +46,14 @@ stat -c '%A  owner=%U  group=%G  mode=%a' /run/vault.sock
 
 应可观察到模式 `600`、属主与属组均为 `root`。
 
+> **关于八进制权限位 `600` 的含义**：Unix 文件权限由三个八进制数字组成，依次表示**属主（owner）**、**属组（group）**、**其他用户（other）**对该文件的访问权限。每一位是 `读(r=4) + 写(w=2) + 执行(x=1)` 的总和。因此：
+>
+> - `600` = `rw- --- ---`：属主可读可写、属组与其他用户完全无权限；
+> - `644` = `rw- r-- r--`：属主可读可写，属组与其他用户仅可读；
+> - `666` = `rw- rw- rw-`：所有用户均可读可写（5.4 节会用此值演示放开权限后的行为）。
+>
+> 对 Unix domain socket 文件而言，"读" + "写" 共同决定一个用户进程是否能够 `connect()` 到该 socket；因此把 mode 设为 `600` 等价于"只允许属主进程访问 Vault API"。
+
 ## 5.3 通过 curl 经由 Unix socket 直连 Vault API
 
 `curl --unix-socket` 可让 HTTP 请求经由 Unix socket 而非网络栈传递。需注意：由于 Unix listener 不参与 TLS 协商，URL scheme 使用 `http://` 即可（host 部分会被忽略）：
