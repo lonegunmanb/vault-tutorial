@@ -81,7 +81,7 @@ vault operator raft list-peers
 node-4    127.0.0.1:8231    follower    true
 ```
 
-至此 4 个节点全部为 voter；`Failure Tolerance` 从 1 上升到 1（4 voter 集群与 3 voter 集群 failure tolerance 相同，均为 1）：
+至此 4 个节点全部为 voter；但 `Failure Tolerance` 仍然是 1（4 voter 集群与 3 voter 集群的 failure tolerance 相同，均为 1）：
 
 ```bash
 vault operator raft autopilot state | head -5

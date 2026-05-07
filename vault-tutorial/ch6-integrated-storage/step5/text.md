@@ -14,13 +14,19 @@ kill -9 "$NODE2_PID" "$NODE3_PID"
 sleep 3
 ```
 
-立即尝试在仅剩的 node-1 上执行任何写请求，预期失败：
+立即尝试在仅剩的 node-1 上执行一个直接写请求，预期失败。这里不使用 `vault kv put`，因为 `vault kv` 子命令会先调用 `sys/internal/ui/mounts/...` 探测挂载点，错误容易被这一步前置请求遮蔽；因此改为直接调用 KV v2 的真实写入 API：
 
 ```bash
-vault kv put secret/app/db username=alice password=should-fail-no-quorum 2>&1 | head -5
+curl -sS \
+  -H "X-Vault-Token: $(jq -r '.root_token' /root/init-output.json)" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{"data":{"username":"alice","password":"should-fail-no-quorum"}}' \
+  http://127.0.0.1:8200/v1/secret/data/app/db \
+  | jq .
 ```
 
-错误信息中应当出现 raft quorum / leadership 相关字样——这是预期的：node-1 失去了能选出 leader 所需的多数派。
+错误信息中可能出现 `local node not active but active cluster node not found`，或包含 raft quorum / leadership 相关字样；这些都是预期结果。它们共同说明：node-1 已经失去了能选出 active leader 的多数派，因此不能完成写入。
 
 > **本场景对应 [6.4 节 §10.2](/ch6-integrated-storage)**：quorum 已经丢失、完全停服。教程明确指出"部分恢复仍然是可能的"，且**该场景下可能发生数据丢失**——因为多个节点同时失效时 Raft 自身无法判定哪些 entry 已经被 commit。本实验的恢复目标不是追求完美一致性，而是把 node-1 上**已经持久化的状态**抢救出来。
 
@@ -76,19 +82,7 @@ sleep 5
 vault status || true
 ```
 
-启动后 `peers.json` 会被 raft 子系统读取并消化——你能在 `/var/log/vault-1.log` 中看到类似日志：
-
-```bash
-grep -i "peers.json\|recovery" /var/log/vault-1.log | head -20
-```
-
-会出现诸如 "found peers.json file, recovering Raft configuration..." 之类的字样，并且 `peers.json` 文件在被消化后会被 raft 自动**删除**：
-
-```bash
-ls /opt/vault/data-1/raft/peers.json 2>&1
-```
-
-预期输出 `No such file or directory`——这是 raft 设计：peers.json 是一次性消耗品，正是 [6.4 节 §10.3](/ch6-integrated-storage) 开头警告"绝对不要把该文件纳入任何'周期性自动重写'的脚本"的根源。
+此时 `vault status` 仍会显示 `Sealed: true`，这是预期状态。`peers.json` 也会暂时继续留在 `/opt/vault/data-1/raft/peers.json`：Vault 只有在下一步 unseal 后才能打开 Raft storage，届时才会读取并消化这份文件。
 
 ## 5.5 解封 node-1 并验证集群已恢复
 
@@ -108,6 +102,20 @@ curl -sS "http://127.0.0.1:8200/v1/sys/seal-status" \
 ```
 
 `"sealed": false` 表示 node-1 已成功解封。
+
+解封后 `peers.json` 会被 raft 子系统读取并消化——你能在 `/var/log/vault-1.log` 中看到类似日志：
+
+```bash
+grep -i "peers.json\|recover" /var/log/vault-1.log | tail -20
+```
+
+会出现诸如 "found peers.json file, recovering Raft configuration..." 之类的字样，并且 `peers.json` 文件在被消化后会被 raft 自动**删除**：
+
+```bash
+ls /opt/vault/data-1/raft/peers.json 2>&1
+```
+
+预期输出 `No such file or directory`——这是 raft 设计：peers.json 是一次性消耗品，正是 [6.4 节 §10.3](/ch6-integrated-storage) 开头警告"绝对不要把该文件纳入任何'周期性自动重写'的脚本"的根源。
 
 确认集群成员已收敛到只剩 node-1：
 

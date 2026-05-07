@@ -43,7 +43,7 @@ ls -la /root/raft-good.snap
 vault operator raft snapshot inspect /root/raft-good.snap
 ```
 
-输出会显示 `Total Size`、各种 `Type` 的 key 计数与大小汇总——可用于判断快照是否完整、与预期数据规模是否相符。
+输出顶部会显示快照的 `ID`、`Size`、`Index`、`Term` 与 `Version`；下方表格按 `Key Name` 汇总每类底层存储前缀的 `Count` 与 `Size`，末尾还有 `Total Size`。这可用于判断快照是否能被正常解析、与预期数据规模是否相符。
 
 ## 4.4 故意写入"快照之后"的数据，标记两个时间点的差异
 
