@@ -73,7 +73,7 @@ docker logs localstack 2>&1 | grep -iE 'kms|encrypt|decrypt' | tail -10
 ## 3.5 验证 root token 真的可用
 
 ```bash
-vault token lookup | head -10
+vault token lookup | grep -E '^(policies|type|ttl)\b'
 ```
 
 应看到 `policies` 是 `[root]`、`type` 是 `service`——一切正常。

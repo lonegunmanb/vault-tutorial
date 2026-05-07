@@ -1,6 +1,6 @@
 {
   "title": "Auto-Unseal 完整闭环：用 LocalStack 模拟 AWS KMS",
-  "description": "在非 dev 模式 raft 单节点 Vault 上接入 LocalStack 模拟的 AWS KMS：(1) 启动 LocalStack 并在其上创建带 alias 的 KMS 密钥；(2) 在 vault.hcl 中追加 seal \"awskms\" 块，把 endpoint 指向 LocalStack 并用间接值引用注入凭据；(3) 执行 vault operator init 观察生成的是 recovery keys 而非 unseal keys；(4) kill Vault 进程并再次启动，确认无需人工解封即回到 unsealed 状态；(5) 故意停掉 LocalStack 后再启动 Vault，复现 KMS 不可达导致启动失败的故障路径。",
+  "description": "在非 dev 模式 raft 单节点 Vault 上接入 LocalStack 模拟的 AWS KMS：(1) 启动 LocalStack 并在其上创建带 alias 的 KMS 密钥；(2) 架设一个 socat KMS 流量代理并在 vault.hcl 中追加 seal \"awskms\" 块，把 endpoint 指向代理端口；(3) 执行 vault operator init 观察生成的是 recovery keys 而非 unseal keys；(4) kill Vault 进程并再次启动，确认无需人工解封即回到 unsealed 状态；(5) 杀掉 KMS 流量代理 socat 进程复现 KMS 不可达的故障路径，再拉起代理验证 Vault 干净恢复。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -13,7 +13,7 @@
         "text": "step1/text.md"
       },
       {
-        "title": "在 vault.hcl 中追加 seal \"awskms\" 块",
+        "title": "架设 socat KMS 代理并在 vault.hcl 中追加 seal \"awskms\" 块",
         "text": "step2/text.md"
       },
       {
@@ -25,7 +25,7 @@
         "text": "step4/text.md"
       },
       {
-        "title": "停掉 LocalStack 复现 KMS 不可达故障路径",
+        "title": "杀掉 KMS 流量代理复现 KMS 不可达故障路径",
         "text": "step5/text.md"
       }
     ],

@@ -15,6 +15,10 @@ if ! command -v docker > /dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq docker.io > /dev/null 2>&1
 fi
 
+if ! command -v socat > /dev/null 2>&1; then
+  apt-get update -qq && apt-get install -y -qq socat > /dev/null 2>&1
+fi
+
 install_awscli &
 INSTALL_AWS_PID=$!
 

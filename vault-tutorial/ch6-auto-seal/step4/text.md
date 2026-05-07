@@ -63,10 +63,18 @@ docker logs localstack 2>&1 | grep -iE 'decrypt' | tail -5
 
 ## 4.6 反向验证：root token 仍然有效
 
-虽然进程重启了，root token 依然写在 `/etc/profile.d/vault.sh` 中，自动加载到当前 shell：
+虽然进程重启了，root token 依然写在 `/etc/profile.d/vault.sh` 中，自动加载到当前 shell。直接过滤出 `policies` 行：
 
 ```bash
-vault token lookup | head -5
+vault token lookup | grep -E '^(policies|type|ttl)\b'
+```
+
+应能看到：
+
+```
+policies          [root]
+ttl               0s
+type              service
 ```
 
 `policies` 仍是 `[root]`——根密钥成功解密了存储后端中保存的 token 元数据。

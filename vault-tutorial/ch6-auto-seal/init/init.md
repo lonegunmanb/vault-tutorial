@@ -8,9 +8,9 @@
 
 实验开始时，环境已完成下列准备：
 
-- 已安装 `vault`、`jq`、`openssl`、`curl`、`docker`、`awscli` v2 与 `awslocal`；
+- 已安装 `vault`、`jq`、`openssl`、`curl`、`docker`、`awscli` v2、`awslocal` 与 `socat`（后者在 Step 2 用作 KMS 流量的可宕机中转层）；
 - 已预拉 `localstack/localstack:3` 容器镜像；
 - 已在 `/root/vault.hcl` 中预置一份**仅含 `storage` / `listener` 的最小配置**——`seal` 块由学员在 Step 2 自行追加；
 - 已把 `VAULT_ADDR=http://127.0.0.1:8200` 与 `AWS_ACCESS_KEY_ID=test` / `AWS_SECRET_ACCESS_KEY=test` / `AWS_DEFAULT_REGION=us-east-1` 写入 `/etc/profile.d/`，登录 shell 自动加载。
 
-LocalStack 容器与 Vault 进程**均尚未启动**；请依照后续步骤逐一手动启动。
+LocalStack 容器、KMS 流量代理、Vault 进程**均尚未启动**；请依照后续步骤逐一手动启动。

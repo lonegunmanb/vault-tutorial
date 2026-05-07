@@ -295,9 +295,9 @@ seal "awskms" {
 本节配套了一个 Killercoda 实验，学员将基于 LocalStack 模拟的 AWS KMS 服务，**亲手把一个 Shamir 模式的非 dev raft Vault 升级为 AWS KMS auto-unseal**，并通过若干实际操作验证本节几个最重要的边界行为。完成下列练习：
 
 - **Step 1**：启动 LocalStack（仅 KMS 服务），用 awscli 在 LocalStack 上创建一把 KMS 密钥并赋予 alias。
-- **Step 2**：在原本只声明了 `storage` / `listener` 的 `vault.hcl` 上追加一个 `seal "awskms"` 块，把 `endpoint` 指向 LocalStack（演示间接值引用与 endpoint 的实际作用），重启 Vault。
+- **Step 2**：架设一个 `socat` TCP 代理作为 Vault 与 LocalStack 之间可宕机的中转层；在原本只声明了 `storage` / `listener` 的 `vault.hcl` 上追加一个 `seal "awskms"` 块，把 `endpoint` 指向代理端口（同时演示间接值引用与 endpoint 的实际作用），重启 Vault。
 - **Step 3**：执行 `vault operator init`，亲眼观察输出**不是** unseal keys，而是 recovery keys + root token。
 - **Step 4**：直接 `kill` Vault 进程并再次启动，观察 Vault **无需任何人工解封步骤**就回到 unsealed 状态——这就是 auto-unseal 在工作。
-- **Step 5**：故意停掉 LocalStack 容器，再次重启 Vault，复现"KMS 不可达 → Vault 启动失败 / 卡 sealed"的故障路径，体会 KMS 在启动瞬间的强依赖性质。
+- **Step 5**：杀掉 `socat` 代理进程模拟 KMS 不可达，先验证 Vault 进程还在跑时业务不受影响；再重启 Vault 复现"KMS 不可达 → Vault 启动失败"的故障路径；最后拉起代理，验证 Vault 重启即可干净 auto-unseal。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch6-auto-seal" title="实验：用 LocalStack 模拟 AWS KMS 完成 Vault auto-unseal 全闭环" />
