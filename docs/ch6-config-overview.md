@@ -74,8 +74,8 @@ telemetry {
 
 当存储后端支持高可用时，Vault 集群中的节点之间需要互相找到对方，这通过两个“通告地址”实现：
 
-- `api_addr`：本节点向集群中其他节点通告的、可供客户端被重定向到的完整 API URL；该值同时被插件后端使用，可由环境变量 `VAULT_API_ADDR` 提供，通常应当与 `listener` 块的实际对外地址保持一致。
-- `cluster_addr`：本节点向集群中其他节点通告的、用于请求转发的完整地址；可由环境变量 `VAULT_CLUSTER_ADDR` 提供。该值在格式上与 `api_addr` 一致，但 Vault 会忽略其中的 scheme，因为集群成员之间始终强制使用基于私有密钥与证书的 TLS。
+- `api_addr`：可以把它理解为“客户端应该通过哪个 API 地址找到本节点”。当其它 Vault 节点需要把客户端请求重定向到本节点时，会使用这个完整 URL；插件后端也会读取这个值。它可由环境变量 `VAULT_API_ADDR` 提供，通常应当写成客户端实际可访问的 `listener` 对外地址，或前方负载均衡器暴露的 API 地址。
+- `cluster_addr`：可以把它理解为“其它 Vault 节点应该通过哪个集群地址找到本节点”。它主要用于 standby 节点与 active 节点之间的请求转发和集群内部通信，普通客户端通常不会直接访问这个地址。它可由环境变量 `VAULT_CLUSTER_ADDR` 提供；格式上也是完整 URL，但 Vault 会忽略其中的 scheme，因为集群成员之间始终强制使用基于私有密钥与证书的 TLS。
 - `disable_clustering`：是否关闭请求转发等集群特性；只有当本节点恰好是 active 节点时，把它设为 `true` 才会真正生效；如果存储类型是 `raft`，则**不允许**把这个参数设为 `true`。
 
 `api_addr` 与 `cluster_addr` 都支持 [go-sockaddr 模板](https://pkg.go.dev/github.com/hashicorp/go-sockaddr/template) 写法，便于在运行时根据节点自身的网卡情况动态求值；这在使用容器编排或自动伸缩时非常关键。
@@ -88,7 +88,7 @@ telemetry {
 
 下列顶层参数会显著改变 Vault 进程的运行时行为，建议在第一次起服务前就明确选定：
 
-- `disable_mlock`（**必填，bool**）：是否阻止 Vault 调用 `mlock` 系统调用；`mlock` 用于阻止内存换页到磁盘。文档明确要求：当使用 integrated storage（即 raft 存储）时，**必须**显式给出该参数的取值，并且**强烈建议**把它设为 `true`，因为 `mlock` 与 BoltDB 这类内存映射文件配合得不好，会把整个数据集都常驻内存。该参数也可以通过环境变量 `VAULT_DISABLE_MLOCK` 提供。
+- `disable_mlock`（bool）：是否阻止 Vault 调用 `mlock` 系统调用；`mlock` 用于阻止内存换页到磁盘。文档要求：当使用 integrated storage（即 raft 存储）时，应当显式给出该参数的取值，并且**强烈建议**把它设为 `true`，因为 `mlock` 与 BoltDB 这类内存映射文件配合得不好，会把整个数据集都常驻内存。该参数也可以通过环境变量 `VAULT_DISABLE_MLOCK` 提供。在当前实验使用的 Vault 版本中，如果省略该参数，服务可能仍会启动，但会回退为启用 `mlock`，因此不要依赖默认行为。
 - `cache_size`（默认 `"131072"`）：物理存储子系统使用的读缓存条目数；总占用还取决于条目大小。
 - `disable_cache`（默认 `false`）：禁用 Vault 内部所有缓存，包括上面的物理存储读缓存；文档警告“会显著影响性能”，因此通常仅在排错时短暂开启。
 - `ui`（默认 `false`）：是否启用内置 Web UI；启用后所有 listener 的 `/ui` 路径都会暴露 UI，浏览器访问标准 API 地址会被自动重定向过去；可通过环境变量 `VAULT_UI` 提供。
@@ -166,7 +166,7 @@ default_lease_ttl = "168h"
 max_lease_ttl     = "720h"
 ```
 
-字段选取依据：`storage` / `listener` 必填，`disable_mlock` 在使用 integrated storage 时必须显式给出，`api_addr` 与 `cluster_addr` 用于让节点向集群通告自己的位置，`default_lease_ttl` / `max_lease_ttl` 演示如何覆盖默认 768 小时。
+字段选取依据：`storage` / `listener` 必填，`disable_mlock = true` 用于避免 raft 存储下启用 `mlock` 带来的内存映射文件问题，`api_addr` 与 `cluster_addr` 用于让节点向集群通告自己的位置，`default_lease_ttl` / `max_lease_ttl` 演示如何覆盖默认 768 小时。
 
 ---
 
@@ -177,6 +177,6 @@ max_lease_ttl     = "720h"
 - **Step 1**：阅读预置的 `vault.hcl`，识别其中的顶层参数与命名块，对照本文 1-9 节定位每一项的职责。
 - **Step 2**：使用 `vault server -config=...` 启动服务，初始化并解封，体验“没有配置文件就无法启动”这一前提。
 - **Step 3**：通过修改 `log_level` 并发送 `SIGHUP` 验证日志级别可被就地刷新；同时观察 SIGHUP 不会重启进程。
-- **Step 4**：故意把 `disable_mlock` 删除，复现 raft 存储下启动失败的报错信息；理解为什么文档把这一项标为必填。
+- **Step 4**：故意把 `disable_mlock` 注释掉，观察 Vault 回退为启用 `mlock` 的行为；理解为什么 raft 配置中通常要显式写出 `disable_mlock = true`。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch6-config-overview" title="实验：Vault 配置文件骨架与全局开关" />

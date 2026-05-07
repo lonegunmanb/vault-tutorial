@@ -11,7 +11,7 @@ cat /root/vault.hcl
 | 配置元素 | 类型 | 在本实验中的作用 |
 | :--- | :--- | :--- |
 | `ui = true` | 顶层标量 | 启用内置 Web UI |
-| `disable_mlock = true` | 顶层标量 | 使用 raft 存储时**必须**显式给出，且建议为 `true` |
+| `disable_mlock = true` | 顶层标量 | 使用 raft 存储时建议显式设为 `true`，避免启用 `mlock` |
 | `cluster_name` | 顶层标量 | 给本集群一个人类可读的名字 |
 | `log_level = "info"` | 顶层标量 | 日志详尽程度（步骤 3 会通过 SIGHUP 改它） |
 | `pid_file` | 顶层标量 | 把 Vault 进程 PID 写入文件，步骤 3 用它发送 SIGHUP |

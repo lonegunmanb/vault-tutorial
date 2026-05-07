@@ -32,7 +32,7 @@ ps -p "$(cat /tmp/vault.pid)" -o pid,etime,cmd
 
 ```bash
 vault read sys/health || true
-vault token lookup-self
+vault token lookup
 ```
 
 观察日志，应能看到包含 `[DEBUG]` 标签的行；如果没有，可以再多调用几次 API：
