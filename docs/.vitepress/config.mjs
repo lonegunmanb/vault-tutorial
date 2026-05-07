@@ -91,7 +91,8 @@ export default defineConfig({
            collapsed: false,
            items: [
              { text: '6.1 配置文件架构纵览与现代 HCL 语法规范', link: '/ch6-config-overview' },
-             { text: '6.2 网络监听器（Listener）与最高级别 TLS 协议族强化配置', link: '/ch6-listener-tls' }
+             { text: '6.2 网络监听器（Listener）与最高级别 TLS 协议族强化配置', link: '/ch6-listener-tls' },
+             { text: '6.3 自动化云端解封（Auto-Seal）机制对接（AWS KMS, Azure Key Vault, Transit 代理）', link: '/ch6-auto-seal' }
            ]
          }
         ],
