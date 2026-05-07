@@ -40,6 +40,7 @@
     { "path": "ch6-config-overview" },
     { "path": "ch6-ha" },
     { "path": "ch6-other-storage" },
-    { "path": "ch6-telemetry-ui" }
+    { "path": "ch6-telemetry-ui" },
+    { "path": "ch6-user-lockout" }
   ]
 }

@@ -1,0 +1,39 @@
+{
+  "title": "user lockout 实操：触发锁定、查询并解锁、用环境变量全局关停",
+  "description": "在单台 Killercoda 主机上启动一个开启 userpass 认证方法的单节点 Vault，把 user_lockout 三个参数都调到很小的数值，亲手复现 6.9 节正文中的几条核心结论：(1) 连续输错若干次密码后用户进入锁定状态、即便此后输入正确密码也会被立刻拒绝；(2) 通过 GET /sys/locked-users 列出所有被锁用户、通过 POST /sys/locked-users/:accessor/unlock/:alias 主动解锁、并验证该端点是幂等的；(3) 通过 VAULT_DISABLE_USER_LOCKOUT 环境变量在最高优先级上全局关停整套机制，验证此时连续失败登录不再触发锁定。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "故意触发 user lockout 并观察 permission denied",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "通过 /sys/locked-users 查询并解锁用户",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "用 VAULT_DISABLE_USER_LOCKOUT 全局关停",
+        "text": "step3/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
