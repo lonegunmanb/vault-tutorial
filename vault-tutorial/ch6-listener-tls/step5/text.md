@@ -91,6 +91,8 @@ sudo -u tester -i bash -c '
 
 将 `socket_mode` 修改为 `666`，观察放开权限后的行为差异：
 
+> **关于 `666` 的含义**：按 5.2 节末尾给出的"读(r=4) + 写(w=2) + 执行(x=1)"规则，`666` 对应 `rw- rw- rw-`，即**属主、属组、其他用户三类身份均可对该文件进行读写**。对 Unix domain socket 而言，这意味着本机上**任何**用户进程（含上一段创建的 `tester`）都可以 `connect()` 到该 socket 并调用 Vault API——这是一种刻意"敞开门"的演示设置，正式环境绝对不应这样配置。
+
 ```bash
 sed -i 's|socket_mode  = "600"|socket_mode  = "666"|' /root/vault.hcl
 kill "$(cat /tmp/vault.pid)" 2>/dev/null || true
