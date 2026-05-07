@@ -1,0 +1,47 @@
+{
+  "title": "TCP listener TLS 1.3 强化与 Unix socket listener 共存",
+  "description": "从一份默认禁用 TLS 的 vault.hcl 出发，亲手生成自签 ECDSA 证书、把 listener 升级到 TLS 1.3 唯一可用并用 sslscan 验证；体验 SIGHUP 不会重载 TLS 协议版本；最后追加一个 Unix domain socket listener，用文件系统权限收紧本机访问。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "阅读基线 vault.hcl 并启动一个 HTTP 监听",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "生成自签 ECDSA 证书并启用 TLS",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "把 TLS 收紧到只允许 TLS 1.3",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "用 SIGHUP 验证 TLS 协议版本不可热加载",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "追加 Unix listener 并体验文件权限隔离",
+        "text": "step5/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

@@ -90,7 +90,8 @@ export default defineConfig({
            text: '第 6 章：集群配置文件调优与高可用自动化运维',
            collapsed: false,
            items: [
-             { text: '6.1 配置文件架构纵览与现代 HCL 语法规范', link: '/ch6-config-overview' }
+             { text: '6.1 配置文件架构纵览与现代 HCL 语法规范', link: '/ch6-config-overview' },
+             { text: '6.2 网络监听器（Listener）与最高级别 TLS 协议族强化配置', link: '/ch6-listener-tls' }
            ]
          }
         ],
