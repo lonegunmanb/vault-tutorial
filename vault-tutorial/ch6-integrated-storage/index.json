@@ -1,0 +1,51 @@
+{
+  "title": "Integrated Storage 全景：3 节点 Raft + Autopilot + Quorum 失守恢复",
+  "description": "在单台 Killercoda 主机上以端口区分启动一个 3 节点 Vault Raft 集群（全部通过 retry_join 自动组装）：(1) 用三份 vault.hcl 起 node-1/2/3 三个 Vault 进程并 init/unseal node-1，验证 list-peers 与 autopilot state；(2) 将 Server Stabilization Time 调高至 30 秒后再 join 第 4 个节点 node-4，观察 Voter 字段从 false 在 30 秒后变为 true 的过渡；(3) 启用 Dead Server Cleanup 并把 dead_server_last_contact_threshold 调小至 1 分钟，kill 掉 node-4 后等候 Autopilot 自动把它从 peers 列表中清除；(4) 写入一些 KV 数据并执行 vault operator raft snapshot save 拍下离线快照；(5) 强行同时 kill node-2 与 node-3 复现 quorum 永久丢失场景，对仅剩节点 node-1 写入只列自身的 peers.json 并重启，验证集群恢复；(6) 在已恢复的单节点集群上执行 snapshot restore 把数据回滚至步骤 4 拍照的状态，确认 KV 数据完好。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启动 3 节点 Raft 集群并初始化",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "调高 Server Stabilization Time 后加入 node-4 观察 non-voter 期",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "启用 Dead Server Cleanup 让 Autopilot 自动剔除被 kill 的节点",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "写入 KV 数据并保存 raft snapshot",
+        "text": "step4/text.md"
+      },
+      {
+        "title": "复现 quorum 永久丢失并通过 peers.json 重建集群",
+        "text": "step5/text.md"
+      },
+      {
+        "title": "用 snapshot restore 把数据回滚至上一已知良好状态",
+        "text": "step6/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

@@ -39,6 +39,7 @@
     { "path": "ch5-mount-migration" },
     { "path": "ch6-config-overview" },
     { "path": "ch6-listener-tls" },
-    { "path": "ch6-auto-seal" }
+    { "path": "ch6-auto-seal" },
+    { "path": "ch6-integrated-storage" }
   ]
 }

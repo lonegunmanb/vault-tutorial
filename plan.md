@@ -279,11 +279,14 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
 * 6.1 配置文件架构纵览与现代 HCL 语法规范  
 * 6.2 网络监听器（Listener）与最高级别 TLS 协议族强化配置  
 * 6.3 自动化云端解封（Auto-Seal）机制对接（AWS KMS, Azure Key Vault, Transit 代理）  
-* 6.4 **【全面更新】** 现代存储引擎的绝对基石：Integrated Storage (Raft) 协议深度剖析  
+* 6.4 **【全面更新】** 现代存储引擎的绝对基石：Integrated Storage (Raft) 协议与自动化运维  
+  * 6.4.1 Raft 一致性协议与 Integrated Storage 数据模型深度剖析  
+  * 6.4.2 **【核心新增】** 彻底解放人工干预：配置 Raft 自动驾驶仪（Autopilot）  
+  * 6.4.3 服务器观察稳定期（Server Stabilization Time）防抖动设置  
+  * 6.4.4 死节点无痛自动清理（Dead Server Cleanup）与 Quorum 阈值维护  
+  * 6.4.5 **【核心新增】** 故障兜底通道：Recovery Mode 启动机制、`-recovery` 标记与受限 API 子集  
+  * 6.4.6 Recovery Mode 实战：在 Quorum 永久丢失场景下抢救 Raft 节点与离线快照（`operator raft snapshot`）恢复  
 * 6.5 集群高可用模式（HA）的设计哲学及其数据一致性保障  
-* 6.6 **【核心新增】** 彻底解放人工干预：配置 Raft 自动驾驶仪（Autopilot）  
-  * 6.6.1 服务器观察稳定期（Server Stabilization Time）防抖动设置  
-  * 6.6.2 死节点无痛自动清理（Dead Server Cleanup）与 Quorum 阈值维护  
 * 6.7 分布式服务注册与发现（K8s 原生发现机制与 Consul 集成模式）  
 * 6.8 核心指标遥测（Telemetry）暴露与可视化 UI 界面底层配置  
 * 6.9 大规模并发下的客户端重试、监听器连接控制与服务端遥测排查
