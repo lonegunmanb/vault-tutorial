@@ -286,6 +286,7 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
   * 6.4.4 死节点无痛自动清理（Dead Server Cleanup）与 Quorum 阈值维护  
   * 6.4.5 **【核心新增】** 故障兜底通道：Recovery Mode 启动机制、`-recovery` 标记与受限 API 子集  
   * 6.4.6 Recovery Mode 实战：在 Quorum 永久丢失场景下抢救 Raft 节点与离线快照（`operator raft snapshot`）恢复  
+* 6.5 其他存储 - Consul, DynamoDB, File system, In-memory storage, MySQL, Postgres, S3
 * 6.5 集群高可用模式（HA）的设计哲学及其数据一致性保障  
 * 6.7 分布式服务注册与发现（K8s 原生发现机制与 Consul 集成模式）  
 * 6.8 核心指标遥测（Telemetry）暴露与可视化 UI 界面底层配置  

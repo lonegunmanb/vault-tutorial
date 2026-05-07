@@ -1,0 +1,43 @@
+{
+  "title": "service_registration 实操：把 Vault 节点状态广播给 Consul 服务目录",
+  "description": "在单台 Killercoda 主机上启动一个 Consul dev agent 与一个 3 节点 Vault Raft 集群，在每个 Vault 节点的 vault.hcl 中加入 service_registration \"consul\" 块，把 6.7 节正文中的概念变成可观察的现象：(1) 启动 Consul + 3 节点 Vault Raft 集群，初始化并解封后通过 HTTP catalog API 与 dig 看到 vault 服务被注册；(2) 分别查询 active.vault.service.consul / standby.vault.service.consul / vault.service.consul 三个 DNS 端点，验证 active 解析到唯一活跃节点、standby 解析到所有待命节点、vault 解析到全部已 unseal 节点；(3) 主动 seal 掉一个待命节点，观察其在数秒内从 vault.service.consul 与 standby.vault.service.consul 中消失；(4) 在 service_registration 块中加入 service_tags 与 service_meta，重启一个节点后通过 catalog API 看到这些自定义标签出现在该节点的服务条目里。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启动 Consul + 3 节点 Vault 集群并完成注册",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "查询 active / standby / vault 三个 DNS 端点",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "Seal 一个待命节点：观察它从服务目录消失",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "为节点加上自定义 service_tags 与 service_meta",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

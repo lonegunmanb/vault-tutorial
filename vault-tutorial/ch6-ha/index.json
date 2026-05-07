@@ -1,0 +1,43 @@
+{
+  "title": "HA 模式实操：观察请求转发、强制重定向与活跃节点切换",
+  "description": "在单台 Killercoda 主机上以端口区分启动一个 3 节点 Vault Raft 集群（每个节点配置自身指向自身的 api_addr），并把 6.6 节正文中的几对核心概念变成可观察的现象：(1) 启动并初始化集群，用 sys/leader API 找出当前的 active/standby 节点；(2) 在默认状态下向一个 standby 节点发起 KV 读取，确认请求被透明转发并直接拿到 200 响应；(3) 在同一请求上加 X-Vault-No-Request-Forwarding: 1 头，观察 standby 改用 307 重定向，验证 Location 头里的地址正是该 standby 配置的活跃节点 api_addr；(4) kill 掉当前 leader 进程触发 Raft 重新选举，等待新 leader 出现后再次执行步骤 2 与 3，确认新的 leader 与新的重定向目标。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启动 3 节点集群并定位 active / standby",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "向 standby 发请求：观察默认的请求转发",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "加 X-Vault-No-Request-Forwarding 头：观察 307 重定向",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "kill 掉 leader 触发重新选举并复测两条路径",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

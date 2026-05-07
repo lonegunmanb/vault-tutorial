@@ -1,0 +1,118 @@
+# 第一步：启动 3 节点集群并验证 `/v1/sys/metrics` 的四条访问规则
+
+## 1.1 启动并初始化
+
+按 bootstrap → follower 顺序拉起 3 个节点：
+
+```bash
+./start-node.sh 1
+sleep 3
+./start-node.sh 2
+./start-node.sh 3
+sleep 3
+```
+
+对 node-1 执行初始化（为简化课堂演示，使用 1/1 分片）：
+
+```bash
+vault operator init -key-shares=1 -key-threshold=1 \
+  -format=json > /root/init-output.json
+
+UNSEAL_KEY=$(jq -r '.unseal_keys_b64[0]' /root/init-output.json)
+ROOT_TOKEN=$(jq -r '.root_token' /root/init-output.json)
+
+cat >> /etc/profile.d/vault.sh <<EOF
+export UNSEAL_KEY='${UNSEAL_KEY}'
+export VAULT_TOKEN='${ROOT_TOKEN}'
+EOF
+source /etc/profile.d/vault.sh
+```
+
+依次解封三个节点：
+
+```bash
+vault operator unseal "$UNSEAL_KEY"
+VAULT_ADDR=http://127.0.0.1:8210 vault operator unseal "$UNSEAL_KEY"
+VAULT_ADDR=http://127.0.0.1:8220 vault operator unseal "$UNSEAL_KEY"
+sleep 3
+```
+
+通过 `find-leader.sh` 找出当前活跃节点的端口：
+
+```bash
+LEADER_PORT=$(./find-leader.sh)
+echo "leader = ${LEADER_PORT}"
+
+# 任挑一个非 leader 端口作为本节实验的"目标 standby"
+for p in 8200 8210 8220; do
+  if [ "$p" != "$LEADER_PORT" ]; then
+    STANDBY_PORT=$p
+    break
+  fi
+done
+echo "standby = ${STANDBY_PORT}"
+```
+
+## 1.2 规则一：只有 leader 响应；standby（OSS 版）会返回 307 重定向
+
+先在不带任何特殊处理的情况下，向 leader 与 standby 各自的 `/v1/sys/metrics` 发起请求，观察状态行的差异：
+
+```bash
+echo "=== leader: ${LEADER_PORT} ==="
+curl -sS -o /dev/null -w "HTTP %{http_code}\n" \
+  -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Accept: prometheus/telemetry" \
+  "http://127.0.0.1:${LEADER_PORT}/v1/sys/metrics"
+
+echo "=== standby: ${STANDBY_PORT} (no -L, observe 307) ==="
+curl -sS -i \
+  -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Accept: prometheus/telemetry" \
+  "http://127.0.0.1:${STANDBY_PORT}/v1/sys/metrics" | head -n 10
+```
+
+预期：leader 返回 `HTTP 200`；standby 返回 `HTTP 307` 并在 `Location` 响应头中给出 leader 的 `api_addr`（即 `http://127.0.0.1:8200/v1/sys/metrics` 这一类）。这就是正文所讲的"OSS 版待命节点对 `/v1/sys/metrics` 不转发、改为重定向"。
+
+## 1.3 规则二：必须带 token；不带或权限不足都会被拒
+
+```bash
+# 不带 token
+curl -sS -o /dev/null -w "无 token: HTTP %{http_code}\n" \
+  -H "Accept: prometheus/telemetry" \
+  "http://127.0.0.1:${LEADER_PORT}/v1/sys/metrics"
+```
+
+预期返回 `HTTP 403`，因为该路径需要带有 `read` 与 `list` 能力的 token。
+
+## 1.4 规则三：必须带正确的 Accept 头才返回 Prometheus 文本格式
+
+不带 Accept 头 / 带任意其它 Accept 值时，端点会返回 JSON 格式的 go-metrics 快照；只有带 `prometheus/telemetry` 或 `application/openmetrics-text` 时才返回 Prometheus 文本：
+
+```bash
+echo "=== 不带 Accept：JSON ==="
+curl -sS -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  "http://127.0.0.1:${LEADER_PORT}/v1/sys/metrics" | head -c 200
+echo
+
+echo "=== 带 Accept: prometheus/telemetry：文本 ==="
+curl -sS -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Accept: prometheus/telemetry" \
+  "http://127.0.0.1:${LEADER_PORT}/v1/sys/metrics" | head -n 5
+```
+
+预期：第一段输出以 `{"Counters":...` 开头；第二段输出以 `# HELP ...` 与 `# TYPE ...` 开头，是标准的 Prometheus 暴露格式。
+
+## 1.5 规则四：路径必须显式写 `/v1/sys/metrics`
+
+```bash
+curl -sS -o /dev/null -w "默认 /metrics: HTTP %{http_code}\n" \
+  -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Accept: prometheus/telemetry" \
+  "http://127.0.0.1:${LEADER_PORT}/metrics"
+```
+
+预期返回 `HTTP 404`——这正是 Prometheus 抓取作业必须显式设置 `metrics_path: "/v1/sys/metrics"` 的原因。
+
+## 1.6 这一步的核心闭环
+
+集群已稳定运行；正文中"`/v1/sys/metrics` 的四条访问规则"全部在终端里被复现：只有 leader 直接响应、必须带 token、必须带正确 Accept、路径必须正确。下一步把 standby 改造为允许未授权指标访问，观察其行为转变。

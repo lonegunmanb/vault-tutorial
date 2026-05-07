@@ -1,0 +1,39 @@
+{
+  "title": "其他存储后端实操：filesystem / in-memory / postgresql 三连切换",
+  "description": "在同一台 Killercoda 主机上，依次以 filesystem、in-memory、postgresql 三种 storage 块启动 Vault 进程，亲眼观察三者在持久化语义与运维步骤上的差异：(1) filesystem 后端写入 KV 数据 → 重启进程 → 验证数据仍在；(2) in-memory 后端写入 KV 数据 → 重启进程 → 验证数据全部丢失；(3) postgresql 后端按官方 schema 手工执行 CREATE TABLE → 启动 Vault → 写入 KV 数据 → 在 PostgreSQL 表里直接 SELECT 出加密后的字节，亲手验证密文落在哪里。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "filesystem 后端：单节点持久化的最小可行写法",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "in-memory 后端：重启即丢失的演示",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "postgresql 后端：手工建表 + 直接观察密文行",
+        "text": "step3/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "title": "telemetry 与 ui 实操：Prometheus 拉取链路、未授权指标访问与 UI 暴露面",
+  "description": "在单台 Killercoda 主机上启动一个 3 节点 Vault Raft 集群，亲手把顶层 telemetry 块、listener.telemetry 子块与 ui 开关分别配置上，并通过 curl 直接观察 6.8 节正文中的几条核心结论：(1) 启动并初始化集群，验证只有活跃节点响应 /v1/sys/metrics、且必须带 token 与正确 Accept 头才能拿到 Prometheus 文本格式；(2) 在一个待命节点的 listener 中加入 telemetry { unauthenticated_metrics_access = true } 并 SIGHUP 重载，验证该节点开始就地返回自身指标且免除 token 依赖；(3) 在顶层 telemetry 块加入 prefix_filter，对比开启前后被屏蔽前缀的指标条数；(4) 通过 ui = true 与开放绑定地址，从浏览器入口确认 /ui/ 可正常返回 GUI HTML。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启动 3 节点集群并验证 /v1/sys/metrics 的四条访问规则",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "为待命节点开启 unauthenticated_metrics_access",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "用 prefix_filter 按前缀粗筛指标",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "开启 ui 并访问内置 GUI",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
