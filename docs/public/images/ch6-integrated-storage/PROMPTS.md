@@ -1,15 +1,15 @@
 # 6.4 Integrated Storage 章节图片绘制提示词
 
-> 风格统一要求：手绘风格（hand-drawn sketch / doodle style）；用真实事物比喻技术概念；线条带轻微抖动以体现"在白板上画"的质感；主色调使用深蓝色与橙色加少量灰；尽量避免文字，必须出现的英文单词限制在 3-4 个以内。所有图都使用横版 16:9 比例。
-
 ---
 
 ## 1. `integrated-storage-position.png`
 
 **比喻主题**：把 Vault 的 Integrated Storage 比喻成"几座一模一样的图书馆，每个馆员都把书库副本完整存在自己馆里，新书入库时通过馆际呼喊网络让所有馆同步上架"。
 
-**绘图提示词**（英文）：
-> Hand-drawn doodle on white paper, three identical small libraries side by side, each library has a tiny librarian inside holding a book, between every two libraries a dashed wavy line shows them shouting the same book title to each other, above the libraries a curly banner reading "RAFT". Soft blue and orange palette, slight pencil shading, 16:9 ratio.
+**绘图提示词**（中文）：
+> 钢笔线稿 + 水彩淡色阴影风格（ink line drawing with light watercolor wash），用真实事物比喻技术概念，黑色钢笔勾勒清晰轮廓，叠加柔和的水彩淡彩作为阴影与点缀，主色调使用深蓝色与橙色加少量灰，尽量避免文字、必须出现的英文单词限制在 3-4 个以内，横版 16:9 比例。
+>
+> 画面内容：三座一模一样的小图书馆并排而立，每座图书馆内部都有一位小小的馆员手捧一本书；每两座图书馆之间用虚线波浪线相连，表示它们在互相喊出同一本书的书名；图书馆上方有一条卷曲的横幅，写着 "RAFT"。
 
 ---
 
@@ -17,8 +17,10 @@
 
 **比喻主题**：把 Vault 节点 join 阶段的特殊握手比喻成"陌生人想加入秘密俱乐部时，先在门口靠暗号确认身份（API port），暗号对上之后才被领进只有会员才知道的内部走廊（cluster port）"。
 
-**绘图提示词**（英文）：
-> Hand-drawn doodle on white paper, on the left a small cottage labeled "API port" with a doorman peeking through a small window, a stranger outside whispering a secret password (a speech bubble showing a UUID-like wavy symbol), on the right of the cottage a long velvet-rope hallway labeled "cluster port" leading to three friendly cottages standing close together (the existing cluster). After the password is verified the stranger receives a tiny golden key. Soft blue and orange palette, sketchy pencil lines, 16:9 ratio.
+**绘图提示词**（中文）：
+> 钢笔线稿 + 水彩淡色阴影风格（ink line drawing with light watercolor wash），用真实事物比喻技术概念，黑色钢笔勾勒清晰轮廓，叠加柔和的水彩淡彩作为阴影与点缀，主色调使用深蓝色与橙色加少量灰，尽量避免文字、必须出现的英文单词限制在 3-4 个以内，横版 16:9 比例。
+>
+> 画面内容：左侧有一座标着 "API port" 的小屋，门卫从小窗户向外张望；屋外一位陌生人正在低声说出暗号（用一个对话气泡画出 UUID 风格的波浪符号）；小屋右侧延伸出一条铺着红绒绳的长走廊，标着 "cluster port"，通向紧挨在一起的三座友好的小屋（即既有 cluster）。暗号核对通过后，陌生人收到一把小小的金钥匙。
 
 ---
 
@@ -26,8 +28,10 @@
 
 **比喻主题**：把 Server Stabilization Time 比喻成"新员工试用期：先在办公室角落坐一段时间观察是否真的能干活，期满才发正式工牌允许投票表决"。
 
-**绘图提示词**（英文）：
-> Hand-drawn doodle on white paper, a small office room divided by a dashed line into two areas. On the left a "probation corner" with a stopwatch icon and a new employee sitting on a stool wearing a paper badge labeled "non-voter". On the right a "voting board room" with three employees holding raised hands and a real metal ID badge marked "voter". A curved arrow from the corner to the boardroom labeled "10s" with a tiny clock symbol. Soft blue and orange palette, sketchy pencil lines, 16:9 ratio.
+**绘图提示词**（中文）：
+> 钢笔线稿 + 水彩淡色阴影风格（ink line drawing with light watercolor wash），用真实事物比喻技术概念，黑色钢笔勾勒清晰轮廓，叠加柔和的水彩淡彩作为阴影与点缀，主色调使用深蓝色与橙色加少量灰，尽量避免文字、必须出现的英文单词限制在 3-4 个以内，横版 16:9 比例。
+>
+> 画面内容：一间小办公室被一条虚线分成两个区域。左侧是"试用期角落"，有一个秒表图标，一位新员工坐在凳子上，胸前挂着写有 "non-voter" 的纸质工牌。右侧是"投票会议室"，三位员工正高举双手表决，胸前挂着标有 "voter" 的真正金属工牌。一条弧形箭头从角落指向会议室，标注 "10s" 并配一个小时钟符号。
 
 ---
 
@@ -35,8 +39,10 @@
 
 **比喻主题**：把 quorum 永久丢失 + `peers.json` 修复比喻成"船队遭遇风暴大部分船只沉没，幸存的两艘船把彼此名字写到同一份手写名册上，凭这份名册重新组成新的小船队"。
 
-**绘图提示词**（英文）：
-> Hand-drawn doodle on white paper, stormy ocean background with several sunken ships only showing their masts above the waves; two surviving small wooden boats float close to each other, on each boat a sailor writes the same handwritten roster (a tiny scroll labeled "peers.json") that lists only the two surviving ships' names; a fresh sun starts to rise behind them. Soft blue and orange palette, sketchy pencil lines, 16:9 ratio.
+**绘图提示词**（中文）：
+> 钢笔线稿 + 水彩淡色阴影风格（ink line drawing with light watercolor wash），用真实事物比喻技术概念，黑色钢笔勾勒清晰轮廓，叠加柔和的水彩淡彩作为阴影与点缀，主色调使用深蓝色与橙色加少量灰，尽量避免文字、必须出现的英文单词限制在 3-4 个以内，横版 16:9 比例。
+>
+> 画面内容：背景是暴风雨后的海面，有几艘沉没的船只仅露出桅杆；两艘幸存的小木船紧靠漂浮在一起，每艘船上的水手都在书写同一份手写名册（一卷小卷轴，标着 "peers.json"），名册上只列出这两艘幸存船只的名字；它们身后一轮新生的太阳正在升起。
 
 ---
 
@@ -44,5 +50,11 @@
 
 **比喻主题**：左右对比"正常 Vault" vs "Recovery Mode"。正常 Vault 是一辆完整装配的车（仪表盘、方向盘、空调全部就位）；Recovery Mode 是同款车被拆掉外壳露出底盘，只剩一个手动操纵杆，车上挂着一把唯一的金钥匙（recovery token）。
 
-**绘图提示词**（英文）：
-> Hand-drawn doodle on white paper, left half shows a fully assembled small car with steering wheel, dashboard with multiple gauges, and a normal door key on the seat (label "normal"). Right half shows the exact same car but with the body removed exposing the chassis; only a single manual lever sticks out, and a single golden key labeled "recovery token" hangs from the lever. A vertical dashed line separates the two halves. Soft blue and orange palette, sketchy pencil lines, 16:9 ratio.
+**绘图提示词**（中文）：
+> 钢笔线稿 + 水彩淡色阴影风格（ink line drawing with light watercolor wash），用真实事物比喻技术概念，黑色钢笔勾勒清晰轮廓，叠加柔和的水彩淡彩作为阴影与点缀，主色调使用深蓝色与橙色加少量灰，尽量避免文字、必须出现的英文单词限制在 3-4 个以内，横版 16:9 比例。
+>
+> 画面内容：整张图被一条居中的竖直虚线分为左右两半，两侧各画一辆侧视角（side view）的同款小汽车，车头都朝向画面右侧。
+>
+> 左半边（"正常 Vault"）：一辆装配完整的小汽车，车身轮廓完整闭合（车顶、车门、车窗、四个车轮齐全）；通过左前侧打开的车门可以看到车内部——方向盘位于车头驾驶舱内侧、紧贴前挡风玻璃下方，方向盘正前方是一块嵌入仪表台的圆形仪表盘（带 2-3 个小表针）；驾驶员座椅是车内靠近方向盘的那把座椅，座椅坐垫正中央放着一把普通银色车门钥匙，钥匙旁边有一个小小的标签写着 "normal"。
+>
+> 右半边（"Recovery Mode"）：完全相同的车型，但车身外壳（车顶、车门、车窗）全部被移除，仅保留底部的底盘、四个车轮、以及裸露的发动机轮廓——画面上只能看到一个平板状的金属底盘和外露的机械结构。底盘正中央**仅**竖直伸出一根手动操纵杆（gear lever 形状，垂直向上），操纵杆顶端的握把上用一根细绳挂着一把金色钥匙，钥匙在握把下方自然下垂，钥匙旁边的标签写着 "recovery token"。**右半边不画方向盘、不画仪表盘、不画座椅、不画车门**。

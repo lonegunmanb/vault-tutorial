@@ -423,3 +423,5 @@ Redundancy Zones 在节点配置文件中通过 `storage "raft" { ... autopilot_
 - 离线 raft 快照（`operator raft snapshot save / inspect / restore`）是与本节直接相关的高频命令，建议在生产部署中以 cron / CronJob 形式自动周期执行。
 
 本节配套的动手实验在严格的"零真实云、零企业版授权"约束下，让学员在一台 Killercoda 主机上通过端口区分启动 3 个节点的 raft 集群，依次演练：组装集群、通过 `autopilot state` 进行观察、把 Server Stabilization Time 调高后再添加节点观察 `Voter=false` → `Voter=true` 的过渡、启用 Dead Server Cleanup 后让 Autopilot 自动剔除被 kill 的节点、使用 `snapshot save` 创建快照、然后通过 quorum 永久丢失 + `peers.json` 重组路径完整地把数据从快照中恢复回来。
+
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch6-integrated-storage" title="实验：单机三节点 Raft 集群的 Autopilot 观察与 peers.json 灾难恢复" />
