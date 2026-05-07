@@ -93,10 +93,21 @@ ls /opt/vault/data-1/raft/peers.json 2>&1
 ## 5.5 解封 node-1 并验证集群已恢复
 
 ```bash
-vault operator unseal "$UNSEAL_KEY"
+vault operator unseal "$(jq -r '.unseal_keys_b64[0]' /root/init-output.json)"
+
+echo "等待 node-1 解封完成 ..."
+until curl -sS "http://127.0.0.1:8200/v1/sys/seal-status" \
+  | jq -e '.sealed == false' >/dev/null; do
+  curl -sS "http://127.0.0.1:8200/v1/sys/seal-status" \
+    | jq '{initialized,sealed,progress,cluster_id}'
+  sleep 2
+done
+
+curl -sS "http://127.0.0.1:8200/v1/sys/seal-status" \
+  | jq '{initialized,sealed,cluster_id}'
 ```
 
-`Sealed: false` 表示 node-1 已成功解封。
+`"sealed": false` 表示 node-1 已成功解封。
 
 确认集群成员已收敛到只剩 node-1：
 

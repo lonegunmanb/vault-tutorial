@@ -26,10 +26,21 @@ vault operator raft autopilot get-config | grep "Server Stabilization Time"
 ```bash
 ./start-node.sh 4
 sleep 3
-VAULT_ADDR=http://127.0.0.1:8230 vault operator unseal "$UNSEAL_KEY"
+VAULT_ADDR=http://127.0.0.1:8230 vault operator unseal "$(jq -r '.unseal_keys_b64[0]' /root/init-output.json)"
+
+echo "等待 node-4 完成 retry_join + unseal ..."
+until curl -sS "http://127.0.0.1:8230/v1/sys/seal-status" \
+  | jq -e '.sealed == false' >/dev/null; do
+  curl -sS "http://127.0.0.1:8230/v1/sys/seal-status" \
+    | jq '{initialized,sealed,progress,cluster_id}'
+  sleep 2
+done
+
+curl -sS "http://127.0.0.1:8230/v1/sys/seal-status" \
+  | jq '{initialized,sealed,cluster_id}'
 ```
 
-最末尾输出应当是 `Sealed: false`，node-4 已加入集群并解封。
+最终输出应当显示 `"sealed": false`，node-4 已加入集群并解封。
 
 ## 2.3 立即查看 peer 列表，确认 node-4 是 non-voter
 

@@ -37,7 +37,7 @@ export VAULT_TOKEN='${ROOT_TOKEN}'
 EOF
 source /etc/profile.d/vault.sh
 
-vault operator unseal "$UNSEAL_KEY"
+vault operator unseal "$(jq -r '.unseal_keys_b64[0]' /root/init-output.json)"
 ```
 
 `vault operator unseal` 应输出 `Sealed: false`，node-1 解封完成。
@@ -54,14 +54,31 @@ sleep 5
 
 由于本实验使用 Shamir seal（而非 auto-unseal），按 [6.4 节 §3](/ch6-integrated-storage) 的说明，`retry_join` 完成后 node-2 与 node-3 仍需要被人工 unseal——它们已经成功 join 了集群，但仍处于 sealed 状态。
 
-分别 unseal node-2 与 node-3。这里直接把 `jq` 内联到命令里，不再依赖任何环境变量——Killercoda 中跨多行的 shell 变量赋值有时不会被带到下一行，最稳妥的写法是每次都从 `init-output.json` 现读：
+分别向 node-2 与 node-3 提供 unseal key。这里直接把 `jq` 内联到命令里，不再依赖任何环境变量——Killercoda 中跨多行的 shell 变量赋值有时不会被带到下一行，最稳妥的写法是每次都从 `init-output.json` 现读：
 
 ```bash
 VAULT_ADDR=http://127.0.0.1:8210 vault operator unseal "$(jq -r '.unseal_keys_b64[0]' /root/init-output.json)"
 VAULT_ADDR=http://127.0.0.1:8220 vault operator unseal "$(jq -r '.unseal_keys_b64[0]' /root/init-output.json)"
 ```
 
-每条命令的输出最末尾应当是 `Sealed: false`。如果看到 `Unseal Progress: 0/1` 与 `Sealed: true`，先用 `echo "[$(jq -r '.unseal_keys_b64[0]' /root/init-output.json)]"` 确认 key 非空，再重跑上面两行。
+对 `retry_join` 节点来说，`unseal` 命令的即时输出有时仍会短暂显示 `Sealed: true` / `Unseal Progress: 0/1`，因为 Vault 还在后台完成 join challenge、Raft bootstrap package 交换与 cluster listener 启动。不要只看这一次命令输出，改用 seal-status API 等待最终状态：
+
+```bash
+for port in 8210 8220; do
+  echo "等待 ${port} 完成 retry_join + unseal ..."
+  until curl -sS "http://127.0.0.1:${port}/v1/sys/seal-status" \
+    | jq -e '.sealed == false' >/dev/null; do
+    curl -sS "http://127.0.0.1:${port}/v1/sys/seal-status" \
+      | jq '{initialized,sealed,progress,cluster_id}'
+    sleep 2
+  done
+
+  curl -sS "http://127.0.0.1:${port}/v1/sys/seal-status" \
+    | jq '{initialized,sealed,cluster_id}'
+done
+```
+
+最终每个节点都应显示 `"sealed": false`，且 `cluster_id` 与 node-1 相同。
 
 > 注意 unseal 时通过 `VAULT_ADDR=...` 临时把 CLI 指向目标节点，但本步**没有改动当前 shell 的 `VAULT_ADDR`**——所以默认 8200 仍然指向 node-1。
 
