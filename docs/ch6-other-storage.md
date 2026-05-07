@@ -360,11 +360,13 @@ storage "s3" {
 
 ## 10. 动手实验
 
-光看不练记不住——本节配套实验在同一台 Killercoda 主机上依次切换三种最具代表性的"非 raft"后端，让学员**亲眼看到**它们在持久化语义、HA 能力、运维步骤上的差异：
+光看不练记不住——本节配套实验在同一台 Killercoda 主机上依次切换五种最具代表性的"非 raft"后端，让学员**亲眼看到**它们在持久化语义、HA 能力、运维步骤上的差异：
 
 1. **Filesystem** 后端：写入 KV 数据 → 重启 Vault 进程 → 验证数据仍在；
 2. **In-Memory** 后端：写入 KV 数据 → 重启 Vault 进程 → 验证数据**全部丢失**；
-3. **PostgreSQL** 后端：手工执行 `CREATE TABLE` → 启动 Vault → 写入 KV 数据 → 直接到 PostgreSQL 表里 `SELECT` 出加密后的字节，亲手验证"密文落在哪里"。
+3. **PostgreSQL** 后端：手工执行 `CREATE TABLE` → 启动 Vault → 写入 KV 数据 → 直接到 PostgreSQL 表里 `SELECT` 出加密后的字节，亲手验证"密文落在哪里"；
+4. **S3** 后端：通过本地 [MiniStack](https://github.com/ministackorg/ministack)（兼容 LocalStack 协议）模拟 AWS S3，预创建 bucket → 启动 Vault → 直接 `awslocal s3api list-objects` 看到 Vault 写入的密文对象；
+5. **DynamoDB** 后端：同样通过本地 MiniStack 模拟 AWS DynamoDB，启动 Vault → 由 Vault 自动建表（与 PostgreSQL 后端形成最直观的运维差异）→ 直接 `awslocal dynamodb scan` 看到 `Path` / `Key` / `Value` 三列的密文行。
 
 → 进入实验：[ch6-other-storage（其他存储后端实操）](https://killercoda.com/vault-tutorial/scenario/ch6-other-storage)
 
