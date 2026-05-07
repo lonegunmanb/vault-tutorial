@@ -23,8 +23,6 @@ Vault 服务器启动时，必须先读取一个配置文件才能进入“等�
 
 ![Vault 启动时读取配置文件后进入解封等待状态的整体流程示意图](/images/ch6-config-overview/vault-config-startup-flow.png)
 
-> 绘图提示词（手绘风格）：一幅马克笔白板手绘风格的友好示意图。左侧画一张纸质文件，标注 “vault.hcl”，里面有几对小小的 stanza 大括号 `{}`。一支箭头从文件指向右侧一个卡通保险箱，保险箱戴着睡帽、挂着写有 “SEALED” 的小挂锁，标注 “Vault server”。箭头上方画一个小放大镜，标注 `-config`。保险箱右侧分出两条虚线箭头：一条指向一摞磁盘，标注 “storage backend”；另一条指向一个门铃，标注 “listener”。线条略微抖动，铅笔阴影柔和，背景为暖米色，不要写实风格。
-
 ---
 
 ## 2. 顶层结构：参数（attribute）与命名块（labelled block）
@@ -83,8 +81,6 @@ telemetry {
 `api_addr` 与 `cluster_addr` 都支持 [go-sockaddr 模板](https://pkg.go.dev/github.com/hashicorp/go-sockaddr/template) 写法，便于在运行时根据节点自身的网卡情况动态求值；这在使用容器编排或自动伸缩时非常关键。
 
 ![api_addr 与 cluster_addr 的差异：客户端流量与节点间转发使用不同通告地址](/images/ch6-config-overview/api-addr-vs-cluster-addr.png)
-
-> 绘图提示词（手绘风格）：在方格纸上用马克笔手绘的涂鸦。三个一模一样的保险箱图标并排站立，分别标注 “Vault node A / B / C”，每个保险箱挂着两个名牌。上方名牌写 `api_addr`，旁边画一个友好的小笔记本电脑，用箭头指向它，表示客户端流量。下方名牌写 `cluster_addr`，三个保险箱之间用弯曲的双向箭头互相串联，表示节点间的请求转发；这些箭头上点缀着小小的 TLS 挂锁图标。线条略微抖动，使用粉彩高光配色，不要写实风格。
 
 ---
 
