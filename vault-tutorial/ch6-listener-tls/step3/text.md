@@ -1,18 +1,18 @@
-# 第三步：把 TLS 收紧到只允许 TLS 1.3
+# 第三步：将 TLS 收紧至仅允许 TLS 1.3
 
-第 2 步启用 TLS 后，listener 默认允许 TLS 1.2 与 TLS 1.3 同时存在；这是 Vault 的开箱默认。本步骤把 listener 收紧到**只接受 TLS 1.3**，并使用 `sslscan` 客观验证。
+第 2 步启用 TLS 后，listener 默认允许 TLS 1.2 与 TLS 1.3 同时存在；这是 Vault 的开箱行为。本步骤将把 listener 收紧至**仅接受 TLS 1.3**，并使用 `sslscan` 进行客观验证。
 
-## 3.1 验证当前状态：TLS 1.2 与 TLS 1.3 都开着
+## 3.1 验证当前状态：TLS 1.2 与 TLS 1.3 均处于启用状态
 
-先用 `sslscan` 看一下当前实际协商出的协议范围：
+首先通过 `sslscan` 查看当前实际协商出的协议范围：
 
 ```bash
 sslscan --no-colour 127.0.0.1:8200 | sed -n '/SSL\/TLS Protocols:/,/^$/p'
 ```
 
-你应该会看到 `TLSv1.2` 与 `TLSv1.3` 都是 `enabled`，而 `SSLv2`、`SSLv3`、`TLSv1.0`、`TLSv1.1` 都是 `disabled`——这正是教程 6.2 节第 4 节所讲的"Vault 默认即拒绝 TLS 1.0/1.1"。
+预期可观察到 `TLSv1.2` 与 `TLSv1.3` 均为 `enabled`，而 `SSLv2`、`SSLv3`、`TLSv1.0`、`TLSv1.1` 均为 `disabled`——这正是教程 6.2 节第 4 节所阐述的"Vault 默认即拒绝 TLS 1.0/1.1"。
 
-也用 `curl` 强制不同协议握手做交叉验证：
+另以 `curl` 强制不同协议进行握手以做交叉验证：
 
 ```bash
 echo "--- 尝试 TLS 1.3 ---"
@@ -49,15 +49,15 @@ vault operator unseal "$UNSEAL_KEY"
 vault status
 ```
 
-## 3.4 再次扫描：现在只剩 TLS 1.3
+## 3.4 再次扫描：仅余 TLS 1.3
 
 ```bash
 sslscan --no-colour 127.0.0.1:8200 | sed -n '/SSL\/TLS Protocols:/,/^$/p'
 ```
 
-预期输出中 `TLSv1.2` 已变为 `disabled`，只有 `TLSv1.3` 还是 `enabled`。
+预期输出中 `TLSv1.2` 已变为 `disabled`，仅 `TLSv1.3` 仍为 `enabled`。
 
-`curl` 也应当反映这一点：
+`curl` 同样应反映这一变化：
 
 ```bash
 echo "--- TLS 1.3 仍然可用 ---"
@@ -71,4 +71,4 @@ curl -s -o /dev/null -w 'HTTP %{http_code}\n' \
   https://127.0.0.1:8200/v1/sys/health || echo "TLS 1.2 握手被拒绝（预期行为）"
 ```
 
-到这里你已经把 listener 收紧到了"TLS 1.3 唯一可用"——这正是教程 6.2 节给出的最高强度基线之一。
+至此，你已将 listener 收紧至"TLS 1.3 唯一可用"——这正是教程 6.2 节给出的最高强度基线之一。
