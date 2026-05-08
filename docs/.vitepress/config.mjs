@@ -69,7 +69,8 @@ export default defineConfig({
              { text: '4.5 GitHub 认证：用个人访问令牌登录 Vault', link: '/ch4-github' },
              { text: '4.6 LDAP 认证：让目录用户用账号密码登录 Vault', link: '/ch4-ldap' },
              { text: '4.7 TLS 证书认证：用客户端证书登录 Vault', link: '/ch4-cert' },
-             { text: '4.8 Userpass 认证：Vault 内置用户名密码登录', link: '/ch4-userpass' }
+             { text: '4.8 Userpass 认证：Vault 内置用户名密码登录', link: '/ch4-userpass' },
+             { text: '4.9 JWT/OIDC 认证：用签名令牌登录 Vault', link: '/ch4-jwt' }
            ]
          },
          {
@@ -94,7 +95,11 @@ export default defineConfig({
              { text: '6.2 网络监听器（Listener）与最高级别 TLS 协议族强化配置', link: '/ch6-listener-tls' },
              { text: '6.3 自动化云端解封（Auto-Seal）机制对接（AWS KMS, Azure Key Vault, Transit 代理）', link: '/ch6-auto-seal' },
              { text: '6.4 现代存储引擎的绝对基石：Integrated Storage (Raft) 协议与自动化运维', link: '/ch6-integrated-storage' },
-             { text: '6.5 其他存储后端：Consul / DynamoDB / Filesystem / In-Memory / PostgreSQL / S3', link: '/ch6-other-storage' }
+             { text: '6.5 其他存储后端：Consul / DynamoDB / Filesystem / In-Memory / PostgreSQL / S3', link: '/ch6-other-storage' },
+             { text: '6.6 集群高可用模式（HA）的设计哲学及其数据一致性保障', link: '/ch6-ha' },
+             { text: '6.7 分布式服务注册与发现（K8s 原生发现机制与 Consul 集成模式）', link: '/ch6-service-registration' },
+             { text: '6.8 核心指标遥测（Telemetry）暴露与可视化 UI 界面底层配置', link: '/ch6-telemetry-ui' },
+             { text: '6.9 User Lockout：内核级防暴力破解机制', link: '/ch6-user-lockout' }
            ]
          }
         ],

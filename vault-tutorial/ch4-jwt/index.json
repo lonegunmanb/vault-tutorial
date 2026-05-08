@@ -1,0 +1,43 @@
+{
+  "title": "JWT/OIDC 认证：Kubernetes ServiceAccount Token 与签名验证",
+  "description": "在 Killercoda 预置的 kubeadm 单节点 Kubernetes 集群上运行 Vault 1.19.2 (Dev 模式)，使用真实 Kubernetes ServiceAccount Token 体验 auth/jwt：查看 issuer、audience、subject 与 exp，配置 Kubernetes ServiceAccount 签名公钥，创建 JWT role，完成登录，验证 audience 和 subject 约束，并删除 ServiceAccount 观察 JWT auth 不调用 TokenReview 时的撤销边界。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "观察 Kubernetes ServiceAccount JWT",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "配置 JWT auth 与 role 约束",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "登录 Vault 并验证 audience/subject",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "观察不调用 TokenReview 的撤销边界",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "kubernetes-kubeadm-1node"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

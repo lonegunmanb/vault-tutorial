@@ -262,8 +262,9 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
 * 4.2 启用 / 禁用认证方法的生命周期：`vault auth enable`、`disable`、自定义路径与多实例并存  
 * 4.3 外部认证方法的固有约束：Token TTL、外部账户状态变更与既签 Token 的有效期裂隙  
 * 4.4 认证方法与 Identity Entity / Policy 的衔接：登录流程结尾自动产出的 Token 如何与 2.5 章 Entity、2.6 章 Policy 串联  
+* 4.9 JWT/OIDC 认证方法：JWT 直传登录、OIDC role 边界、claim 约束与 Kubernetes ServiceAccount Token 签名验证入门  
 
-> 说明：本章定位为“认证方法的机制与路制”，先讲挂载 / 启禁 / 外部认证的通用约束，再选择开源版中最具代表性的认证方法进行动手实践。高级身份治理议题（JWT/OIDC、User Lockout、Vault 反向作 OIDC Provider）在第 7 章集中收束。
+> 说明：本章定位为“认证方法的机制与路制”，先讲挂载 / 启禁 / 外部认证的通用约束，再选择开源版中最具代表性的认证方法进行动手实践。JWT/OIDC 在第 4 章先覆盖认证方法入门与 Kubernetes ServiceAccount Token 直验；更高级的组治理、端到端浏览器 OIDC 与 Vault 反向作 OIDC Provider 放到第 9 章案例库中收束。
 
 * 5.1 核心 CRUD 交互指令：read, write, delete, list, patch 深度应用  
 * 5.2 认证与生命周期管控：login, auth, token 复杂参数体系  
@@ -290,51 +291,44 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
 * 6.5 集群高可用模式（HA）的设计哲学及其数据一致性保障  
 * 6.7 分布式服务注册与发现（K8s 原生发现机制与 Consul 集成模式）  
 * 6.8 核心指标遥测（Telemetry）暴露与可视化 UI 界面底层配置  
-* 6.9 大规模并发下的客户端重试、监听器连接控制与服务端遥测排查
+* 6.9 User Lockout
 
-## **第 7 章：面向现代系统的联邦身份验证与治理**
+## **第 7 章：应用自动化接入与现代 Kubernetes 云原生集成生态 【架构重大重构】**
 
-*(本章不再重复第 4 章已经覆盖的 Userpass、AppRole、GitHub、LDAP、Kubernetes、TLS Cert、AWS 等认证方法入门实验，而是聚焦开源版中可复现的高级身份协议与治理能力。)*
+* 7.1 技术演进背景：消除应用层代码中的"机密感知 SDK"集成负担  
+* 7.2 现代 Vault Agent 遗留核心应用实践  
+  * 7.2.1 Auto-auth 自动化网络鉴权与 Token 生命守护逻辑  
+  * 7.2.2 Consul-Template 高级模板渲染引擎与动态文件注入  
+  * 7.2.3 进程监督器（Process Supervisor）底层环境变量包裹模式  
+* 7.3 **【核心新增】** 全新解耦的网关层架构：独立运行的 Vault Proxy 代理层  
+  * 7.3.1 API 请求的透明网络拦截与加密 Header 自动注入转发机制  
+  * 7.3.2 应对大规模高并发拉取：Token 与动态租约缓冲层（Caching）调优  
+* 7.4 **【核心新增】** Kubernetes 平台级深度声明式集成体系  
+  * 7.4.1 传统演进模式剖析：Vault Sidecar Agent Injector 与 Webhook 边车注入利弊分析  
+  * 7.4.2 现代原生控制流范式：Vault Secrets Operator (VSO) CRD 部署与机密数据自动化同步（Sync）实战  
+  * 7.4.3 集群级别选型对标：Sidecar 注入模式 vs 原生 Operator CRD 模式的资源、安全与容灾场景对比
 
-* 7.1 JWT 认证方法与声明映射：本地签名 JWT、JWKS / 静态公钥验证、`bound_audiences`、`user_claim`、claims 到 Entity / Policy 的映射  
-* 7.2 OIDC 认证方法与组治理：接入本地 Keycloak / Dex，跑通 Authorization Code Flow、CLI callback、groups claim 与 Vault Group 映射  
-* 7.3 原生内核级防暴力破解：User Lockout 防御基线、挂载级参数调优与锁定用户排查  
-* 7.4 端到端 SSO 应用集成：用一个最小 Web 应用接入 Vault OIDC Provider，验证登录跳转、ID Token、UserInfo 与 assignment 拒绝路径
+## **第 8 章：安全合规审计与系统观测**
 
-## **第 8 章：应用自动化接入与现代 Kubernetes 云原生集成生态 【架构重大重构】**
+* 8.1 审计设备模块的数据流向与不可抵赖性验证原理  
+* 8.2 File 本地审计设备配置（针对内核 CVE-2025-6000 文件系统执行权限漏洞的安全加固指导）  
+* 8.3 Syslog 远程系统日志收集与 Socket 网络套接字审计数据高吞吐分发  
+* 8.4 针对 PII（个人敏感信息）的审计日志自动化数据脱敏与 HMAC 防破解哈希校验分析
 
-* 8.1 技术演进背景：消除应用层代码中的"机密感知 SDK"集成负担  
-* 8.2 现代 Vault Agent 遗留核心应用实践  
-  * 8.2.1 Auto-auth 自动化网络鉴权与 Token 生命守护逻辑  
-  * 8.2.2 Consul-Template 高级模板渲染引擎与动态文件注入  
-  * 8.2.3 进程监督器（Process Supervisor）底层环境变量包裹模式  
-* 8.3 **【核心新增】** 全新解耦的网关层架构：独立运行的 Vault Proxy 代理层  
-  * 8.3.1 API 请求的透明网络拦截与加密 Header 自动注入转发机制  
-  * 8.3.2 应对大规模高并发拉取：Token 与动态租约缓冲层（Caching）调优  
-* 8.4 **【核心新增】** Kubernetes 平台级深度声明式集成体系  
-  * 8.4.1 传统演进模式剖析：Vault Sidecar Agent Injector 与 Webhook 边车注入利弊分析  
-  * 8.4.2 现代原生控制流范式：Vault Secrets Operator (VSO) CRD 部署与机密数据自动化同步（Sync）实战  
-  * 8.4.3 集群级别选型对标：Sidecar 注入模式 vs 原生 Operator CRD 模式的资源、安全与容灾场景对比
+## **第 9 章：全栈架构防线升级与现代工程实战案例 【案例库全面更新】**
 
-## **第 9 章：安全合规审计与系统观测**
+* 9.1 密码学原语解耦应用：基于 Transit 机密引擎构建"加密即服务（EaaS）"的无密钥应用平台  
+* 9.2 从静态密码到动态凭据：以 Database / SSH / AWS 机密引擎改造长效凭据使用方式  
+* 9.3 核心生产环境极高安全加固基线：从物理部署防线到最低权限最小化原则的系统级核查清单  
+* 9.4 **【核心新增】** 零接触式的公共信任体系闭环：深度整合 Vault PKI 机密引擎与 ACME 自动化协议（集成 Traefik 或 Cert-Manager 演示 TLS 证书静默全自动签发与轮转）  
+* 9.5 OIDC 认证方法与组治理案例：接入本地 Keycloak / Dex，跑通 Authorization Code Flow、CLI callback、groups claim 与 Vault Group 映射  
+* 9.6 端到端 SSO 应用集成案例：用一个最小 Web 应用接入 Vault OIDC Provider，验证登录跳转、ID Token、UserInfo 与 assignment 拒绝路径
 
-* 9.1 审计设备模块的数据流向与不可抵赖性验证原理  
-* 9.2 File 本地审计设备配置（针对内核 CVE-2025-6000 文件系统执行权限漏洞的安全加固指导）  
-* 9.3 Syslog 远程系统日志收集与 Socket 网络套接字审计数据高吞吐分发  
-* 9.4 针对 PII（个人敏感信息）的审计日志自动化数据脱敏与 HMAC 防破解哈希校验分析
+## **第 10 章：技术趋势展望与全课程总结归纳**
 
-## **第 10 章：全栈架构防线升级与现代工程实战案例 【案例库全面更新】**
-
-* 10.1 密码学原语解耦应用：基于 Transit 机密引擎构建"加密即服务（EaaS）"的无密钥应用平台  
-* 10.2 从静态密码到动态凭据：以 Database / SSH / AWS 机密引擎改造长效凭据使用方式  
-* 10.3 核心生产环境极高安全加固基线：从物理部署防线到最低权限最小化原则的系统级核查清单  
-* 10.4 **【核心新增】** 零接触式的公共信任体系闭环：深度整合 Vault PKI 机密引擎与 ACME 自动化协议（集成 Traefik 或 Cert-Manager 演示 TLS 证书静默全自动签发与轮转）
-
-## **第 11 章：技术趋势展望与全课程总结归纳**
-
-* 11.1 跨越从静态防御到动态信任的鸿沟：Vault 核心安全模型设计哲学的历史反思与未来发展图景演进  
-* 11.2 应对开源版边界：深入解读官方路线图与后续最新英文架构文档检索方法论  
-* 11.3 互动实验平台环境注销流程指南与讲师结语致谢
+* 10.1 跨越从静态防御到动态信任的鸿沟：Vault 核心安全模型设计哲学的历史反思与未来发展图景演进  
+* 10.2 应对开源版边界：深入解读官方路线图与后续最新英文架构文档检索方法论  
+* 10.3 互动实验平台环境注销流程指南与讲师结语致谢
 
 #### **引用的著作**
 
