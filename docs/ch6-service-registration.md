@@ -56,7 +56,6 @@ service_registration "consul" {
 处于 sealed 状态的 Vault 节点会主动在健康检查中将自身标记为不健康，因此**不会**被 Consul 的服务发现层返回。
 
 ![Consul 服务注册后形成的三个 DNS 端点：active 只解析到当前活跃节点，standby 只解析到已 unseal 的待命节点，vault 解析到全部已 unseal 节点；sealed 节点全部被 Consul 主动剔除](/images/ch6-service-registration/consul-three-endpoints.png)
-> 配图提示词（手绘风、真实事物比喻，钢笔线绘，水彩淡色阴影风格）：画一个三层木质抽屉柜（标 "Consul DNS 服务目录"），三层抽屉从上到下分别贴标签 "active.vault.service.consul"、"standby.vault.service.consul"、"vault.service.consul"。柜子右侧站着四只小机器人（vault-1 / vault-2 / vault-3 / vault-4），其中 vault-2 头顶亮起一盏小灯标 "active"，vault-1 与 vault-3 胸前挂 "standby unsealed" 牌、神情平和，vault-4 全身被铁链缠住、贴着写有 "sealed" 的封条、表情委屈。引线规则严格按照三个 DNS 端点的语义：从 vault-2 引一条线只落入第一层（active）抽屉；从 vault-1 与 vault-3 各引一条线只落入第二层（standby）抽屉；同时再从 vault-1、vault-2、vault-3 三只机器人**各**引出一条线，共三条线一起汇入第三层（vault）抽屉，体现"全部已 unseal 节点"的全集语义。sealed 的 vault-4 没有任何线指向任何抽屉，旁边一只小章鱼伸出爪子把它温柔地推到柜子外面。可用不同颜色区分三组连线（active 朱橙、standby 灰蓝、全集 草绿）以避免视觉混乱。钢笔勾线，水彩淡色阴影——木柜浅木黄、机器人冷灰、活跃节点的灯与 active 抽屉用饱和度稍高的水彩朱橙、sealed 封条用水彩朱红、章鱼淡粉紫，整体留白舒朗。
 
 ### 2.3 关键参数：服务命名、健康检查、ACL token 与 TLS
 
@@ -193,7 +192,7 @@ metadata:
 - `vault-version`（字符串，例如 `"1.21.2"`）：Vault 的版本号，**在该 Pod 的生命周期内不会变化**。
 
 ![Kubernetes 服务注册写到 Pod 上的标签：把活跃 / 待命 / 封印 / 版本号等运行时状态打成 label，让 Service 选择器能够直接挑出"当前活跃且已解封的那一台"](/images/ch6-service-registration/k8s-pod-labels.png)
-> 配图提示词（手绘风、真实事物比喻，钢笔线绘，水彩淡色阴影风格）：画三只机器人（vault-0 / vault-1 / vault-2）整齐排成一队，每只机器人胸前都贴着五张便利贴：vault-active、vault-initialized、vault-perf-standby、vault-sealed、vault-version。vault-0 的 vault-active 写 "true"、神情振奋；其它两只机器人对应便利贴写 "false"、表情淡定。一台老式分拣机（标 "Kubernetes Service selector：vault-active=true"）伸出一只机械臂只把 vault-0 轻轻拉到出口管道里，其余两只被留在原位。钢笔勾线，水彩淡色阴影——机器人冷灰、便利贴米黄、"active=true" 便利贴用水彩薄荷绿高亮、"sealed=true" 便利贴用水彩朱红高亮（若出现）、其余便利贴保持淡米色，分拣机机身淡褐木色、出口管道浅蓝晕染。
+> 配图提示词（手绘风、真实事物比喻，钢笔线绘，水彩淡色阴影风格）：画一台经典的**抓娃娃机**（机身正面贴一张大标签 "Kubernetes Service selector：vault-active=true"），玻璃柜厢内并排坐着三只小机器人玩偶（vault-0 / vault-1 / vault-2），每只机器人胸前都贴着五张便利贴：vault-active、vault-initialized、vault-perf-standby、vault-sealed、vault-version。vault-0 的 vault-active 写 "true"、神情振奋、头顶亮起一盏小灯；vault-1 与 vault-2 对应便利贴写 "false"、表情淡定。机器顶部的金属爪子精准地夹住 vault-0 头顶（**只**抓走它），正沿着机箱内的轨道把它送向右下角的出口槽（标 "Service Endpoints"）；vault-1 与 vault-2 留在原位，爪子完全没有触碰它们。机箱旁可加一枚已投入的小硬币与一只小章鱼旁观者。钢笔勾线，水彩淡色阴影——机身淡蜜桃粉与浅薄荷绿撞色、玻璃用极淡的天蓝晕染、机器人冷灰、便利贴米黄、"active=true" 便利贴用水彩薄荷绿高亮、"sealed=true" 便利贴用水彩朱红高亮（若出现）、其余便利贴保持淡米色，整体留白舒朗。
 
 ### 3.4 据标签构建"始终指向活跃节点"的 Service
 
