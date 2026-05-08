@@ -34,7 +34,9 @@ source /etc/profile.d/vault.sh
 vault operator unseal "$UNSEAL_KEY"
 ```
 
-node-2 与 node-3 通过 `retry_join` 加入集群，但 retry_join 是**异步**的——它们要等下一个重试周期才会从 node-1 拉到 raft snapshot，进而把自己从"未初始化"翻成"已初始化但 sealed"。如果在这之前直接 unseal，会得到 `Vault is not initialized` 报错，节点保持 sealed。所以这里**轮询等待 follower 完成初始化**，再统一 unseal：
+node-2 与 node-3 是通过 `retry_join` "去找 node-1 报到"的，但这件事不是立刻完成的——它们要等下一个重试周期，才会从 node-1 把"集群已经被初始化过"这件事同步过来。在同步完成之前，对它们执行 `vault operator unseal` 会报 `Vault is not initialized`，节点会一直停留在 sealed。
+
+所以正确的做法是：**先轮询确认 follower 已经知道集群被初始化了（`initialized: true`），再 unseal**。
 
 ```bash
 for port in 8210 8220; do
