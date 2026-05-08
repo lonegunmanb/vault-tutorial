@@ -37,41 +37,55 @@ done
 
 `is_self: true` 的那一行的端口，必须与 §2.1 中 `active.vault.service.consul` 的 SRV 端口完全一致。
 
-## 2.3 主动 seal 一个待命节点，观察其从服务目录消失
+## 2.3 让一个待命节点回到 sealed 状态，观察其从服务目录消失
 
 正文已经指出："处于 sealed 状态的 Vault 节点会主动在健康检查中将自身标记为不健康，因此不会被 Consul 的服务发现层返回。" 下面把这句话变成可观察的现象。
 
-从 §2.1 / §2.2 的结果中确认哪个端口是 active、哪两个端口是 standby。下面假设 `8200` 是 active、`8210` 是其中一个 standby——若实际情况不同，请将命令中的 `8210` 替换为任意一个 standby 端口。
+> **注意**：`vault operator seal` 命令**只能对 active 节点生效**，对 standby 节点调用会返回 HTTP 500 与 `vault cannot seal when in standby mode; please restart instead`。standby 节点要回到 sealed 状态，正确做法是**重启该节点的进程**——重启后 Vault 会回到未解封状态，直到再次 unseal 为止。
+
+从 §2.1 / §2.2 的结果中确认哪个端口是 active、哪两个端口是 standby。下面假设 `8200` 是 active、`8210` 是其中一个 standby——若实际情况不同，请将命令中的 `8210` 与 `2` 替换为另一个 standby 端口及其对应的节点编号（8210→2、8220→3）。
 
 记下当前 standby 集合，便于稍后比对：
 
 ```bash
-echo "=== seal 之前的 standby 端点 ==="
+echo "=== 重启之前的 standby 端点 ==="
 dig @127.0.0.1 -p 8600 standby.vault.service.consul SRV +short
 ```
 
-对 8210 节点执行 `vault operator seal`：
+终止 node-2 进程并重新拉起（重启后即默认 sealed）：
 
 ```bash
-VAULT_ADDR=http://127.0.0.1:8210 vault operator seal
+kill "$(cat /tmp/vault-2.pid)"
+sleep 2
+
+./start-node.sh 2
+sleep 3
 ```
+
+确认该节点已回到 sealed：
+
+```bash
+curl -sS http://127.0.0.1:8210/v1/sys/seal-status | jq '{sealed, initialized}'
+```
+
+`sealed` 应为 `true`、`initialized` 应为 `true`——这正是"已知道集群存在、但本地尚未解封"的状态。
 
 健康检查的更新存在数秒间隔（默认 `check_timeout` 为 `5s`）。等待至多 10 秒再观察：
 
 ```bash
 sleep 10
 
-echo "=== seal 之后的 standby 端点（应少 1 条）==="
+echo "=== 重启后的 standby 端点（应少 1 条）==="
 dig @127.0.0.1 -p 8600 standby.vault.service.consul SRV +short
 
-echo "=== seal 之后的 vault 端点（应少 1 条）==="
+echo "=== 重启后的 vault 端点（应少 1 条）==="
 dig @127.0.0.1 -p 8600 vault.service.consul SRV +short
 
-echo "=== seal 之后的 active 端点（应不变，仍是原 leader）==="
+echo "=== 重启后的 active 端点（应不变，仍是原 leader）==="
 dig @127.0.0.1 -p 8600 active.vault.service.consul SRV +short
 ```
 
-被 seal 的 8210 节点应当从 `standby.vault.service.consul` 与 `vault.service.consul` 中消失，但 `active.vault.service.consul` 不受影响。
+被重启的 8210 节点应当从 `standby.vault.service.consul` 与 `vault.service.consul` 中消失，但 `active.vault.service.consul` 不受影响。
 
 进一步用 HTTP API 查看 Consul 端的健康检查状态：
 
@@ -81,6 +95,16 @@ curl -sS http://127.0.0.1:8500/v1/health/service/vault \
 ```
 
 被 seal 的节点对应的 Vault 健康检查会从 `passing` 变为 `critical`。
+
+最后把它 unseal 回到 standby 池，让集群回到 3/3 健康状态，便于 step 3 之后的复盘：
+
+```bash
+VAULT_ADDR=http://127.0.0.1:8210 vault operator unseal "$UNSEAL_KEY"
+sleep 10
+
+echo "=== unseal 之后的 standby 端点（应恢复 2 条）==="
+dig @127.0.0.1 -p 8600 standby.vault.service.consul SRV +short
+```
 
 ## 2.4 这一步的核心闭环
 
