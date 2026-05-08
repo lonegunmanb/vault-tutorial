@@ -28,16 +28,33 @@ EOF
 source /etc/profile.d/vault.sh
 ```
 
-依次解封三个节点。node-1 自不必说；node-2 与 node-3 已通过 `retry_join` 加入集群，但仍处于 sealed 状态，需要单独 unseal：
+先解封 node-1（bootstrap 节点初始化后立即可解封）：
 
 ```bash
 vault operator unseal "$UNSEAL_KEY"
-
-VAULT_ADDR=http://127.0.0.1:8210 vault operator unseal "$UNSEAL_KEY"
-VAULT_ADDR=http://127.0.0.1:8220 vault operator unseal "$UNSEAL_KEY"
 ```
 
-等待集群稳定，确认 3 节点都已 unsealed：
+node-2 与 node-3 通过 `retry_join` 加入集群，但 retry_join 是**异步**的——它们要等下一个重试周期才会从 node-1 拉到 raft snapshot，进而把自己从"未初始化"翻成"已初始化但 sealed"。如果在这之前直接 unseal，会得到 `Vault is not initialized` 报错，节点保持 sealed。所以这里**轮询等待 follower 完成初始化**，再统一 unseal：
+
+```bash
+for port in 8210 8220; do
+  echo -n "等待 node @ ${port} 完成 retry_join "
+  for i in {1..30}; do
+    initialized=$(curl -sS "http://127.0.0.1:${port}/v1/sys/seal-status" | jq -r '.initialized')
+    if [ "$initialized" = "true" ]; then
+      echo " OK"
+      break
+    fi
+    echo -n "."
+    sleep 1
+  done
+  VAULT_ADDR=http://127.0.0.1:${port} vault operator unseal "$UNSEAL_KEY"
+done
+```
+
+> 如果某个 follower 30 秒后仍 `initialized: false`，先看 `/var/log/vault-2.log` 或 `/var/log/vault-3.log`，最常见的原因是 node-1 还没 unsealed（retry_join 拉不到已初始化的状态）或者端口没起来。
+
+确认 3 节点都已 unsealed：
 
 ```bash
 for port in 8200 8210 8220; do
