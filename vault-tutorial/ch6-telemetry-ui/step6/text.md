@@ -16,9 +16,17 @@ curl -sS -i "http://127.0.0.1:${LEADER_PORT}/ui/" | head -n 15
 
 ## 6.2 通过 Killercoda 浏览器入口访问
 
-Killercoda 控制条上方提供"Traffic / Ports"按钮，点击后选择端口 `8200`（即 `LEADER_PORT` 不一定是 8200——若不是，可暂时把 leader 节点改为绑定 8200，或直接访问当前 leader 端口对应的 Killercoda URL）。打开后地址栏中拼上 `/ui/` 即可看到 Vault GUI 登录页。
+Killercoda 把环境内的 HTTP 端口映射成一个公网可达的临时 URL。打开方式有两种，任选其一：
 
-在登录页选择 "Token" 方式，填入实验环境保存在 `$VAULT_TOKEN` 中的 root token：
+- **终端右上角的 "Traffic / Ports" 按钮**：点开后选择当前 leader 对应的端口（`8200` / `8210` / `8220` 三个都可以——三个 listener 都绑在 `0.0.0.0`，OSS 版的 standby 在收到 UI 请求时会自动 307 重定向到 leader 的 `api_addr`，所以即便选错端口浏览器也会被自动跳走）；
+- **直接点下面的占位链接**（Killercoda 会在渲染时把 `{{TRAFFIC_HOST1_PORT}}` 替换成真实 URL）：
+  - 端口 8200：[打开 node-1 UI]({{TRAFFIC_HOST1_8200}}/ui/)
+  - 端口 8210：[打开 node-2 UI]({{TRAFFIC_HOST1_8210}}/ui/)
+  - 端口 8220：[打开 node-3 UI]({{TRAFFIC_HOST1_8220}}/ui/)
+
+> 注意：Killercoda 的 Traffic 通道只支持 **HTTP**，不支持 HTTPS。本章 listener 全部用的是明文 HTTP，符合要求。
+
+打开后会进入 Vault GUI 登录页，选择 "Token" 方式，填入实验环境保存在 `$VAULT_TOKEN` 中的 root token：
 
 ```bash
 echo "登录用 root token："

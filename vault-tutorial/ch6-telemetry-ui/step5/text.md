@@ -91,7 +91,7 @@ grep -c '^[0-9:]\+ vault\.runtime\.' /var/log/fake-statsd.log
 ...
 ```
 
-`|g` 表示 gauge 类型，`|c` 表示 counter，`|ms` 表示 timing/histogram——这就是 statsd 协议的原始字面量。看到这些数据，就证明 Vault 确实在通过 push sink 主动外发指标。
+后缀 |g 表示 gauge 类型，|c 表示 counter，|ms 表示 timing/histogram——这就是 statsd 协议的原始字面量。看到这些数据，就证明 Vault 确实在通过 push sink 主动外发指标。
 
 ## 5.4 这一步的核心闭环
 
