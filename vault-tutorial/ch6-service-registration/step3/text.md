@@ -48,7 +48,7 @@ helm install vault hashicorp/vault \
   --wait --timeout 3m || true
 ```
 
-> Helm chart 在 `server.ha.enabled=true` 且 `server.ha.raft.enabled=true` 时，会**自动**在生成的 vault.hcl 里写入 `service_registration "kubernetes" {}`，并通过 Downward API 注入 `VAULT_K8S_NAMESPACE` 与 `VAULT_K8S_POD_NAME` 这两个环境变量，同时为 Pod 的 ServiceAccount 配上对 `pods` 资源的 `get`、`update`、`patch` 权限——也就是说，正文 §3.1 与 §3.2 描述的"声明意图 + RBAC"两件事都已经被 chart 替你做完。
+> Helm chart 在 `server.ha.enabled=true` 且 `server.ha.raft.enabled=true` 时，会**自动**在生成的 vault.hcl 里写入 `service_registration "kubernetes" {}`，并通过 Downward API 注入 VAULT_K8S_NAMESPACE 与 VAULT_K8S_POD_NAME 这两个环境变量，同时为 Pod 的 ServiceAccount 配上对 pods 资源的 get、update、patch 权限——也就是说，正文 §3.1 与 §3.2 描述的"声明意图 + RBAC"两件事都已经被 chart 替你做完。
 
 等 3 个 Pod 都进入 Running（`--wait` 等的是 readiness probe，但 Vault 在初始化前 ready 永远不会是 true，所以这里允许超时）：
 
@@ -126,10 +126,10 @@ kubectl -n vault get pods -l app.kubernetes.io/name=vault \
 
 预期：
 
-- 三只 Pod 中有且仅有一只的 `VAULT-ACTIVE` 列是 `true`，其余两只是 `false`；
+- 三个 Pod 中有且仅有一个的 `VAULT-ACTIVE` 列是 `true`，其余两个是 `false`；
 - 全部 `VAULT-INITIALIZED=true`、`VAULT-SEALED=false`、`VAULT-PERF-STANDBY=false`、`VAULT-VERSION=1.19.2`。
 
-也可以单独看某一只 Pod 的完整 label 集：
+也可以单独看某一个 Pod 的完整 label 集：
 
 ```bash
 kubectl -n vault get pod vault-0 -o jsonpath='{.metadata.labels}' | jq
@@ -150,7 +150,7 @@ for pod in vault-0 vault-1 vault-2; do
 done
 ```
 
-`is_self: true` 的那一只 Pod，必须正是上一步 `VAULT-ACTIVE=true` 的那一只。
+`is_self: true` 的那一个 Pod，必须正是上一步 `VAULT-ACTIVE=true` 的那一个。
 
 ## 3.6 这一步的核心闭环
 

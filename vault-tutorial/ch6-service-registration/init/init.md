@@ -4,8 +4,8 @@
 
 1. **Consul 模式**：在 Raft 存储后端之上**显式**声明 `service_registration "consul"` 块后，3 个 Vault 节点会被注册进 Consul 服务目录；
 2. **Consul DNS 三端点**：`active.vault.service.consul`、`standby.vault.service.consul`、`vault.service.consul` 三条 DNS 名各自对应不同的节点子集；sealed 节点会被 Consul 健康检查主动剔除而"自动隐身"；
-3. **Kubernetes 模式**：声明 `service_registration "kubernetes" {}` 后（官方 Helm chart HA + raft 模式默认就会写入这一行），Vault 进程会**反向把状态打到自己所在 Pod 的 label 上**——`vault-active`、`vault-sealed`、`vault-initialized`、`vault-perf-standby`、`vault-version`；
-4. **K8s Service selector 跟随**：Helm chart 默认创建的 `vault-active` Service 用 `selector: vault-active=true` 选 Pod，因此其 endpoints 始终精确指向当前的 leader Pod，且会随重新选举自动迁移。
+3. **Kubernetes 模式**：声明 `service_registration "kubernetes" {}` 后（官方 Helm chart HA + raft 模式默认就会写入这一行），Vault 进程会**反向把状态打到自己所在 Pod 的 label 上**——vault-active、vault-sealed、vault-initialized、vault-perf-standby、vault-version；
+4. **K8s Service selector 跟随**：Helm chart 默认创建的 vault-active Service 用 `selector: vault-active=true` 选 Pod，因此其 endpoints 始终精确指向当前的 leader Pod，且会随重新选举自动迁移。
 
 为了在同一台 Killercoda 主机上同时演示两种模式，本实验运行在 Killercoda 的 `kubernetes-kubeadm-1node` 环境中：
 
@@ -21,7 +21,7 @@
   - `/root/vault-3.hcl`：node-3，API 8220，cluster 8221，通过 `retry_join` 指向 node-1；
 - 已为每个节点预创建独立的 raft 数据目录 `/opt/vault/data-{1,2,3}`；
 - 已把 `VAULT_ADDR=http://127.0.0.1:8200` 与 `KUBECONFIG` 写入 `/etc/profile.d/`，登录 shell 自动加载；
-- 已提供便捷脚本 `/root/start-consul.sh`、`/root/start-node.sh <1|2|3>`、`/root/stop-host-vaults.sh`；
+- 已提供便捷脚本 `/root/start-consul.sh`、`/root/start-node.sh` `<1|2|3>`、`/root/stop-host-vaults.sh`；
 - 已为 K8s 节点去除 `node-role.kubernetes.io/control-plane` 的 NoSchedule taint，使 Vault Pod 可被调度；
 - 已添加 `hashicorp` Helm 仓库并执行 `helm repo update`；
 - 已通过 `crictl` 在后台预拉 `hashicorp/vault:1.19.2` 镜像以缩短 step 3 的等待时间。

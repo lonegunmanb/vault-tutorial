@@ -12,13 +12,18 @@ kubectl -n vault get svc vault-active -o yaml \
 
 `selector` 中应当包含 `vault-active: "true"`——这正是正文 §3.4 中那个 YAML 片段的语义。
 
-查看该 Service 当前的 endpoints：
+查看该 Service 当前的 endpoints（K8s 1.33+ 已弃用 v1 Endpoints，这里直接看 EndpointSlice）：
 
 ```bash
-kubectl -n vault get endpoints vault-active
+kubectl -n vault get endpointslice -l kubernetes.io/service-name=vault-active \
+  -o jsonpath='{range .items[*].endpoints[*]}{.targetRef.name}{" -> "}{.addresses[0]}{"\n"}{end}'
 ```
 
-`ENDPOINTS` 列只有一个 `<ip>:8200` 条目——其 `<ip>` 必然属于当前 leader Pod。再通过 endpointslice 进一步看到背后的 Pod 名（依不同 K8s 版本，输出 schema 可能略有差异）：
+输出只有一行：一个 IP 加一个 Pod 名，这就是当前 leader Pod。
+
+> 你可能注意到，如果用旧命令 `kubectl get endpoints vault-active`，`ENDPOINTS` 列里会出现两条记录，例如 `192.168.0.220:8200,192.168.0.220:8201`。别误会——这并不代表后面有两个 Pod，只是同一个 leader Pod 上同时暴露了 8200（客户端 API）和 8201（节点间 cluster 通信）两个端口而已。所以这里改用 EndpointSlice 直接打印 `targetRef.name`，一行一个 Pod，看起来更直观。
+
+也可以用更简洁的命令直接读出 leader Pod 名：
 
 ```bash
 kubectl -n vault get endpointslice -l kubernetes.io/service-name=vault-active \
@@ -81,18 +86,16 @@ kubectl -n vault get pods -l app.kubernetes.io/name=vault \
 预期：
 
 - 原 leader Pod（被你 delete 掉的那一只）——重建后默认为 sealed，所以 `VAULT-SEALED=true`、`VAULT-ACTIVE=false`，且 `READY` 列暂时为 `0/1`；
-- 剩余两只 Pod 中，新 leader 的 `VAULT-ACTIVE` 已经翻成 `true`，另一只仍为 `false`。
+- 剩余两个 Pod 中，新 leader 的 `VAULT-ACTIVE` 已经翻成 `true`，另一个仍为 `false`。
 
-再看 Service endpoints：
+再看 Service endpoints（同 §4.1，用 EndpointSlice 直接看 Pod 名）：
 
 ```bash
-kubectl -n vault get endpoints vault-active
-
 kubectl -n vault get endpointslice -l kubernetes.io/service-name=vault-active \
-  -o jsonpath='{.items[*].endpoints[*].targetRef.name}{"\n"}'
+  -o jsonpath='{range .items[*].endpoints[*]}{.targetRef.name}{" -> "}{.addresses[0]}{"\n"}{end}'
 ```
 
-`vault-active` Service 的 endpoint 已经自动指向**新** leader Pod，没有任何手工操作介入。这就是正文 §3.4 中那一段配图所讲的事情：**抓娃娃机的爪子始终精准抓出当前 `vault-active=true` 的那只 Pod**。
+`vault-active` Service 的 endpoint 已经自动指向**新** leader Pod，没有任何手工操作介入。这就是正文 §3.4 中那一段配图所讲的事情：**抓娃娃机的爪子始终精准抓出当前 `vault-active=true` 的那个 Pod**。
 
 通过 active service 复读 §4.2 写入的数据，验证应用侧"无感"地切到了新 leader：
 
