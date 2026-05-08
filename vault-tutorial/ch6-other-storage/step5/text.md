@@ -66,7 +66,9 @@ awslocal dynamodb describe-table --table-name vault-data \
   --query 'Table.{KeySchema: KeySchema, AttributeDefinitions: AttributeDefinitions, BillingMode: BillingModeSummary.BillingMode, ProvisionedThroughput: ProvisionedThroughput}'
 ```
 
-输出应为：**主分区键名 `Path`、类型字符串（`S`）；主排序键名 `Key`、类型字符串（`S`）**——与 6.5 节正文 §4.3 的描述完全一致。`BillingMode` 为 `PROVISIONED`、`ReadCapacityUnits` 与 `WriteCapacityUnits` 均为 `5`，对应正文 §4.2 列出的默认值。
+输出应为：**主分区键名 `Path`、类型字符串（`S`）；主排序键名 `Key`、类型字符串（`S`）**——与 6.5 节正文 §4.3 的描述完全一致。`ProvisionedThroughput` 中的 `ReadCapacityUnits` 与 `WriteCapacityUnits` 均为 `5`，对应正文 §4.2 列出的默认值；这本身就隐含了表是按 `PROVISIONED` 模式建出来的。
+
+> 这里的 `BillingMode` 字段在 LocalStack 上会返回 `null`——LocalStack 没有实现 `BillingModeSummary` 的填充，但表的实际 billing 模式与真实 DynamoDB 一致（默认 `PROVISIONED`）。在真实 AWS 上同一条命令会返回 `"BillingMode": "PROVISIONED"`。
 
 继续完成 Vault 初始化：
 
