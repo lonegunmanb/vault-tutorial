@@ -10,7 +10,27 @@ if ! command -v jq > /dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq jq > /dev/null 2>&1
 fi
 
+# step5 需要 python3 跑一个轻量 statsd UDP 接收端（多数 Ubuntu 镜像预装，仅作保险）
+if ! command -v python3 > /dev/null 2>&1; then
+  apt-get update -qq && apt-get install -y -qq python3 > /dev/null 2>&1
+fi
+
+# step4 需要 prometheus 二进制；直接下载官方 release tarball、只提取 prometheus 主二进制。
+# 后台下载以免阻塞 Vault 安装。
+(
+  if ! command -v prometheus > /dev/null 2>&1; then
+    PROM_VER=2.53.0
+    curl -fsSLo /tmp/prom.tgz \
+      "https://github.com/prometheus/prometheus/releases/download/v${PROM_VER}/prometheus-${PROM_VER}.linux-amd64.tar.gz" \
+      && tar -xzf /tmp/prom.tgz -C /tmp \
+      && install -m 0755 "/tmp/prometheus-${PROM_VER}.linux-amd64/prometheus" /usr/local/bin/prometheus \
+      && rm -rf /tmp/prom.tgz "/tmp/prometheus-${PROM_VER}.linux-amd64"
+  fi
+) &
+INSTALL_PROM_PID=$!
+
 wait "$INSTALL_VAULT_PID"
+wait "$INSTALL_PROM_PID"
 
 for n in 1 2 3; do
   mkdir -p /opt/vault/data-${n}

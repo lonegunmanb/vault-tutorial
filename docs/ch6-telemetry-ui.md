@@ -145,6 +145,8 @@ UI 与 API 共用同一个 `listener` 端口，因此**必须**在配置文件�
 1. 启动并初始化 3 节点集群，仅在配置文件顶层加入最小化的 `telemetry { prometheus_retention_time = "30s" disable_hostname = true }`，先用带 token 的 `curl -H "Accept: prometheus/telemetry"` 直接抓取 leader 的 `/v1/sys/metrics`，验证"只 leader 响应"以及 token 鉴权；
 2. 在不带 token 的情况下重复抓取，观察 `403`；再为某一个待命节点的 `listener` 加入 `telemetry { unauthenticated_metrics_access = true }` 并 SIGHUP 重载，验证该节点开始就地返回自身指标；
 3. 为顶层块追加 `prefix_filter = ["+vault.token", "-vault.expire"]` 与 `filter_default = true`，对比开启前后抓取响应中带 `vault.expire.` 前缀的指标条数，验证按前缀粗筛的效果；
-4. 为 leader 节点开启 `ui = true`、保持其 listener 监听 `0.0.0.0:8200`，从 Killercoda 提供的浏览器端口入口访问 `/ui/`，登录后保持静止 4 分钟以上，验证 UI 对 token TTL 与 3 分钟静止规则的处理。
+4. **拉取式接入端到端验证**：在同一台主机上启动一个 Prometheus 进程，按 §3 的最小 job 配置（含 `metrics_path: /v1/sys/metrics`、`bearer_token`、`Accept` 头由 Prometheus 自动带）抓取 leader，等一个 scrape 周期后在 Prometheus 的 `/api/v1/query` 上查询 `vault_core_unsealed`，确认指标确实被拉到了；
+5. **推送式接入端到端验证**：在同一台主机上启动一个 `statsd` 兼容的轻量接收端（例如以 TCP/UDP 监听打印每行内容的小脚本），给某个节点追加 `telemetry { statsd_address = "127.0.0.1:8125" disable_hostname = true }` 并 SIGHUP 重载，几十秒后即可在接收端的输出中看到形如 `vault.runtime.alloc_bytes:...|g` 的推送数据，验证 push sink 链路；
+6. 为 leader 节点开启 `ui = true`、保持其 listener 监听 `0.0.0.0:8200`，从 Killercoda 提供的浏览器端口入口访问 `/ui/`，用 root token 登录并完成一次机密读写，验证 UI 暴露面与 listener 的绑定关系。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch6-telemetry-ui" title="实验：开启 Vault 指标遥测与内置 UI 并验证访问规则" />

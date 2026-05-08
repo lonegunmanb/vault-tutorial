@@ -1,6 +1,6 @@
 {
-  "title": "telemetry 与 ui 实操：Prometheus 拉取链路、未授权指标访问与 UI 暴露面",
-  "description": "在单台 Killercoda 主机上启动一个 3 节点 Vault Raft 集群，亲手把顶层 telemetry 块、listener.telemetry 子块与 ui 开关分别配置上，并通过 curl 直接观察 6.8 节正文中的几条核心结论：(1) 启动并初始化集群，验证只有活跃节点响应 /v1/sys/metrics、且必须带 token 与正确 Accept 头才能拿到 Prometheus 文本格式；(2) 在一个待命节点的 listener 中加入 telemetry { unauthenticated_metrics_access = true } 并 SIGHUP 重载，验证该节点开始就地返回自身指标且免除 token 依赖；(3) 在顶层 telemetry 块加入 prefix_filter，对比开启前后被屏蔽前缀的指标条数；(4) 通过 ui = true 与开放绑定地址，从浏览器入口确认 /ui/ 可正常返回 GUI HTML。",
+  "title": "telemetry 与 ui 实操：Prometheus 拉取、statsd 推送、未授权指标访问与 UI 暴露面",
+  "description": "在单台 Killercoda 主机上启动一个 3 节点 Vault Raft 集群，亲手把顶层 telemetry 块、listener.telemetry 子块与 ui 开关分别配置上，并通过 curl、本地 Prometheus 与一个轻量 statsd 接收端直接观察 6.8 节正文中的几条核心结论：(1) 只有活跃节点响应 /v1/sys/metrics、且必须带 token 与正确 Accept 头才能拿到 Prometheus 文本格式；(2) 在一个待命节点的 listener 中加入 telemetry { unauthenticated_metrics_access = true } 并 SIGHUP 重载，验证该节点开始就地返回自身指标且免除 token 依赖；(3) 在顶层 telemetry 块加入 prefix_filter，对比开启前后被屏蔽前缀的指标条数；(4) 启动本地 Prometheus 拉取 leader 的 /v1/sys/metrics，验证拉取式接入链路能拿到数据；(5) 给某节点配上 statsd_address 并重启，在轻量 statsd 接收端看到推送式 sink 发出的指标包；(6) 通过 ui = true 与开放绑定地址，从浏览器入口确认 /ui/ 可正常返回 GUI HTML 并完成一次 root token 登录。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -21,8 +21,16 @@
         "text": "step3/text.md"
       },
       {
-        "title": "开启 ui 并访问内置 GUI",
+        "title": "拉取式接入端到端：Prometheus 拓取 leader 指标",
         "text": "step4/text.md"
+      },
+      {
+        "title": "推送式接入端到端：statsd 接收端看到 Vault 推送数据",
+        "text": "step5/text.md"
+      },
+      {
+        "title": "开启 ui 并访问内置 GUI",
+        "text": "step6/text.md"
       }
     ],
     "finish": {
