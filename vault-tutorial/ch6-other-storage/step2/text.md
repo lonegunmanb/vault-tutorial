@@ -24,7 +24,11 @@ sleep 3
 vault status || true
 ```
 
-之前 filesystem 后端持有的 init 状态与数据**完全不会被这个新进程感知**——`Initialized: false` 再次出现。重新初始化：
+之前 filesystem 后端持有的 init 状态与数据**完全不会被这个新进程感知**——`vault status` 输出中应该看到 `Initialized   false`。
+
+> 如果这里显示 `Initialized   true`，说明上一节的 vault 进程没被 `start-vault.sh` 真正杀掉、:8200 仍在被旧进程占用、新 inmem 进程绑定端口失败已经退出。重跑 `./start-vault.sh inmem` 一次即可（脚本现在会等到端口释放再拉新进程）；仍异常时 `pkill -9 -f 'vault server' && sleep 2 && ./start-vault.sh inmem`。
+
+确认 `Initialized   false` 之后再初始化：
 
 ```bash
 vault operator init -key-shares=1 -key-threshold=1 \

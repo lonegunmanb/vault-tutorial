@@ -206,10 +206,26 @@ if [ -z "$mode" ]; then
   echo "用法：$0 <file|inmem|pg|s3|dynamodb>"
   exit 1
 fi
-# 先停掉已有的 vault 进程
+# 先停掉已有的 vault 进程：先 SIGTERM 给一秒优雅退出，再 SIGKILL 兜底，
+# 然后**真正等到 :8200 空闲**再拉新进程，避免端口冲突导致新进程秒退、
+# 学员仍然连到旧进程的“已 initialized”状态上。
 pkill -f 'vault server' > /dev/null 2>&1
 sleep 1
+pkill -9 -f 'vault server' > /dev/null 2>&1
+for i in $(seq 1 10); do
+  if ! ss -ltn 2>/dev/null | grep -q ':8200 '; then
+    break
+  fi
+  sleep 1
+done
 nohup vault server -config=/root/vault-${mode}.hcl > /var/log/vault-${mode}.log 2>&1 &
+# 等 :8200 真正起来再返回
+for i in $(seq 1 15); do
+  if ss -ltn 2>/dev/null | grep -q ':8200 '; then
+    break
+  fi
+  sleep 1
+done
 echo "vault (${mode} backend) 已启动，日志：/var/log/vault-${mode}.log"
 EOF
 chmod +x /root/start-vault.sh
