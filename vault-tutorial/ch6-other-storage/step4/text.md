@@ -1,16 +1,16 @@
-# 第四步：S3 后端 — 用 ministack 模拟 AWS S3 + 直接观察密文对象
+# 第四步：S3 后端 — 用 LocalStack 模拟 AWS S3 + 直接观察密文对象
 
-[6.5 节 §8](/ch6-other-storage) 已经说明：S3 后端**不支持高可用**、由社区维护，把 Vault 数据落到 S3 桶里。本步通过本地 [MiniStack](https://github.com/ministackorg/ministack)（兼容 LocalStack 协议、监听 `:4566`）模拟 AWS S3 服务——配置思路与第 3 章 AWS 机密引擎实验完全一致：**Vault 与 AWS 之间是普通 HTTP API 调用，把 endpoint 指向本地 MiniStack 即可在零真实云成本的前提下完整跑通 S3 后端**。
+[6.5 节 §8](/ch6-other-storage) 已经说明：S3 后端**不支持高可用**、由社区维护，把 Vault 数据落到 S3 桶里。本步通过本地 [LocalStack](https://www.localstack.cloud/)（本地 AWS API 兼容服务、监听 `:4566`）模拟 AWS S3 服务——配置思路与 [4.4 节 AWS 认证实验](/ch4-aws) 完全一致：**Vault 与 AWS 之间是普通 HTTP API 调用，把 endpoint 指向本地 LocalStack 即可在零真实云成本的前提下完整跑通 S3 后端**。
 
-## 4.1 启动 MiniStack 并预创建 S3 桶
+## 4.1 启动 LocalStack 并预创建 S3 桶
 
 ```bash
-./start-ministack.sh
+./start-localstack.sh
 ```
 
-脚本会拉起 `ministackorg/ministack`，监听 `127.0.0.1:4566`，等其健康后退出。镜像在准备阶段已经预拉过，启动只要 1–2 秒。
+脚本会拉起 `localstack/localstack:3`，监听 `127.0.0.1:4566`，等其健康后退出。镜像在准备阶段已经预拉过，启动只要 1–2 秒。
 
-确认 MiniStack 上的 S3 服务可用：
+确认 LocalStack 上的 S3 服务可用：
 
 ```bash
 curl -s http://127.0.0.1:4566/_localstack/health | jq '.services.s3'
@@ -18,7 +18,7 @@ curl -s http://127.0.0.1:4566/_localstack/health | jq '.services.s3'
 
 应输出 `"available"`。
 
-S3 后端**不会自动创建桶**——必须先在 MiniStack 上把 `vault-data` 桶建出来：
+S3 后端**不会自动创建桶**——必须先在 LocalStack 上把 `vault-data` 桶建出来：
 
 ```bash
 awslocal s3 mb s3://vault-data
@@ -49,11 +49,11 @@ storage "s3" {
 }
 ```
 
-三个与 MiniStack 强相关的字段：
+三个与 LocalStack 强相关的字段：
 
 - `endpoint = "http://127.0.0.1:4566"`：S3 API 的替代端点；正文 §8.2 已说明该字段对应官方文档的 `endpoint` 参数。
-- `s3_force_path_style = "true"`：MiniStack 默认仅接受 path-style 寻址（`http://endpoint/bucket/key`），而非 host-style 的 `http://bucket.endpoint/key`，因此必须打开。
-- `disable_ssl = "true"`：MiniStack 不监听 TLS，必须显式关闭 SSL。**生产 S3 上严禁关闭**。
+- `s3_force_path_style = "true"`：LocalStack 默认仅接受 path-style 寻址（`http://endpoint/bucket/key`），而非 host-style 的 `http://bucket.endpoint/key`，因此必须打开。
+- `disable_ssl = "true"`：LocalStack 不监听 TLS，必须显式关闭 SSL。**生产 S3 上严禁关闭**。
 
 ## 4.3 启动 Vault 并初始化
 

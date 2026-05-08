@@ -131,7 +131,7 @@ output = json
 cli_pager =
 AWSCFG
 
-  # Install awscli-local (provides the 'awslocal' command pointing at MiniStack/LocalStack on :4566).
+  # Install awscli-local (provides the 'awslocal' command pointing at LocalStack on :4566).
   if ! command -v awslocal > /dev/null 2>&1; then
     pip3 install --break-system-packages awscli-local > /dev/null 2>&1 \
       || {

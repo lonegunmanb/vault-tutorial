@@ -365,8 +365,8 @@ storage "s3" {
 1. **Filesystem** 后端：写入 KV 数据 → 重启 Vault 进程 → 验证数据仍在；
 2. **In-Memory** 后端：写入 KV 数据 → 重启 Vault 进程 → 验证数据**全部丢失**；
 3. **PostgreSQL** 后端：手工执行 `CREATE TABLE` → 启动 Vault → 写入 KV 数据 → 直接到 PostgreSQL 表里 `SELECT` 出加密后的字节，亲手验证"密文落在哪里"；
-4. **S3** 后端：通过本地 [MiniStack](https://github.com/ministackorg/ministack)（兼容 LocalStack 协议）模拟 AWS S3，预创建 bucket → 启动 Vault → 直接 `awslocal s3api list-objects` 看到 Vault 写入的密文对象；
-5. **DynamoDB** 后端：同样通过本地 MiniStack 模拟 AWS DynamoDB，启动 Vault → 由 Vault 自动建表（与 PostgreSQL 后端形成最直观的运维差异）→ 直接 `awslocal dynamodb scan` 看到 `Path` / `Key` / `Value` 三列的密文行。
+4. **S3** 后端：通过本地 [LocalStack](https://www.localstack.cloud/)（监听 :4566 的本机 AWS API 兼容服务）模拟 AWS S3，预创建 bucket → 启动 Vault → 直接 `awslocal s3api list-objects` 看到 Vault 写入的密文对象；
+5. **DynamoDB** 后端：同样通过本地 LocalStack 模拟 AWS DynamoDB，启动 Vault → 由 Vault 自动建表（与 PostgreSQL 后端形成最直观的运维差异）→ 直接 `awslocal dynamodb scan` 看到 `Path` / `Key` / `Value` 三列的密文行。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch6-other-storage" title="实验：其他存储后端实操（Filesystem / In-Memory / PostgreSQL / S3 / DynamoDB）" />
 

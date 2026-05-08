@@ -1,10 +1,10 @@
-# 第五步：DynamoDB 后端 — 用 ministack 模拟 AWS DynamoDB + Vault 自动建表
+# 第五步：DynamoDB 后端 — 用 LocalStack 模拟 AWS DynamoDB + Vault 自动建表
 
-[6.5 节 §4](/ch6-other-storage) 已经说明：DynamoDB 后端**支持高可用**（但受节点时钟漂移影响）、由社区维护，并且**与 PostgreSQL 后端最显著的差异之一是：Vault 会在初始化时自动创建 DynamoDB 表，无需手工 `CREATE TABLE`**。本步把这一行为在本地 MiniStack 上跑出来，让学员亲眼看到 Vault 直接操作 DynamoDB 的全过程。
+[6.5 节 §4](/ch6-other-storage) 已经说明：DynamoDB 后端**支持高可用**（但受节点时钟漂移影响）、由社区维护，并且**与 PostgreSQL 后端最显著的差异之一是：Vault 会在初始化时自动创建 DynamoDB 表，无需手工 `CREATE TABLE`**。本步把这一行为在本地 LocalStack 上跑出来，让学员亲眼看到 Vault 直接操作 DynamoDB 的全过程。
 
-> 如果上一步的 ministack 容器仍在运行，本步无需重启。可以用 `docker ps | grep ministack` 确认；若没在跑，再次执行 `./start-ministack.sh`。
+> 如果上一步的 localstack 容器仍在运行，本步无需重启。可以用 `docker ps | grep localstack` 确认；若没在跑，再次执行 `./start-localstack.sh`。
 
-## 5.1 确认 MiniStack 上的 DynamoDB 服务可用
+## 5.1 确认 LocalStack 上的 DynamoDB 服务可用
 
 ```bash
 curl -s http://127.0.0.1:4566/_localstack/health | jq '.services.dynamodb'
@@ -12,7 +12,7 @@ curl -s http://127.0.0.1:4566/_localstack/health | jq '.services.dynamodb'
 
 应输出 `"available"`。
 
-确认 MiniStack 当前**没有任何 DynamoDB 表**——这样接下来 Vault 自动建表的行为就更直观：
+确认 LocalStack 当前**没有任何 DynamoDB 表**——这样接下来 Vault 自动建表的行为就更直观：
 
 ```bash
 awslocal dynamodb list-tables
@@ -53,7 +53,7 @@ sleep 5
 vault status || true
 ```
 
-立刻回头看 MiniStack 上的 DynamoDB 表列表：
+立刻回头看 LocalStack 上的 DynamoDB 表列表：
 
 ```bash
 awslocal dynamodb list-tables

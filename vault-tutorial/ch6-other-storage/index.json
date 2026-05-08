@@ -1,6 +1,6 @@
 {
   "title": "其他存储后端实操：filesystem / in-memory / postgresql / s3 / dynamodb 五连切换",
-  "description": "在同一台 Killercoda 主机上，依次以 filesystem、in-memory、postgresql、s3、dynamodb 五种 storage 块启动 Vault 进程，亲眼观察五者在持久化语义与运维步骤上的差异：(1) filesystem 后端写入 KV 数据 → 重启进程 → 验证数据仍在；(2) in-memory 后端写入 KV 数据 → 重启进程 → 验证数据全部丢失；(3) postgresql 后端按官方 schema 手工执行 CREATE TABLE → 启动 Vault → 写入 KV 数据 → 在 PostgreSQL 表里直接 SELECT 出加密后的字节；(4) S3 后端通过本地 ministack（LocalStack 兼容）模拟 AWS S3，预创建 bucket → 启动 Vault → 直接 awslocal s3api list-objects 看到 Vault 写入的密文对象；(5) DynamoDB 后端同样通过 ministack 模拟，启动 Vault 后由 Vault 自动建表 → 直接 awslocal dynamodb scan 看到 Path/Key/Value 三列的密文行。",
+  "description": "在同一台 Killercoda 主机上，依次以 filesystem、in-memory、postgresql、s3、dynamodb 五种 storage 块启动 Vault 进程，亲眼观察五者在持久化语义与运维步骤上的差异：(1) filesystem 后端写入 KV 数据 → 重启进程 → 验证数据仍在；(2) in-memory 后端写入 KV 数据 → 重启进程 → 验证数据全部丢失；(3) postgresql 后端按官方 schema 手工执行 CREATE TABLE → 启动 Vault → 写入 KV 数据 → 在 PostgreSQL 表里直接 SELECT 出加密后的字节；(4) S3 后端通过本地 LocalStack 模拟 AWS S3，预创建 bucket → 启动 Vault → 直接 awslocal s3api list-objects 看到 Vault 写入的密文对象；(5) DynamoDB 后端同样通过 LocalStack 模拟，启动 Vault 后由 Vault 自动建表 → 直接 awslocal dynamodb scan 看到 Path/Key/Value 三列的密文行。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -21,11 +21,11 @@
         "text": "step3/text.md"
       },
       {
-        "title": "s3 后端：用 ministack 模拟 AWS S3 + 直接观察密文对象",
+        "title": "s3 后端：用 LocalStack 模拟 AWS S3 + 直接观察密文对象",
         "text": "step4/text.md"
       },
       {
-        "title": "dynamodb 后端：用 ministack 模拟 AWS DynamoDB + Vault 自动建表",
+        "title": "dynamodb 后端：用 LocalStack 模拟 AWS DynamoDB + Vault 自动建表",
         "text": "step5/text.md"
       }
     ],

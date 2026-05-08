@@ -3,7 +3,7 @@ set +e
 
 source /root/setup-common.sh
 
-# 并行安装 vault / 拉取 ministack 镜像 / 装 awscli + awslocal
+# 并行安装 vault / 拉取 LocalStack 镜像 / 装 awscli + awslocal
 install_vault &
 INSTALL_VAULT_PID=$!
 
@@ -22,8 +22,8 @@ if ! command -v docker > /dev/null 2>&1; then
   apt-get update -qq && apt-get install -y -qq docker.io > /dev/null 2>&1
 fi
 
-# 提前预热 ministack 镜像，让 step4 / step5 启动时秒级响应
-docker pull ministackorg/ministack > /dev/null 2>&1 &
+# 提前预热 LocalStack 镜像，让 step4 / step5 启动时秒级响应
+docker pull localstack/localstack:3 > /dev/null 2>&1 &
 PULL_PID=$!
 
 wait "$INSTALL_VAULT_PID"
@@ -87,7 +87,7 @@ listener "tcp" {
 }
 EOF
 
-# Step4：S3 后端，指向本地 ministack（兼容 LocalStack 的 :4566 端点）
+# Step4：S3 后端，指向本地 LocalStack（本地 AWS API 兼容服务的 :4566 端点）
 cat > /root/vault-s3.hcl <<'EOF'
 ui            = true
 disable_mlock = true
@@ -112,7 +112,7 @@ listener "tcp" {
 }
 EOF
 
-# Step5：DynamoDB 后端，同样指向本地 ministack
+# Step5：DynamoDB 后端，同样指向本地 LocalStack
 cat > /root/vault-dynamodb.hcl <<'EOF'
 ui            = true
 disable_mlock = true
@@ -144,7 +144,7 @@ chmod +x /etc/profile.d/vault.sh
 grep -q "VAULT_ADDR=" /root/.bashrc 2>/dev/null || \
   cat /etc/profile.d/vault.sh >> /root/.bashrc
 
-# 默认 AWS 凭据（指向 ministack 的 root 凭据 test/test）
+# 默认 AWS 凭据（指向 LocalStack 的 root 凭据 test/test）
 cat > /etc/profile.d/aws.sh <<'EOF'
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
@@ -214,26 +214,26 @@ echo "vault (${mode} backend) 已启动，日志：/var/log/vault-${mode}.log"
 EOF
 chmod +x /root/start-vault.sh
 
-# 启动 ministack（LocalStack 兼容的 AWS 模拟器，监听 :4566）。
+# 启动 LocalStack（本地 AWS API 兼容服务，监听 :4566）。
 # 学员到 step4 才执行；这里只准备脚本。
-cat > /root/start-ministack.sh <<'EOF'
+cat > /root/start-localstack.sh <<'EOF'
 #!/bin/bash
-# 启动一个本地 ministack 实例供 Vault s3 / dynamodb 后端使用。
-docker rm -f ministack > /dev/null 2>&1
-docker run -d --name ministack -p 4566:4566 ministackorg/ministack > /dev/null
+# 启动一个本地 LocalStack 实例供 Vault s3 / dynamodb 后端使用。
+docker rm -f localstack > /dev/null 2>&1
+docker run -d --name localstack -p 4566:4566 -e SERVICES=s3,dynamodb localstack/localstack:3 > /dev/null
 
-# 等 ministack 健康
+# 等 LocalStack 健康
 for i in $(seq 1 30); do
   if curl -fs http://127.0.0.1:4566/_localstack/health > /dev/null 2>&1; then
-    echo "ministack ready."
+    echo "localstack ready."
     exit 0
   fi
   sleep 1
 done
-echo "WARNING: ministack did not become ready in time."
+echo "WARNING: localstack did not become ready in time."
 exit 1
 EOF
-chmod +x /root/start-ministack.sh
+chmod +x /root/start-localstack.sh
 
 cd /root
 finish_setup

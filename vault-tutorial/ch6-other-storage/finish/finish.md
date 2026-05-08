@@ -5,8 +5,8 @@
 1. **filesystem** 后端：唯一参数是 `path`，重启进程数据仍在；不支持高可用，仅适合单节点持久化或本地开发。
 2. **in-memory** 后端：没有任何参数，重启进程数据**全部丢失**；只适合开发 / 测试 / 演示，**生产配置中出现 `storage "inmem" {}` 必须立刻拦回**。
 3. **postgresql** 后端：必须按官方 schema 手工 `CREATE TABLE` 才能启动；写入的 KV 数据以密文 `BYTEA` 行的形式落在 `vault_kv_store` 表中。
-4. **s3** 后端：通过本地 ministack 模拟 AWS S3 跑通；**桶必须预先创建**，配置中需要 `s3_force_path_style = "true"`；写入数据以密文对象形式落在桶里；**不支持高可用**，对外宣称 SLA 时不能把 S3 自身的耐久度等同于 Vault 集群的可用性。
-5. **dynamodb** 后端：通过本地 ministack 模拟 AWS DynamoDB 跑通；**表会被 Vault 自动创建**（与 postgresql 形成最直观的运维差异），结构为 `Path` 分区键 + `Key` 排序键；写入数据以密文 `BYTEA` item 形式落在表里；支持高可用但锁依赖节点本机时钟。
+4. **s3** 后端：通过本地 LocalStack 模拟 AWS S3 跑通；**桶必须预先创建**，配置中需要 `s3_force_path_style = "true"`；写入数据以密文对象形式落在桶里；**不支持高可用**，对外宣称 SLA 时不能把 S3 自身的耐久度等同于 Vault 集群的可用性。
+5. **dynamodb** 后端：通过本地 LocalStack 模拟 AWS DynamoDB 跑通；**表会被 Vault 自动创建**（与 postgresql 形成最直观的运维差异），结构为 `Path` 分区键 + `Key` 排序键；写入数据以密文 `BYTEA` item 形式落在表里；支持高可用但锁依赖节点本机时钟。
 
 这五种后端的密文物化形式各有不同（文件 / 内存 / PG 行 / S3 对象 / DynamoDB item），但 **Vault 加密屏障在所有外部存储后端上的行为完全一致：底层存储里能看到的只是密文，没有 unseal key 即使拿到完整副本也无法还原任何明文**——step3 / step4 / step5 的"直接观察"环节已经反复验证了这一点。
 
