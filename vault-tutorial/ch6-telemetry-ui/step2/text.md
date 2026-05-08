@@ -4,7 +4,20 @@
 
 ## 2.1 找出 standby 对应的节点编号与配置文件
 
+> Killercoda 的点击运行代码块不一定能继承上一步点过的环境变量。为安全起见，本步开头先重新加载 `$VAULT_TOKEN` 与 `$UNSEAL_KEY`、并重新推出 `LEADER_PORT` / `STANDBY_PORT`。
+
 ```bash
+source /etc/profile.d/vault.sh
+
+LEADER_PORT=$(/root/find-leader.sh)
+for p in 8200 8210 8220; do
+  if [ "$p" != "$LEADER_PORT" ]; then
+    STANDBY_PORT=$p
+    break
+  fi
+done
+echo "leader = ${LEADER_PORT}, standby = ${STANDBY_PORT}"
+
 # 端口 → 节点编号的映射
 case "$STANDBY_PORT" in
   8200) STANDBY_N=1 ;;
@@ -41,20 +54,27 @@ listener "tcp" {
 }
 ```
 
-## 2.3 SIGHUP 触发配置热重载
+## 2.3 重启该节点让新的 listener.telemetry 生效
 
-Vault 对 listener 相关配置变更支持通过 SIGHUP 热重载：
+> 严格说 `unauthenticated_metrics_access` 也可以通过 SIGHUP 热重载，但实际上这一跳转在不同版本上表现不一致（例如 1.19 上经常看到 SIGHUP 后仍返回 `307`）。为了课堂可靠复现，这里直接重启该节点。Raft 集群在三节点中踢掉一个 follower 只会导致短暂的头数不足，重启后重新 unseal 即可。
 
 ```bash
-PID=$(cat /tmp/vault-${STANDBY_N}.pid)
-kill -HUP "$PID"
-sleep 1
+PID=$(cat /tmp/vault-${STANDBY_N}.pid 2>/dev/null)
+[ -n "$PID" ] && kill "$PID"
+sleep 2
 
-# 看一眼日志确认 reload 成功
+/root/start-node.sh ${STANDBY_N}
+sleep 3
+
+# 重新 unseal。这里直接从 init-output.json 读 key，以免子 shell 丢失环境变量。
+VAULT_ADDR="http://127.0.0.1:${STANDBY_PORT}" \
+  vault operator unseal "$(jq -r '.unseal_keys_b64[0]' /root/init-output.json)"
+
+sleep 2
 tail -n 5 /var/log/vault-${STANDBY_N}.log
 ```
 
-预期日志中出现类似 `core: reloaded ...` 或 `received SIGHUP` 的行；不应出现 panic / fatal。
+预期看到该节点重新以 `HA mode: standby` 运行、不出现 panic / fatal。
 
 ## 2.4 验证：standby 现在就地返回指标且不需要 token
 

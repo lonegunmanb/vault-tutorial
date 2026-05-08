@@ -28,12 +28,25 @@ EOF
 source /etc/profile.d/vault.sh
 ```
 
-依次解封三个节点：
+依次解封三个节点。注意：`retry_join` 是异步的，node-2 / node-3 在 node-1 初始化完成后还需要几秒才能从 leader 拉到 raft 状态、进入 `initialized=true`；如果太快 unseal 它们会得到 `Vault is not initialized`。这里在 unseal 前先等待每个 follower 的 `initialized` 翻成 `true`：
 
 ```bash
 vault operator unseal "$UNSEAL_KEY"
-VAULT_ADDR=http://127.0.0.1:8210 vault operator unseal "$UNSEAL_KEY"
-VAULT_ADDR=http://127.0.0.1:8220 vault operator unseal "$UNSEAL_KEY"
+
+for port in 8210 8220; do
+  echo -n "等待 127.0.0.1:${port} 完成 raft join "
+  for i in {1..30}; do
+    init=$(curl -sS "http://127.0.0.1:${port}/v1/sys/health" 2>/dev/null \
+             | jq -r '.initialized' 2>/dev/null)
+    if [ "$init" = "true" ]; then
+      echo " OK"
+      break
+    fi
+    echo -n "."
+    sleep 1
+  done
+  VAULT_ADDR=http://127.0.0.1:${port} vault operator unseal "$UNSEAL_KEY"
+done
 sleep 3
 ```
 
@@ -100,18 +113,31 @@ curl -sS -H "X-Vault-Token: ${VAULT_TOKEN}" \
   "http://127.0.0.1:${LEADER_PORT}/v1/sys/metrics" | head -n 5
 ```
 
-预期：第一段输出以 `{"Counters":...` 开头；第二段输出以 `# HELP ...` 与 `# TYPE ...` 开头，是标准的 Prometheus 暴露格式。
+预期：第一段输出以 `{"Counters":...` 开头；第二段输出以 Prometheus 暴露格式标准的 `# HELP` / `# TYPE` 注释行开头。
 
 ## 1.5 规则四：路径必须显式写 `/v1/sys/metrics`
 
 ```bash
-curl -sS -o /dev/null -w "默认 /metrics: HTTP %{http_code}\n" \
+echo "--- Prometheus 默认路径 /metrics ---"
+curl -sS -i \
   -H "X-Vault-Token: ${VAULT_TOKEN}" \
   -H "Accept: prometheus/telemetry" \
-  "http://127.0.0.1:${LEADER_PORT}/metrics"
+  "http://127.0.0.1:${LEADER_PORT}/metrics" | head -n 5
+
+echo
+echo "--- /v1 下随便一个不存在的子路径 ---"
+curl -sS -o /dev/null -w "/v1/metrics: HTTP %{http_code}\n" \
+  -H "X-Vault-Token: ${VAULT_TOKEN}" \
+  -H "Accept: prometheus/telemetry" \
+  "http://127.0.0.1:${LEADER_PORT}/v1/metrics"
 ```
 
-预期返回 `HTTP 404`——这正是 Prometheus 抓取作业必须显式设置 `metrics_path: "/v1/sys/metrics"` 的原因。
+预期：
+
+- `GET /metrics` 返回 `HTTP 307`，`Location` 指向 `/ui/`——这是 Vault 把所有未识别的根路径**统一重定向到内置 UI** 的默认行为，**并不是**它真的把指标暴露在了 `/metrics`；
+- `GET /v1/metrics` 返回 `HTTP 404`——证明指标端点没有挂在 Prometheus 默认的"短路径"上。
+
+这两条共同说明了正文 §3 的第四条规则：Prometheus 抓取作业必须显式设置 `metrics_path: "/v1/sys/metrics"`，否则要么命中 UI 重定向、要么命中 404，都拿不到指标。
 
 ## 1.6 这一步的核心闭环
 
