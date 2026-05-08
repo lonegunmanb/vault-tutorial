@@ -192,7 +192,6 @@ metadata:
 - `vault-version`（字符串，例如 `"1.21.2"`）：Vault 的版本号，**在该 Pod 的生命周期内不会变化**。
 
 ![Kubernetes 服务注册写到 Pod 上的标签：把活跃 / 待命 / 封印 / 版本号等运行时状态打成 label，让 Service 选择器能够直接挑出"当前活跃且已解封的那一台"](/images/ch6-service-registration/k8s-pod-labels.png)
-> 配图提示词（手绘风、真实事物比喻，钢笔线绘，水彩淡色阴影风格）：画一台经典的**抓娃娃机**（机身正面贴一张大标签 "Kubernetes Service selector：vault-active=true"），玻璃柜厢内并排坐着三只小机器人玩偶（vault-0 / vault-1 / vault-2），每只机器人胸前都贴着五张便利贴：vault-active、vault-initialized、vault-perf-standby、vault-sealed、vault-version。vault-0 的 vault-active 写 "true"、神情振奋、头顶亮起一盏小灯；vault-1 与 vault-2 对应便利贴写 "false"、表情淡定。机器顶部的金属爪子精准地夹住 vault-0 头顶（**只**抓走它），正沿着机箱内的轨道把它送向右下角的出口槽（标 "Service Endpoints"）；vault-1 与 vault-2 留在原位，爪子完全没有触碰它们。机箱旁可加一枚已投入的小硬币与一只小章鱼旁观者。钢笔勾线，水彩淡色阴影——机身淡蜜桃粉与浅薄荷绿撞色、玻璃用极淡的天蓝晕染、机器人冷灰、便利贴米黄、"active=true" 便利贴用水彩薄荷绿高亮、"sealed=true" 便利贴用水彩朱红高亮（若出现）、其余便利贴保持淡米色，整体留白舒朗。
 
 ### 3.4 据标签构建"始终指向活跃节点"的 Service
 
