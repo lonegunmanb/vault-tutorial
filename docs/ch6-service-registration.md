@@ -26,7 +26,6 @@ group_order: 60
 > 该配置项是在 Vault 1.4.0 中引入的，更老的版本无法直接套用本节的写法。
 
 ![service_registration 与 storage 在配置文件中的关系：当存储后端不是 Consul 时，必须显式声明一个独立的 service_registration 块来让外部系统感知 Vault 节点状态](/images/ch6-service-registration/stanza-position.png)
-> 配图提示词（手绘风、真实事物比喻，钢笔线绘，水彩淡色阴影风格）：在米白草稿本上画一台老式收银机（标 "Vault"），收银机正面有两个并排的抽屉，左侧抽屉标 "storage = raft（数据钱箱）"，右侧抽屉标 "service_registration = consul（对外广播喇叭）"。收银机顶部有一只铜制喇叭，正向远处一栋小木屋（标 "Consul / Kubernetes 服务目录"）喊话："我是 active!"，喇叭口画几道淡淡的声波弧线。钢笔勾线，水彩淡色阴影——收银机机身浅灰、铜喇叭暖橙、数据抽屉米黄、对外广播抽屉淡橘、小木屋屋顶赭红、墙体淡米色，背景留白点缀几片淡蓝水彩晕染表示远景。
 
 ---
 
@@ -57,7 +56,7 @@ service_registration "consul" {
 处于 sealed 状态的 Vault 节点会主动在健康检查中将自身标记为不健康，因此**不会**被 Consul 的服务发现层返回。
 
 ![Consul 服务注册后形成的三个 DNS 端点：active 只解析到当前活跃节点，standby 只解析到已 unseal 的待命节点，vault 解析到全部已 unseal 节点；sealed 节点全部被 Consul 主动剔除](/images/ch6-service-registration/consul-three-endpoints.png)
-> 配图提示词（手绘风、真实事物比喻，钢笔线绘，水彩淡色阴影风格）：画一个三层木质抽屉柜（标 "Consul DNS 服务目录"），三层抽屉从上到下分别贴标签 "active.vault.service.consul"、"standby.vault.service.consul"、"vault.service.consul"。柜子右侧站着四只小机器人（vault-1 / vault-2 / vault-3 / vault-4），其中 vault-2 头顶亮起一盏小灯标 "active"，vault-1 与 vault-3 胸前挂 "standby unsealed" 牌、神情平和，vault-4 全身被铁链缠住、贴着写有 "sealed" 的封条、表情委屈；从前三只机器人身上引出柔和的细线分别落入对应抽屉，sealed 的 vault-4 没有任何线指向任何抽屉，旁边一只小章鱼伸出爪子把它温柔地推到柜子外面。钢笔勾线，水彩淡色阴影——木柜浅木黄、机器人冷灰、活跃节点的灯与高亮抽屉用饱和度稍高的水彩朱橙、sealed 封条用水彩朱红、章鱼淡粉紫，整体留白舒朗。
+> 配图提示词（手绘风、真实事物比喻，钢笔线绘，水彩淡色阴影风格）：画一个三层木质抽屉柜（标 "Consul DNS 服务目录"），三层抽屉从上到下分别贴标签 "active.vault.service.consul"、"standby.vault.service.consul"、"vault.service.consul"。柜子右侧站着四只小机器人（vault-1 / vault-2 / vault-3 / vault-4），其中 vault-2 头顶亮起一盏小灯标 "active"，vault-1 与 vault-3 胸前挂 "standby unsealed" 牌、神情平和，vault-4 全身被铁链缠住、贴着写有 "sealed" 的封条、表情委屈。引线规则严格按照三个 DNS 端点的语义：从 vault-2 引一条线只落入第一层（active）抽屉；从 vault-1 与 vault-3 各引一条线只落入第二层（standby）抽屉；同时再从 vault-1、vault-2、vault-3 三只机器人**各**引出一条线，共三条线一起汇入第三层（vault）抽屉，体现"全部已 unseal 节点"的全集语义。sealed 的 vault-4 没有任何线指向任何抽屉，旁边一只小章鱼伸出爪子把它温柔地推到柜子外面。可用不同颜色区分三组连线（active 朱橙、standby 灰蓝、全集 草绿）以避免视觉混乱。钢笔勾线，水彩淡色阴影——木柜浅木黄、机器人冷灰、活跃节点的灯与 active 抽屉用饱和度稍高的水彩朱橙、sealed 封条用水彩朱红、章鱼淡粉紫，整体留白舒朗。
 
 ### 2.3 关键参数：服务命名、健康检查、ACL token 与 TLS
 
