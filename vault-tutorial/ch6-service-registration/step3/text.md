@@ -48,7 +48,7 @@ helm install vault hashicorp/vault \
   --wait --timeout 3m || true
 ```
 
-> Helm chart 在 `server.ha.enabled=true` 且 `server.ha.raft.enabled=true` 时，会**自动**在生成的 vault.hcl 里写入 `service_registration "kubernetes" {}`，并通过 Downward API 注入 `VAULT_K8S_NAMESPACE` 与 `VAULT_K8S_POD_NAME`，同时为 Pod 的 ServiceAccount 配上 `pods` 资源的 `get`/`update`/`patch` 权限——也就是说，正文 §3.1 / §3.2 描述的"声明意图 + RBAC"两件事都已经被 chart 替你做完。
+> Helm chart 在 `server.ha.enabled=true` 且 `server.ha.raft.enabled=true` 时，会**自动**在生成的 vault.hcl 里写入 `service_registration "kubernetes" {}`，并通过 Downward API 注入 `VAULT_K8S_NAMESPACE` 与 `VAULT_K8S_POD_NAME` 这两个环境变量，同时为 Pod 的 ServiceAccount 配上对 `pods` 资源的 `get`、`update`、`patch` 权限——也就是说，正文 §3.1 与 §3.2 描述的"声明意图 + RBAC"两件事都已经被 chart 替你做完。
 
 等 3 个 Pod 都进入 Running（`--wait` 等的是 readiness probe，但 Vault 在初始化前 ready 永远不会是 true，所以这里允许超时）：
 
