@@ -78,7 +78,26 @@ vault operator init -key-shares=1 -key-threshold=1 \
 
 vault operator unseal "$(jq -r '.unseal_keys_b64[0]' /root/init-dynamodb.json)"
 export VAULT_TOKEN=$(jq -r '.root_token' /root/init-dynamodb.json)
+```
 
+> **HA 选举有几秒延迟**：unseal 完成后，DynamoDB 后端要在 `vault-data` 表里抢一行锁才能把本节点切成 `active`，这一步在 LocalStack 上通常需要 5–15 秒。如果不等就直接调 `secrets enable`，会撞上 `local node not active but active cluster node not found` 的 500。等到 HA Mode 切成 `active` 再往下做：
+>
+> ```bash
+> for i in $(seq 1 30); do
+>   mode=$(vault status -format=json 2>/dev/null | jq -r '.ha_mode')
+>   if [ "$mode" = "active" ]; then
+>     echo "active in ${i}s"; break
+>   fi
+>   sleep 1
+> done
+> vault status | grep -E 'HA Mode|Active Node Address'
+> ```
+>
+> 应当看到 `HA Mode active`、`Active Node Address http://127.0.0.1:8200`。
+
+确认本节点已经是 active 之后再写入：
+
+```bash
 vault secrets enable -path=secret kv-v2
 vault kv put secret/demo storage=dynamodb note="written-via-dynamodb-backend"
 vault kv get secret/demo
@@ -106,6 +125,13 @@ sleep 5
 
 vault operator unseal "$(jq -r '.unseal_keys_b64[0]' /root/init-dynamodb.json)"
 export VAULT_TOKEN=$(jq -r '.root_token' /root/init-dynamodb.json)
+
+# 同样要等 HA 选举完成，否则 vault kv get 会撞上 "local node not active"
+for i in $(seq 1 30); do
+  mode=$(vault status -format=json 2>/dev/null | jq -r '.ha_mode')
+  [ "$mode" = "active" ] && { echo "active in ${i}s"; break; }
+  sleep 1
+done
 
 vault kv get secret/demo
 ```
