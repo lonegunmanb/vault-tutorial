@@ -113,7 +113,7 @@ curl -sS -H "X-Vault-Token: ${VAULT_TOKEN}" \
   "http://127.0.0.1:${LEADER_PORT}/v1/sys/metrics" | head -n 5
 ```
 
-预期：第一段输出以 `{"Counters":...` 开头；第二段输出以 Prometheus 暴露格式标准的 `# HELP` / `# TYPE` 注释行开头。
+预期：第一段输出是 JSON，以 `{"Timestamp":"...","Gauges":[...` 这样的字段开头（实际字段顺序可能是 Timestamp / Gauges / Counters / Samples 中的若干个，取决于当前快照里有哪些指标）；第二段输出则是 Prometheus 暴露格式，以标准的 # HELP / # TYPE 注释行开头。
 
 ## 1.5 规则四：路径必须显式写 `/v1/sys/metrics`
 
