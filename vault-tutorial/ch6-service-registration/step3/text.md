@@ -87,10 +87,14 @@ for pod in vault-1 vault-2; do
 
   # 与 step1 中宿主机场景同理：retry/raft join 是异步的，
   # 必须先看到 initialized=true 再 unseal，否则会报 "Vault is not initialized"。
+  # 官方 hashicorp/vault 镜像是 distroless，不带 curl，因此这里改用 vault status
+  # 的 -format=json 输出来读 initialized 字段。`vault status` 在 sealed 状态下
+  # 退出码非零，所以加上 || true 防止 set -e 之类的环境直接中断循环。
   echo -n "等待 $pod 完成 raft join "
   for i in {1..30}; do
     init=$(kubectl -n vault exec "$pod" -- \
-             curl -sS http://127.0.0.1:8200/v1/sys/seal-status | jq -r '.initialized')
+             vault status -format=json 2>/dev/null \
+             | jq -r '.initialized' 2>/dev/null)
     if [ "$init" = "true" ]; then
       echo " OK"
       break
@@ -135,14 +139,14 @@ kubectl -n vault get pod vault-0 -o jsonpath='{.metadata.labels}' | jq
 
 ## 3.5 验证 Vault 自身的 leader 视图与标签一致
 
-把"标签视角"与"Vault 自报视角"交叉验证一遍：
+把"标签视角"与"Vault 自报视角"交叉验证一遍。同样因为镜像不带 `curl`，这里改用 `vault read -format=json sys/leader`：
 
 ```bash
 for pod in vault-0 vault-1 vault-2; do
   echo "=== $pod ==="
   kubectl -n vault exec "$pod" -- \
-    curl -sS http://127.0.0.1:8200/v1/sys/leader \
-    | jq '{is_self, leader_address}'
+    vault read -format=json sys/leader \
+    | jq '.data | {is_self, leader_address}'
 done
 ```
 

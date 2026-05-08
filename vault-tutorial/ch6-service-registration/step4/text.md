@@ -115,7 +115,7 @@ RESTARTED_POD="$LEADER_POD"
 echo -n "等待 $RESTARTED_POD 完成 raft 同步 "
 for i in {1..30}; do
   init=$(kubectl -n vault exec "$RESTARTED_POD" -- \
-           curl -sS http://127.0.0.1:8200/v1/sys/seal-status 2>/dev/null \
+           vault status -format=json 2>/dev/null \
            | jq -r '.initialized' 2>/dev/null)
   if [ "$init" = "true" ]; then
     echo " OK"
