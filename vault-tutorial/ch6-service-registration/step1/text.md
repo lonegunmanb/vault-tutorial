@@ -18,7 +18,7 @@ curl -sS http://127.0.0.1:8500/v1/status/leader
 
 ## 1.2 顺序启动 3 个 Vault 节点
 
-按 bootstrap → follower 顺序拉起 3 个节点：
+按 bootstrap → follower 顺序启动 3 个节点：
 
 ```bash
 ./start-node.sh 1

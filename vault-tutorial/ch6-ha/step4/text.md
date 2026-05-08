@@ -1,10 +1,10 @@
-# 第四步：kill 掉 leader 触发重新选举并复测两条路径
+# 第四步：终止 leader 进程触发重新选举并复测两条路径
 
-本步通过物理 kill 掉当前 leader 进程，触发 Raft 重新选举，并验证：(a) 新 leader 在剩下的 2 个节点中产生；(b) 步骤 2、步骤 3 中观察到的两条路径在新 leader 下依然成立。这把 6.6 节 §1 中"节点失活后由其余节点接替"的口径变成了一次可肉眼观察的事件。
+本步通过强制终止当前 leader 进程，触发 Raft 重新选举，并验证：(a) 新 leader 在剩余 2 个节点中产生；(b) 步骤 2、步骤 3 中观察到的两条路径在新 leader 下依然成立。该过程将 6.6 节 §1 中"节点失活后由其余节点接替"的描述转化为一次可直接观察的事件。
 
-## 4.1 找到当前 leader 的进程并 kill
+## 4.1 定位当前 leader 进程并终止之
 
-按当前的 `${ACTIVE_PORT}` 找到对应节点编号（8200→1、8210→2、8220→3），并 kill 其进程：
+根据当前的 `${ACTIVE_PORT}` 推断对应节点编号（8200→1、8210→2、8220→3），并终止其进程：
 
 ```bash
 case "${ACTIVE_PORT}" in
@@ -12,7 +12,7 @@ case "${ACTIVE_PORT}" in
   8210) ACTIVE_NODE=2 ;;
   8220) ACTIVE_NODE=3 ;;
 esac
-echo "当前 leader 是 node-${ACTIVE_NODE}，准备 kill 之"
+echo "当前 leader 为 node-${ACTIVE_NODE}，准备终止该进程"
 
 kill "$(cat /tmp/vault-${ACTIVE_NODE}.pid)"
 sleep 5

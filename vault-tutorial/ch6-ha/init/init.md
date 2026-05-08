@@ -5,7 +5,7 @@
 1. 用 `sys/leader` API 区分 active / standby；
 2. 默认情况下向 standby 发请求被**透明转发**，客户端拿到的就是 200 响应；
 3. 加上 `X-Vault-No-Request-Forwarding: 1` 后，standby 改以 `307` 重定向回 active 节点的 `api_addr`；
-4. kill 掉当前 leader 后，Raft 重新选举出新的 active，先前的两条路径会随新 leader 自动迁移。
+4. 终止当前 leader 进程后，Raft 重新选举出新的 active，先前的两条路径将随新 leader 自动迁移。
 
 为完全规避真实云成本，整个实验都在单台 Killercoda 主机上完成——3 个 Vault 进程通过 `127.0.0.1` 上的不同端口隔离（API 8200/8210/8220、cluster 8201/8211/8221）。每个节点的 `api_addr` 都配置为 **"指向该节点自己"**，这正是 6.5 节"4.1 客户端可直接访问每台 Vault"中描述的标准部署形态。
 

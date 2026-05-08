@@ -2,7 +2,7 @@
 
 ## 1.1 启动并初始化
 
-按 bootstrap → follower 顺序拉起 3 个节点：
+按 bootstrap → follower 顺序启动 3 个节点：
 
 ```bash
 ./start-node.sh 1

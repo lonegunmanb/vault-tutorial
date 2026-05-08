@@ -4,7 +4,7 @@
 
 ## 2.1 先在 active 上启用 KV v2 并写入一条数据
 
-为方便后续观察，约定 active 端口为 `${ACTIVE_PORT}`，先随便挑一个 standby 端口为 `${STANDBY_PORT}`。请按上一步 `sys/leader` 的实际结果手动赋值，例如：
+为方便后续观察，约定 active 端口为 `${ACTIVE_PORT}`，并任选一个 standby 端口作为 `${STANDBY_PORT}`。请按上一步 `sys/leader` 的实际结果手动赋值，例如：
 
 ```bash
 export ACTIVE_PORT=8200
@@ -20,9 +20,9 @@ VAULT_ADDR="http://127.0.0.1:${ACTIVE_PORT}" vault kv put demo-kv/hello \
   message="written via active"
 ```
 
-## 2.2 把同一次读取请求直接打给 standby
+## 2.2 将同一次读取请求直接发送至 standby
 
-把 CLI 临时指向 standby 端口、并保留默认行为（不带任何特殊请求头），读取刚刚那条数据：
+将 CLI 临时指向 standby 端口，并保留默认行为（不附加任何特殊请求头），读取上一步写入的数据：
 
 ```bash
 VAULT_ADDR="http://127.0.0.1:${STANDBY_PORT}" vault kv get demo-kv/hello
@@ -30,9 +30,9 @@ VAULT_ADDR="http://127.0.0.1:${STANDBY_PORT}" vault kv get demo-kv/hello
 
 预期输出与在 active 上读取完全一致——客户端拿到了 `message=written via active`，**完全无感**。
 
-## 2.3 用原生 `curl` 复盘一遍：HTTP 层面看到的是什么
+## 2.3 使用原生 `curl` 复核一次：HTTP 层面观察到的实际响应
 
-CLI 把网络细节抽走了，用 `curl -i` 复盘可以看到 standby 实际返回的 HTTP 报文确实是 `200 OK`，而非任何 `3xx`：
+CLI 屏蔽了底层网络细节，使用 `curl -i` 可观察到 standby 实际返回的 HTTP 报文为 `200 OK`，而非任何 `3xx` 状态码：
 
 ```bash
 curl -i \
@@ -44,4 +44,4 @@ curl -i \
 
 ## 2.4 这一步的核心闭环
 
-standby 节点在不做任何特殊配置时**默认就把请求透明转发到了 active**——客户端看到的就是普通 200 响应，没有任何 3xx。这一行为符合 6.5 节 §3 中"自 0.6.2 起请求转发默认启用"的描述。下一步主动关闭这一便利，让 standby 暴露出底层的"307 重定向"。
+standby 节点在未做任何特殊配置时**默认即将请求透明转发至 active**——客户端收到的是标准的 200 响应，未出现任何 3xx。该行为符合 6.5 节 §3 中"自 0.6.2 起请求转发默认启用"的描述。下一步将主动关闭该机制，使 standby 显式返回底层的"307 重定向"。

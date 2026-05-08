@@ -2,7 +2,7 @@
 
 ## 1.1 启动并初始化
 
-按 bootstrap → follower 顺序拉起 3 个节点：
+按 bootstrap → follower 顺序启动 3 个节点：
 
 ```bash
 ./start-node.sh 1
@@ -34,9 +34,9 @@ source /etc/profile.d/vault.sh
 vault operator unseal "$UNSEAL_KEY"
 ```
 
-node-2 与 node-3 是通过 `retry_join` "去找 node-1 报到"的，但这件事不是立刻完成的——它们要等下一个重试周期，才会从 node-1 把"集群已经被初始化过"这件事同步过来。在同步完成之前，对它们执行 `vault operator unseal` 会报 `Vault is not initialized`，节点会一直停留在 sealed。
+node-2 与 node-3 通过 `retry_join` 向 node-1 注册以加入集群，但该注册过程不会立即完成——两节点需要等待下一次重试周期，才能从 node-1 同步到"集群已完成初始化"这一状态。在该状态同步完成之前，对其执行 `vault operator unseal` 将返回 `Vault is not initialized` 错误，节点将持续保持 sealed 状态。
 
-所以正确的做法是：**先轮询确认 follower 已经知道集群被初始化了（`initialized: true`），再 unseal**。
+因此正确的做法是：**先轮询确认 follower 已感知到集群初始化状态（`initialized: true`），再执行 unseal 操作**。
 
 ```bash
 for port in 8210 8220; do
@@ -84,8 +84,8 @@ done
 - 其中一个节点 `is_self: true`、`leader_address` 等于自身的 `api_addr`——这就是 active；
 - 另外两个节点 `is_self: false`、`leader_address` 等于上面那个节点的 `api_addr`——这就是 standby，并且它们已经知道 active 的可达地址（这正是 6.5 节 §2 所讲的"通过加密存储广播"的成果，从客户端角度看是一个直接的 API 字段）。
 
-记住此时哪个端口是 active、哪两个端口是 standby——后续步骤会反复用到。例如，若 active 是 8200，则 8210 / 8220 都是 standby，可以从中任挑一个作为本节实验的"目标 standby"。
+请记录此时哪个端口为 active、哪两个端口为 standby——后续步骤将反复使用。例如，若 active 为 8200，则 8210 / 8220 均为 standby，可从中任选其一作为本节实验的"目标 standby"。
 
 ## 1.3 这一步的核心闭环
 
-集群已稳定运行，3 节点全部 unsealed，并且每个节点都能通过 `sys/leader` 自报"自己是 active 还是 standby、当前 active 的对外地址是什么"。下一步把请求真正打到 standby 节点上，观察默认的请求转发行为。
+集群已稳定运行，3 节点全部 unsealed，并且每个节点均可通过 `sys/leader` 报告"自身角色为 active 或 standby、当前 active 的对外地址"等信息。下一步将向 standby 节点直接发送请求，以观察默认的请求转发行为。
