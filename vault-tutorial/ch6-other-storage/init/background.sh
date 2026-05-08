@@ -112,7 +112,11 @@ listener "tcp" {
 }
 EOF
 
-# Step5：DynamoDB 后端，同样指向本地 LocalStack
+# Step5：DynamoDB 后端，同样指向本地 LocalStack。
+# 注意：LocalStack (社区版) 对 Vault 用于 DynamoDB HA 选主的 conditional-update /
+# TTL 语义支持不完整，打开 ha_enabled 后节点会卸在 standby、选不出 leader。
+# 本 lab 重点是“Vault 自动建表”这个与 PostgreSQL 后端的运维差异，HA 能力的
+# 支持级别在正文 §4.1/§9 里已说明，因此关闭 ha_enabled。
 cat > /root/vault-dynamodb.hcl <<'EOF'
 ui            = true
 disable_mlock = true
@@ -122,7 +126,7 @@ log_level     = "info"
 api_addr      = "http://127.0.0.1:8200"
 
 storage "dynamodb" {
-  ha_enabled = "true"
+  ha_enabled = "false"
   access_key = "test"
   secret_key = "test"
   region     = "us-east-1"
