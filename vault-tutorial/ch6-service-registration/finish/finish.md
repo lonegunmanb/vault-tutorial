@@ -1,18 +1,26 @@
 # 实验完成
 
-至此，学员完成了围绕 `service_registration "consul"` 块的四步实操：
+恭喜你完成本节实验。本节同时演示了 `service_registration` 的两种官方实现，每一种都把 6.7 节正文中相应的概念落到了可观察的现象上：
 
-1. 在 Raft 存储后端之上**显式**声明 `service_registration "consul"`，让 3 个 Vault 节点被注册进 Consul 服务目录；
+**Consul 模式（step 1 ~ step 2）**
+
+1. 在 Raft 存储后端之上**显式**声明 `service_registration "consul"` 块，让 3 个 Vault 节点被注册进 Consul 服务目录；
 2. 通过 `dig` 验证 `active.vault.service.consul` / `standby.vault.service.consul` / `vault.service.consul` 三个 DNS 端点各自精确对应的节点子集；
-3. 主动 seal 一个待命节点，观察它在 Consul 健康检查更新后从两个 DNS 端点中"自动隐身"，并在 unseal 后再次出现；
-4. 加入 `service_tags` 与 `service_meta` 后通过 Consul catalog API 与按 tag 的 DNS 查询验证自定义标签的端到端透传。
+3. 主动 seal 一个待命节点，观察它在 Consul 健康检查更新后从两个 DNS 端点中自动隐身，与正文 §2.2 关于"sealed 节点会被 Consul 主动剔除"的描述完全一致。
 
-> **关于 Kubernetes 服务注册的延伸说明**：本实验未覆盖 `service_registration "kubernetes"`，因为该模式要求一个真实的 Kubernetes 集群与 Vault 进程在 Pod 内运行，无法在单台 Killercoda Ubuntu 主机上以同等清晰度演示。学员若希望把本实验的结论迁移到 Kubernetes 模式，关键差异在于：
-> - "服务目录"从 Consul 换成 Kubernetes API server；
-> - "DNS 端点"换成 Kubernetes Service 的 selector（按 `vault-active` 等标签筛选 Pod）；
-> - 节点状态以 Pod label 的形式持续被 Vault 改写，因此 Vault 进程所属的 ServiceAccount 必须具备对自身 Pod 的 `get` / `update` / `patch` 权限。
+**Kubernetes 模式（step 3 ~ step 4）**
+
+1. 用官方 `hashicorp/vault` Helm chart 在 K8s 上部署 3 副本 HA Vault，chart 默认就把 `service_registration "kubernetes" {}` 块、Downward API 注入与 ServiceAccount RBAC 三件事帮你配齐；
+2. 在 `kubectl get pod -L vault-active,vault-sealed,...` 的输出里直接看到 Vault 把节点状态写到自身 Pod label 上；
+3. 主动 `kubectl delete pod` 杀掉当前 leader 触发重新选举，观察标签随之翻转、Helm chart 默认创建的 `vault-active` Service 的 endpoints 自动迁移到新 leader——一条"内部 HA 状态 → label → selector → endpoints"的完整链路。
+
+把两种模式横向放在一起回看 6.7 节正文 §4 的"心智地图"：
+
+- **Consul 模式提供的是"DNS 视角"**——客户端只需查询一个 DNS 名（例如 `active.vault.service.consul`）就能被指向当前 leader；
+- **K8s 模式提供的是"Label 视角"**——客户端只需用一个固定的 Service 名就能被指向当前 leader，路由由 Pod label + Service selector 完成；
+- 两种模式对应用代码而言都是"纯透明"的，运维人员真正要做的事只有：在 `vault.hcl` 中声明意图、为 Vault 准备相应的访问凭据（Consul ACL token / K8s ServiceAccount 与 RBAC）、把存储后端换成 raft 之外的任意后端时**记得显式带上** `service_registration` 块。
 
 > **生产环境补强提示**：
-> - 与 Consul 的通信应启用 TLS（`scheme = "https"` 与 `tls_*` 系列参数）；
-> - 若 Consul 启用了 ACL，需要为 Vault 单独签发具备 `service.vault: write` 权限的 ACL token，并通过 `token` 参数注入；
-> - 客户端建议指向 `active.vault.service.consul`，把"找到当前活跃节点"这一职责完全下放给 Consul DNS，而不再依赖应用侧或负载均衡器自行判定。
+> - 与 Consul 通信请启用 TLS（`scheme = "https"` + `tls_*` 系列参数）；若 Consul 启用了 ACL，需为 Vault 单独签发具备 `service.vault: write` 权限的 token，并通过 `token` 参数注入。
+> - K8s 模式下，本实验为简化演示在 chart 中关闭了 anti-affinity（`affinity: ""`）、并使用了 1/1 分片；生产请保留 chart 默认的 anti-affinity 让 3 副本分散到不同 worker、并改用 5/3 等更稳健的 Shamir 配置。
+> - K8s `vault-active` Service 的 endpoints 会随选举立刻翻转，但客户端连接池里**老的连接不会立刻自动切换**——结合 `publishNotReadyAddresses: false` 让失败 Pod 立即被踢出端点池，并在客户端侧设置较短的连接保活时间，能把切换感知度做到秒级。

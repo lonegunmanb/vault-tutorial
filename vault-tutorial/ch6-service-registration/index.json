@@ -1,6 +1,6 @@
 {
-  "title": "service_registration 实操：把 Vault 节点状态广播给 Consul 服务目录",
-  "description": "在单台 Killercoda 主机上启动一个 Consul dev agent 与一个 3 节点 Vault Raft 集群，在每个 Vault 节点的 vault.hcl 中加入 service_registration \"consul\" 块，把 6.7 节正文中的概念变成可观察的现象：(1) 启动 Consul + 3 节点 Vault Raft 集群，初始化并解封后通过 HTTP catalog API 与 dig 看到 vault 服务被注册；(2) 分别查询 active.vault.service.consul / standby.vault.service.consul / vault.service.consul 三个 DNS 端点，验证 active 解析到唯一活跃节点、standby 解析到所有待命节点、vault 解析到全部已 unseal 节点；(3) 主动 seal 掉一个待命节点，观察其在数秒内从 vault.service.consul 与 standby.vault.service.consul 中消失；(4) 在 service_registration 块中加入 service_tags 与 service_meta，重启一个节点后通过 catalog API 看到这些自定义标签出现在该节点的服务条目里。",
+  "title": "service_registration 实操：Consul DNS 服务目录与 Kubernetes Pod 标签双视角",
+  "description": "在 Killercoda 提供的 kubeadm 单节点 Kubernetes 主机上同时演示 service_registration 的两种实现：(1) 宿主机启动 Consul dev agent 与 3 节点 Vault Raft 集群（vault.hcl 显式声明 service_registration \"consul\"），通过 Consul HTTP catalog API 验证 vault 服务被注册；(2) 用 dig 查询 active.vault.service.consul / standby.vault.service.consul / vault.service.consul 三个 DNS 端点，再 seal 一个待命节点观察其在数秒内从两个端点中消失；(3) 关闭宿主机 Vault 进程后，使用官方 Helm chart 把 3 副本 HA Vault 部署到 Kubernetes（默认配置已包含 service_registration \"kubernetes\" {}），初始化 + raft join + unseal，再用 kubectl get pod -L vault-active,vault-sealed,vault-version 直接看到标签随状态翻转；(4) 观察 Helm chart 默认创建的 vault-active Service 永远只指向 leader Pod，主动 kubectl delete pod 杀掉当前 leader 触发选举，看到标签与 Service endpoints 一并跟随新 leader 迁移。",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -9,19 +9,19 @@
     },
     "steps": [
       {
-        "title": "启动 Consul + 3 节点 Vault 集群并完成注册",
+        "title": "Consul：启动 dev agent 与 3 节点 Vault 集群并完成注册",
         "text": "step1/text.md"
       },
       {
-        "title": "查询 active / standby / vault 三个 DNS 端点",
+        "title": "Consul：查询三个 DNS 端点并观察 sealed 节点自动隐身",
         "text": "step2/text.md"
       },
       {
-        "title": "Seal 一个待命节点：观察它从服务目录消失",
+        "title": "Kubernetes：用 Helm 部署 HA Vault 并观察 Pod 标签",
         "text": "step3/text.md"
       },
       {
-        "title": "为节点加上自定义 service_tags 与 service_meta",
+        "title": "Kubernetes：终止 leader Pod 触发选举，观察标签与 Service endpoints 跟随",
         "text": "step4/text.md"
       }
     ],
@@ -35,7 +35,7 @@
     }
   },
   "backend": {
-    "imageid": "ubuntu"
+    "imageid": "kubernetes-kubeadm-1node"
   },
   "interface": {
     "layout": "editor-terminal"

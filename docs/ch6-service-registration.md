@@ -267,14 +267,14 @@ $ kubectl delete pod --selector=vault-active=true \
 
 ## 5. 动手实验
 
-本节配套了一个 Killercoda 实验，学员将在单台 Killercoda 主机上启动一个 Consul dev agent 与一个 3 节点 Vault Raft 集群，**亲手把 `service_registration "consul"` 块加入 `vault.hcl`** 并通过 `dig` 与 Consul HTTP API 直接观察本节正文中的几条核心结论。完成下列练习：
+本节配套了一个 Killercoda 实验，**同时**演示 `service_registration` 的两种官方实现。实验运行在 `kubernetes-kubeadm-1node` 环境上：前 2 步用宿主机进程演示 Consul 模式，后 2 步通过官方 `hashicorp/vault` Helm chart 把 HA Vault 部署到 K8s 演示 Kubernetes 模式。完成下列练习：
 
-1. 启动 Consul dev agent 与 3 节点 Vault Raft 集群，初始化并解封后通过 Consul catalog API 看到 `vault` 服务的三条注册记录；
-2. 分别查询 `active.vault.service.consul` / `standby.vault.service.consul` / `vault.service.consul` 三个 DNS 端点，并与 Vault `sys/leader` 端点交叉验证视图一致；
-3. 主动 seal 掉一个待命节点，等待健康检查刷新后看到该节点从两个 DNS 端点中"自动隐身"，再 unseal 复现；
-4. 在 `service_registration` 块中加入 `service_tags` 与 `service_meta`，重启节点后通过 catalog API 与按 tag 的 DNS 查询验证自定义标签的端到端透传。
+1. 启动 Consul dev agent 与 3 节点 Vault Raft 集群（`vault.hcl` 显式声明 `service_registration "consul"`），通过 Consul HTTP catalog API 看到 `vault` 服务下注册了 3 个实例；
+2. 用 `dig` 分别查询 `active.vault.service.consul` / `standby.vault.service.consul` / `vault.service.consul` 三个 DNS 端点并与 `sys/leader` 交叉验证，再主动 seal 一个待命节点观察其在数秒内从两个端点中"自动隐身"；
+3. 用 Helm 把 3 副本 HA Vault 部署到 K8s（chart 默认就会注入 `service_registration "kubernetes" {}`、Downward API 与 ServiceAccount RBAC），完成 init / raft join / unseal 后，通过 `kubectl get pod -L vault-active,vault-sealed,...` 直接看到 Vault 写到 Pod label 上的状态；
+4. 观察 Helm chart 默认创建的 `vault-active` Service 的 endpoints 始终精确指向当前 leader Pod；主动 `kubectl delete pod` 杀掉当前 leader 触发重新选举，看到标签随之翻转、Service endpoints 自动跟随到新 leader。
 
-<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch6-service-registration" title="实验：把 Vault 节点状态广播给 Consul 服务目录" />
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch6-service-registration" title="实验：Consul DNS 服务目录与 Kubernetes Pod 标签双视角下的 service_registration" />
 
 [consul]: https://www.consul.io/
 [consul-acl]: https://developer.hashicorp.com/consul/docs/security/acl
