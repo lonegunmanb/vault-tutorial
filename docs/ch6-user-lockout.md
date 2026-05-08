@@ -22,7 +22,6 @@ User lockout 用四个名词描述一个状态机：**lockout threshold（锁定
 > **必须明确给学员的一个安全提示**：user lockout 在请求处理流程中**很早**就被触发，因此可能向外部观察者**泄露**用户名是否真实存在的信息——攻击者可以根据"是否被锁定"这一现象去枚举有效用户名。这是该机制设计上的内在权衡，不是实现缺陷。
 
 ![user lockout 状态机：失败计数累积、达到阈值进入锁定窗口、duration 过后或 counter_reset 静默期后回到正常态](/images/ch6-user-lockout/lockout-state-machine.png)
-> 绘图提示词：hand-drawn ink line drawing with soft watercolor wash, 一个真实的金属保险柜门示意图，门上有一个老式机械计数器（counter）逐步累积刻度，刻度走到红色 threshold 标记后保险柜门被一根铜锁链锁住（lockout），旁边有一个沙漏在倒计时表示 lockout duration，沙漏旁边还有一个独立的小沙漏表示 lockout counter reset 静默期；线条手绘风格，水彩淡色阴影，专业术语用英文标签，其他说明用中文标签
 
 ---
 
@@ -67,7 +66,6 @@ user_lockout "ldap" {
 逐块解读这份示例：ldap 认证方法会因 `disable_lockout = "true"` 而**完全关闭**锁定行为；userpass 在合并后的最终参数为 threshold=25、duration=5m、counter_reset=10m（threshold 与 duration 显式覆盖了 `all`、counter_reset 沿用 `all`）；approle 由于没有写自己的块，会沿用 `all` 的 duration=10m 与 counter_reset=10m，并因为没有任何地方显式给出 threshold，最终采用默认值 5。
 
 ![三种 user_lockout 块（all / 具体方法 / 不写）合并产生最终参数的过程示意，强调"具体方法块覆盖 all 块、未指定的字段沿用上一层"](/images/ch6-user-lockout/stanza-merge.png)
-> 绘图提示词：hand-drawn ink line drawing with soft watercolor wash, 三层叠放的真实纸质表格示意图：最底下是一张默认值表格（默认值标 "default"），中间是 user_lockout "all" 表格，最上层是 user_lockout "userpass" 表格；三张表格通过手绘箭头逐层覆盖，最终在右侧汇聚成一张"effective config"表格；线条手绘风格，水彩淡色阴影，参数名用英文（lockout_threshold / lockout_duration / lockout_counter_reset / disable_lockout），其余标注用中文
 
 ---
 
