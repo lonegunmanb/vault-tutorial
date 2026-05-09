@@ -1,0 +1,43 @@
+{
+  "title": "Vault Agent 文件渲染与进程供给",
+  "description": "Practice Vault Agent file templating and process supervisor mode with a local Vault dev server, AppRole auto-auth, KV v2 updates, rendered files, and environment-variable injection.",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "检查 Agent 配置骨架",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "模板渲染为本地文件",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "观察 KV 更新后的重新渲染",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "Process Supervisor 注入环境变量",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

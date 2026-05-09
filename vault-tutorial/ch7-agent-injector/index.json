@@ -1,0 +1,43 @@
+{
+  "title": "Vault Agent Injector：用 annotation 把 Vault 机密注入 Pod 文件",
+  "description": "在 Killercoda kubeadm 单节点 Kubernetes 环境中，使用 Helm 安装 Vault dev server 与 Vault Agent Injector，配置 Kubernetes auth method，再通过 Pod annotation 注入 Vault Agent init container / sidecar container，把 KV v2 机密渲染到 /vault/secrets/config.txt，并对比 init-only Job 的生命周期。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "检查 Injector 与基线 Pod",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "用 annotation 触发注入",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "读取 /vault/secrets 并观察刷新",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "体验 init-only Job",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "kubernetes-kubeadm-1node"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

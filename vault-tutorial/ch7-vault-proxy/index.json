@@ -1,0 +1,43 @@
+{
+  "title": "Vault Proxy 身份边界、缓存清理与 Kubernetes persistent cache 模型",
+  "description": "在同一台 Vault dev server 上启动两个 Vault Proxy，比较 use_auto_auth_token=true 与 force 的身份结果，观察 X-Vault-Request 请求头保护、cache-clear 管理 API，并阅读 Kubernetes persistent cache 的 init/sidecar 交接配置模型。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启动 use_auto_auth_token=true 的 Proxy",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "比较 true 与 force 的身份边界",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "观察请求头保护与缓存清理 API",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "阅读 Kubernetes persistent cache 模型",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

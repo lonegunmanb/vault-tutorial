@@ -85,7 +85,7 @@ Vault Proxy 的核心定位是「位于应用与 Vault 之间的代理」：可�
 
 Vault Proxy 的命令行用法、配置文件结构、Auto-auth 与缓存语义已经在
 [5.6 轻量级代理服务指令](/ch5-vault-proxy) 中完整讲解过，本章后续
-（7.4）会聚焦在 Proxy 的部署拓扑选择与缓存边界，避免重复解释 CLI
+（7.3）会聚焦在 Proxy 的部署拓扑选择与缓存边界，避免重复解释 CLI
 与配置语法。
 
 ### 2.3 Kubernetes 平台三件套：VSO、CSI provider 与 Agent Injector
@@ -152,9 +152,9 @@ Kubernetes 集群签发的 ServiceAccount Token 本身就是一种 JWT，可以
 认证方法清单中都包含 JWT，正是这种同源关系的体现。
 
 [5.6 Vault Proxy CLI](/ch5-vault-proxy) 已经把 `vault proxy` 的
-配置文件结构、Auto-auth、API 代理与缓存边界讲解完毕。本章 7.4 节
-会复用这些结论，重点讨论 Proxy 在「每应用边车」「每节点共享」
-「网关式共享」三种部署位置上的取舍，而不再重复解释配置语法。
+配置文件结构、Auto-auth、API 代理与缓存边界讲解完毕。本章 7.3 节
+会复用这些结论，重点讨论 Proxy 在应用接入中的身份边界、缓存边界
+与 Kubernetes persistent cache 模型，而不再重复解释配置语法。
 
 [3.11 Kubernetes 机密引擎](/ch3-k8s) 是与本章方向相反的链路——它
 让 Vault 主动调用目标 K8s 集群的 API 为某个 ServiceAccount 签出
@@ -162,9 +162,9 @@ Kubernetes 集群签发的 ServiceAccount Token 本身就是一种 JWT，可以
 Vault 拉取或同步机密。区分清楚两者的方向有助于避免后续选型混淆。
 
 > **本章后续阅读路径**：
-> - 7.2 / 7.3 聚焦 Vault Agent 的两条主线（模板渲染、进程供给）；
-> - 7.4 专门讨论 Vault Proxy 的部署拓扑与缓存边界；
-> - 7.5 / 7.6 / 7.7 / 7.8 分别动手实战 Agent Injector、CSI provider、VSO 静态机密、VSO 动态机密与 PKI；
+> - 7.2 聚焦 Vault Agent 的两条主线（模板渲染、进程供给）；
+> - 7.3 专门讨论 Vault Proxy 的部署拓扑、身份边界与缓存边界；
+> - 7.4 / 7.5 / 7.6 分别动手实战 Agent Injector、CSI provider、VSO 静态机密；
 > - 7.9 收束三种 K8s 集成的选型矩阵与决策树。
 
 ---

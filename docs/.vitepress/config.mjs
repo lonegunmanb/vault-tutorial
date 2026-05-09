@@ -106,7 +106,12 @@ export default defineConfig({
            text: '第 7 章：应用自动化接入与 Kubernetes 云原生集成',
            collapsed: false,
            items: [
-             { text: '7.1 章节导览与三种接入形态选型', link: '/ch7-overview' }
+             { text: '7.1 章节导览与三种接入形态选型', link: '/ch7-overview' },
+             { text: '7.2 Vault Agent：本机模板渲染、令牌托管与进程供给', link: '/ch7-agent' },
+             { text: '7.3 Vault Proxy：API 代理、缓存与应用身份边界', link: '/ch7-vault-proxy' },
+             { text: '7.4 Kubernetes 集成模式之一：Vault Agent Sidecar Injector（vault-k8s）', link: '/ch7-agent-injector' },
+             { text: '7.5 Kubernetes 集成模式之二：Secrets Store CSI Driver + Vault Provider', link: '/ch7-csi' },
+             { text: '7.6 Kubernetes 集成模式之三：Vault Secrets Operator (VSO) 控制器与 CRD 模型', link: '/ch7-vso' }
            ]
          }
         ],

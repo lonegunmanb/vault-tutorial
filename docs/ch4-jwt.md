@@ -27,9 +27,7 @@ JWT 直传登录适合机器、CI/CD、工作负载或已经拿到 JWT 的客户
 
 OIDC 登录适合需要浏览器交互的人类用户：Vault 生成指向 OIDC Provider 的授权 URL，用户在 Provider 完成认证，Provider 回调 Vault，Vault 交换并校验 ID Token，最后签发 Vault token；Vault 文档明确说明 CLI 与 UI 都内置了 OIDC 登录流程。
 
-![JWT 直传与 OIDC 浏览器登录对比](/images/ch4-jwt/jwt-vs-oidc-flow.svg)
-
-绘图提示词：手绘风格真实事物比喻，钢笔线绘，水彩淡色阴影；左侧画一名自动化流水线工人把写着 JWT 的密封信交给 Vault 门卫，右侧画一名用户跟随浏览器路标走到 OIDC Provider 柜台再回到 Vault；画面标注 JWT login、OIDC Authorization Code Flow、ID Token、Vault token，整体像课程讲义里的温和示意图。
+![JWT 直传与 OIDC 浏览器登录对比](/images/ch4-jwt/jwt-vs-oidc-flow.png)
 
 ---
 
@@ -57,9 +55,7 @@ OIDC Discovery 让 Vault 从 Provider 的 discovery endpoint 获取签名公钥�
 
 OIDC role 还需要在挂载级配置 `oidc_discovery_url`、`oidc_client_id` 与 `oidc_client_secret`；如果只做 JWT 直传验证，可以把 OIDC client ID 与 secret 留空，并使用 Discovery、JWKS 或静态公钥完成签名校验。
 
-![JWT 签名验证方式地图](/images/ch4-jwt/jwt-verification-methods.svg)
-
-绘图提示词：手绘风格真实事物比喻，钢笔线绘，水彩淡色阴影；画一个 Vault 检票口，前方四条小路分别来自 OIDC Discovery、JWKS URL、JWKS Pairs、Static Public Keys，每条路都送来一把 public key；检票口旁边写 one verification method per mount，远处另有第二个 Vault mount 小亭子表示不同 issuer 需要不同 mount。
+![JWT 签名验证方式地图](/images/ch4-jwt/jwt-verification-methods.png)
 
 ---
 
@@ -119,9 +115,7 @@ Kubernetes 可以充当 OIDC Provider，使 Vault 通过 JWT/OIDC auth method �
 
 如果需要控制 ServiceAccount Token 的 audience 与 TTL，可以使用 projected `serviceAccountToken` volume；官方示例中 `audience: vault` 要与 JWT role 的 `bound_audiences=vault` 对应，`expirationSeconds: 600` 表示 10 分钟，这是示例中给出的最小 TTL。
 
-![Kubernetes JWT auth 不经过 TokenReview 的边界](/images/ch4-jwt/kubernetes-oidc-without-tokenreview.svg)
-
-绘图提示词：手绘风格真实事物比喻，钢笔线绘，水彩淡色阴影；画一个 Kubernetes ServiceAccount Token 像一张有到期时间的火车票，Vault 站务员只用 public key 放大镜检查签名、aud、sub、exp；旁边画一扇写着 TokenReview API 的门没有被打开；远处有一块提示牌写 short TTL or Kubernetes auth for revocation。
+![Kubernetes JWT auth 不经过 TokenReview 的边界](/images/ch4-jwt/kubernetes-oidc-without-tokenreview.png)
 
 ---
 

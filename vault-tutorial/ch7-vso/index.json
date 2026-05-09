@@ -1,0 +1,43 @@
+{
+  "title": "Vault Secrets Operator (VSO) 把 KV 同步成 K8s Secret",
+  "description": "在 Killercoda Kubernetes 单节点环境中安装 Vault dev server 与 Vault Secrets Operator，使用 VaultConnection、VaultAuth(kubernetes) 与 VaultStaticSecret 把 Vault KV v2 机密同步为原生 Kubernetes Secret，让 Deployment 通过 envFrom 直接消费；随后更新 Vault 中的 KV 数据观察 Secret 刷新，并通过 rolloutRestartTargets 触发 Deployment 自动滚动重启。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "检查 VSO 控制器、CRD 与 Vault 配置",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "声明 VaultConnection 与 VaultAuth",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "用 VaultStaticSecret 同步 KV 并消费",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "用 rolloutRestartTargets 触发 Deployment 滚动",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "kubernetes-kubeadm-1node"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

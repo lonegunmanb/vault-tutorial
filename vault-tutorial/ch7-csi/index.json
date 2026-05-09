@@ -1,0 +1,43 @@
+{
+  "title": "Secrets Store CSI Driver 与 Vault Provider 挂载机密",
+  "description": "在 Killercoda Kubernetes 单节点环境中安装 Secrets Store CSI driver 与 Vault Secrets Store CSI provider，使用 SecretProviderClass 把 Vault KV v2 机密挂载为 Pod 文件，验证 ServiceAccount 与 Vault role 的权限边界，并把同一份机密同步为 Kubernetes Secret 后注入环境变量。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "检查 CSI 组件与 CRD",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "用 SecretProviderClass 挂载文件",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "验证 ServiceAccount 权限边界",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "同步 Kubernetes Secret 并注入环境变量",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "kubernetes-kubeadm-1node"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
