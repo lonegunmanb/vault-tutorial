@@ -6,14 +6,16 @@
 sed -n '1,80p' /root/injector-demo.yaml
 ```
 
-应用 Deployment，并等待新的 Pod 就绪。
+应用 Deployment，并等待新的 Pod 就绪。这里设置超时时间，是为了避免在镜像拉取、webhook 调用或 Vault Agent 初始化失败时一直停在等待状态。
 
 ```bash
 kubectl -n demo apply -f /root/injector-demo.yaml
-kubectl -n demo rollout status deployment/injector-demo
+kubectl -n demo rollout status deployment/injector-demo --timeout=120s
 INJECTED_POD=$(kubectl -n demo get pod -l app=injector-demo -o jsonpath='{.items[0].metadata.name}')
 echo "$INJECTED_POD"
 ```
+
+如果 rollout 超时，先不要删除 Deployment。通常可以从 Deployment、ReplicaSet、Pod events 以及 `vault-agent-init` 日志中判断问题发生在 webhook mutation、Pod 调度、镜像拉取，还是 Vault Kubernetes auth 初始化阶段；需要时可以向助教索取诊断命令。
 
 Injector 成功改写后，会给 Pod 增加 `vault.hashicorp.com/agent-inject-status: injected` 注解，用来阻止重复 mutation。
 

@@ -110,14 +110,30 @@ kubectl create clusterrolebinding vault-reviewer-tokenreview \
   --serviceaccount=vault:vault-reviewer > /dev/null 2>&1 || true
 
 REVIEWER_JWT=$(kubectl -n vault create token vault-reviewer --duration=1h 2>/dev/null)
+WEBAPP_TEST_JWT=$(kubectl -n demo create token webapp --duration=10m 2>/dev/null)
 K8S_CA_CERT=/tmp/k8s-ca.crt
 kubectl config view --raw --minify -o 'jsonpath={.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$K8S_CA_CERT"
+decode_jwt_issuer() {
+  local payload
+  payload=$(printf '%s' "$1" | cut -d. -f2 | tr -- '-_' '+/')
+  case $(( ${#payload} % 4 )) in
+    2) payload="${payload}==" ;;
+    3) payload="${payload}=" ;;
+  esac
+  printf '%s' "$payload" | base64 -d 2>/dev/null | jq -r '.iss // empty'
+}
+K8S_ISSUER=$(decode_jwt_issuer "$WEBAPP_TEST_JWT")
+if [ -z "$K8S_ISSUER" ]; then
+  K8S_ISSUER=$(kubectl get --raw /.well-known/openid-configuration 2>/dev/null | jq -r '.issuer // empty')
+fi
+echo "Kubernetes ServiceAccount issuer: ${K8S_ISSUER:-unknown}"
 
 vault auth enable kubernetes > /dev/null 2>&1 || true
 vault write auth/kubernetes/config \
   token_reviewer_jwt="$REVIEWER_JWT" \
   kubernetes_host="https://kubernetes.default.svc:443" \
-  kubernetes_ca_cert=@"$K8S_CA_CERT" > /dev/null
+  kubernetes_ca_cert=@"$K8S_CA_CERT" \
+  issuer="$K8S_ISSUER" > /dev/null
 
 vault secrets enable -path=secret kv-v2 > /dev/null 2>&1 || true
 vault kv put secret/injector/web username="injector-demo" password="initial-password" > /dev/null
@@ -134,6 +150,11 @@ vault write auth/kubernetes/role/webapp \
   bound_service_account_namespaces="demo" \
   policies="webapp" \
   ttl="24h" > /dev/null
+
+if [ -n "$WEBAPP_TEST_JWT" ]; then
+  vault write auth/kubernetes/login role="webapp" jwt="$WEBAPP_TEST_JWT" > /dev/null 2>&1 \
+    || echo "WARNING: Vault Kubernetes auth login test failed for demo/webapp"
+fi
 
 cat > /root/baseline.yaml <<'EOF'
 apiVersion: apps/v1
