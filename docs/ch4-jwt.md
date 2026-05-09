@@ -55,6 +55,34 @@ OIDC Discovery 让 Vault 从 Provider 的 discovery endpoint 获取签名公钥�
 
 OIDC role 还需要在挂载级配置 `oidc_discovery_url`、`oidc_client_id` 与 `oidc_client_secret`；如果只做 JWT 直传验证，可以把 OIDC client ID 与 secret 留空，并使用 Discovery、JWKS 或静态公钥完成签名校验。
 
+下面给出三种典型挂载级配置写法，三选一即可，不要在同一挂载点同时配置：
+
+```bash
+# 方式 A：OIDC Discovery（推荐用于支持 .well-known/openid-configuration 的 issuer）
+vault auth enable jwt
+vault write auth/jwt/config \
+    oidc_discovery_url="https://issuer.example.com" \
+    bound_issuer="https://issuer.example.com"
+
+# 方式 B：JWKS URL（Provider 仅暴露 JWKS endpoint 时）
+vault write auth/jwt/config \
+    jwks_url="https://issuer.example.com/.well-known/jwks.json" \
+    bound_issuer="https://issuer.example.com"
+
+# 方式 C：静态 PEM 公钥（离线环境，例如 Kubernetes /etc/kubernetes/pki/sa.pub）
+vault write auth/jwt/config \
+    jwt_validation_pubkeys=@/etc/kubernetes/pki/sa.pub \
+    bound_issuer="https://kubernetes.default.svc.cluster.local"
+
+# 方式 D：作为 OIDC 浏览器登录使用，需要 client ID/secret
+vault auth enable -path=oidc oidc
+vault write auth/oidc/config \
+    oidc_discovery_url="https://issuer.example.com" \
+    oidc_client_id="vault" \
+    oidc_client_secret="<from-provider>" \
+    default_role="reader"
+```
+
 ![JWT 签名验证方式地图](/images/ch4-jwt/jwt-verification-methods.png)
 
 ---
@@ -73,6 +101,36 @@ OIDC role 还需要在挂载级配置 `oidc_discovery_url`、`oidc_client_id` �
 
 当 claim 位于嵌套 JSON 对象中时，`user_claim`、`groups_claim`、`bound_claims` 与 `claim_mappings` 都可以使用 JSON Pointer 语法引用嵌套字段，例如 `/groups/primary` 表示读取 `groups.primary`。
 
+下面是一个典型 JWT role 的写法（role 含数组/map 字段时建议用整段 JSON 提交）：
+
+```bash
+vault policy write jwt-app-read - <<'EOF'
+path "secret/data/jwt-app/*" {
+  capabilities = ["read"]
+}
+EOF
+
+vault write auth/jwt/role/jwt-app - <<'EOF'
+{
+  "role_type": "jwt",
+  "user_claim": "sub",
+  "bound_subject": "system:serviceaccount:demo:jwt-app",
+  "bound_audiences": ["vault-jwt"],
+  "bound_claims": {
+    "kubernetes.io/namespace": "demo"
+  },
+  "claim_mappings": {
+    "iss": "issuer"
+  },
+  "token_policies": ["jwt-app-read"],
+  "token_ttl": "10m",
+  "token_max_ttl": "30m"
+}
+EOF
+
+vault read auth/jwt/role/jwt-app
+```
+
 ---
 
 ## 5. JWT 登录的完整数据流
@@ -84,6 +142,26 @@ OIDC role 还需要在挂载级配置 `oidc_discovery_url`、`oidc_client_id` �
 默认 HTTP API 端点是 `POST /v1/auth/jwt/login`，请求体包含 `role` 与 `jwt`；响应中的 Vault token 位于 `auth.client_token`，后续访问 Vault API 时应使用这枚 Vault token，而不是继续把外部 JWT 当作 Vault token。
 
 这条链路适合说明一个重要边界：Vault 校验的是 JWT 的签名和声明，并不会自动向每一种外部系统回调确认“这个主体此刻是否仍然存在或仍然启用”；是否具备即时撤销能力，取决于所选验证方式和外部系统协议。
+
+CLI 与 API 调用示例：
+
+```bash
+# CLI：把外部系统签发的 JWT 直接交给 Vault
+JWT="eyJhbGciOi..."   # 由 CI、Kubernetes 或 IdP 颁发
+vault write auth/jwt/login role=jwt-app jwt="$JWT"
+
+# 拿到的 Vault token 在响应的 auth.client_token 字段
+VAULT_TOKEN=$(vault write -field=token auth/jwt/login role=jwt-app jwt="$JWT")
+export VAULT_TOKEN
+vault kv get secret/jwt-app/config
+```
+
+```bash
+# HTTP API 等价写法
+curl -sS --request POST \
+  --data "{\"role\":\"jwt-app\",\"jwt\":\"$JWT\"}" \
+  "$VAULT_ADDR/v1/auth/jwt/login" | jq '.auth.client_token'
+```
 
 ---
 
@@ -98,6 +176,33 @@ OIDC 配置最常见的错误是 redirect URI 不完全一致；官方排障建�
 OIDC role 的 `bound_audiences` 通常不是必需项，因为 OIDC Provider 会把 client ID 用作 audience，OIDC 验证本身会处理这一点；官方排障建议先只配置必需的 `user_claim` 跑通登录，再逐步增加 bound claims、metadata 映射与 scopes。
 
 `verbose_oidc_logging` 可以在 Vault server debug 日志中记录收到的 OIDC token 与 claims，便于调试 claim 名称与结构；但官方明确提醒这些日志可能包含敏感信息，不应在生产环境启用。
+
+一个最小可跑的 OIDC role + 浏览器登录示例：
+
+```bash
+# 创建 OIDC role：注意 allowed_redirect_uris 必须与 Provider 侧严格一致
+vault write auth/oidc/role/reader - <<'EOF'
+{
+  "role_type": "oidc",
+  "user_claim": "sub",
+  "allowed_redirect_uris": [
+    "http://localhost:8250/oidc/callback",
+    "https://vault.example.com/ui/vault/auth/oidc/oidc/callback"
+  ],
+  "groups_claim": "groups",
+  "oidc_scopes": ["profile", "email", "groups"],
+  "token_policies": ["reader"],
+  "token_ttl": "1h"
+}
+EOF
+
+# CLI 端发起浏览器登录（默认在本机 8250 端口启动 callback listener）
+vault login -method=oidc -path=oidc role=reader
+
+# 自定义 callback 主机/端口
+vault login -method=oidc -path=oidc role=reader \
+    port=18250 callbackhost=127.0.0.1 callbackmethod=http
+```
 
 ---
 
@@ -114,6 +219,41 @@ Kubernetes 可以充当 OIDC Provider，使 Vault 通过 JWT/OIDC auth method �
 为 Kubernetes ServiceAccount Token 创建 JWT role 时，官方示例使用 `role_type="jwt"`、`user_claim="sub"`、`bound_subject="system:serviceaccount:<namespace>:<serviceaccount>"`、`bound_audiences=<token audience>` 与合适的 policy/TTL；登录时可把 Pod 默认 token 文件或 TokenRequest 生成的 token 提交给 `auth/jwt/login`。
 
 如果需要控制 ServiceAccount Token 的 audience 与 TTL，可以使用 projected `serviceAccountToken` volume；官方示例中 `audience: vault` 要与 JWT role 的 `bound_audiences=vault` 对应，`expirationSeconds: 600` 表示 10 分钟，这是示例中给出的最小 TTL。
+
+在 Pod 内用 projected token 登录 Vault 的最小例子：
+
+```yaml
+# Pod spec 片段：把 audience=vault-jwt、TTL=600s 的 token 投射到容器内
+volumes:
+  - name: vault-jwt
+    projected:
+      sources:
+        - serviceAccountToken:
+            path: vault-jwt
+            audience: vault-jwt
+            expirationSeconds: 600
+volumeMounts:
+  - name: vault-jwt
+    mountPath: /var/run/secrets/vault
+    readOnly: true
+```
+
+```bash
+# 在 Pod 内：读取 projected token 并登录
+JWT=$(cat /var/run/secrets/vault/vault-jwt)
+curl -sS --request POST \
+  --data "{\"role\":\"jwt-app\",\"jwt\":\"$JWT\"}" \
+  "$VAULT_ADDR/v1/auth/jwt/login" | jq -r '.auth.client_token'
+```
+
+如果 Vault 在集群外、且 kube-apiserver 暴露了 OIDC discovery，可以让 Vault 走 discovery 而不是手动维护公钥：
+
+```bash
+vault write auth/jwt/config \
+    oidc_discovery_url="https://kubernetes.default.svc.cluster.local" \
+    oidc_discovery_ca_pem=@/etc/kubernetes/pki/ca.crt \
+    bound_issuer="https://kubernetes.default.svc.cluster.local"
+```
 
 ![Kubernetes JWT auth 不经过 TokenReview 的边界](/images/ch4-jwt/kubernetes-oidc-without-tokenreview.png)
 

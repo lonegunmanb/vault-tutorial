@@ -155,6 +155,33 @@ mount 的 alias name 与某个已有 Entity 的某个 alias 不冲突**时，Vau
 部 IdP 在登录时自动写入，你只能配 alias 把"外部组名"映射到这个 Vault
 Group。
 
+最小可跑的 CRUD（与 §7 实验一致）：
+
+```bash
+# Entity
+ALICE_EID=$(vault write -format=json identity/entity \
+    name="alice" metadata=department="platform" \
+  | jq -r .data.id)
+vault read identity/entity/id/$ALICE_EID
+
+# Alias：必须用 mount accessor 而不是 path
+vault auth enable userpass
+USERPASS_ACCESSOR=$(vault auth list -format=json | jq -r '."userpass/".accessor')
+vault write identity/entity-alias \
+    name="alice" canonical_id="$ALICE_EID" \
+    mount_accessor="$USERPASS_ACCESSOR"
+
+# Group：internal 显式列成员
+BOB_EID=$(vault write -format=json identity/entity name="bob" | jq -r .data.id)
+vault write identity/group \
+    name="platform-team" type="internal" \
+    member_entity_ids="$ALICE_EID,$BOB_EID"
+
+# 用 alias 反查 Entity（调试归并必备）
+vault write identity/lookup/entity \
+    alias_name="alice" alias_mount_accessor="$USERPASS_ACCESSOR"
+```
+
 ---
 
 ## 3. Identity Tokens：让 Vault 变成 JWT 签发机
@@ -306,7 +333,46 @@ EOT
 > 大多数生产场景用 JWKS 即可——脱离 Vault、可缓存、与所有 OIDC 库
 > 兼容。仅在"需要立刻反映 Entity 撤销"的高敏场景才上 introspection。
 
-### 3.5 `iss`（Issuer）的网络可达性
+### 3.5 最小可跑的签发 + 双重验证
+
+把上面三个对象一次性穿起来——和 §7 实验保持一致：
+
+```bash
+# 1) named key
+vault write identity/oidc/key/my-key \
+    rotation_period="24h" verification_ttl="24h" \
+    algorithm="RS256" allowed_client_ids="*"
+
+# 2) 给 alice 一个允许签 token 的策略，并登录拿她的 token
+vault policy write oidc-signer - <<EOF
+path "identity/oidc/token/my-role" { capabilities = ["read"] }
+EOF
+vault write auth/userpass/users/alice \
+    password="alice-pwd" policies="default,oidc-signer"
+ALICE_TOKEN=$(vault login -format=json -method=userpass \
+    username=alice password=alice-pwd | jq -r .auth.client_token)
+export VAULT_TOKEN=root  # vault login 会切换 token，记得切回去
+
+# 3) role：引用 key + 模板 + TTL；client_id 留空让 Vault 自动生成
+vault write identity/oidc/role/my-role \
+    key="my-key" ttl="10m" \
+    template='{"username":{{identity.entity.aliases.'$USERPASS_ACCESSOR'.name}},"groups":{{identity.entity.groups.names}}}'
+CLIENT_ID=$(vault read -format=json identity/oidc/role/my-role | jq -r .data.client_id)
+
+# 4) 用 alice 的 token 签一张 JWT（只能为请求者自己的 Entity 签）
+JWT=$(VAULT_TOKEN=$ALICE_TOKEN vault read -format=json \
+    identity/oidc/token/my-role | jq -r .data.token)
+echo "$JWT" | cut -d. -f2 | base64 -d | jq    # 看 payload
+
+# 5a) JWKS / Discovery 验证（无需 Vault Token）
+curl -s http://127.0.0.1:8200/v1/identity/oidc/.well-known/openid-configuration | jq
+curl -s http://127.0.0.1:8200/v1/identity/oidc/.well-known/keys | jq
+
+# 5b) introspect 验证（需要 Vault Token，但能感知 Entity 撤销）
+vault write identity/oidc/introspect token="$JWT"
+```
+
+### 3.6 `iss`（Issuer）的网络可达性
 
 签出去的 JWT 里 `iss` 字段是验证方用来发现公钥的 issuer URL。默认情
 况下，Vault 会基于启动配置里的 `api_addr` 设置 issuer；如果显式配置

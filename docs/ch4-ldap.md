@@ -114,6 +114,46 @@ LDAP auth 适合人类用户使用既有目录账号登录 Vault；应用和工�
 
 ---
 
+## 9.1 标准配置流程速记
+
+把 §3 / §4 / §7 出现过的 CLI 调用串成最小可跑的端到端示例——启用插件、配置 LDAP 连接与搜索、把组映射到 policy、用 LDAP 账号密码登录：
+
+```bash
+# 1. 启用 ldap 认证方法（默认挂在 auth/ldap/）
+vault auth enable ldap
+
+# 2. 配置 LDAP 连接、用户搜索与组搜索
+vault write auth/ldap/config \
+    url="ldap://127.0.0.1:389" \
+    binddn="cn=admin,dc=example,dc=org" \
+    bindpass="admin" \
+    userdn="ou=People,dc=example,dc=org" \
+    userattr="uid" \
+    groupdn="ou=Groups,dc=example,dc=org" \
+    groupfilter="(&(objectClass=groupOfNames)(member={{.UserDN}}))" \
+    groupattr="cn" \
+    token_ttl="15m"
+
+# 3. 把 LDAP 组映射到 Vault policy
+vault write auth/ldap/groups/dev policies=dev-read
+vault write auth/ldap/groups/ops policies=ops-read
+
+# 4. 用 LDAP 账号密码登录（CLI 会从 stdin / 环境变量读取密码）
+VAULT_LDAP_PASSWORD=alice-pass vault login -method=ldap username=alice
+```
+
+等价的 HTTP API 调用（登录端点）。注意密码走请求体，用户名在 URL path：
+
+```bash
+curl --request POST \
+     --data '{"password":"alice-pass"}' \
+     "$VAULT_ADDR/v1/auth/ldap/login/alice"
+```
+
+返回 JSON 的 `auth.client_token` 即为新签发的 Vault token；`auth.policies` 是 LDAP 组映射 + Vault 本地 user 映射叠加后的最终 policy 列表。
+
+---
+
 ## 10. 本章实验设计
 
 本章实验使用一个本地 OpenLDAP 容器作为目录服务，并预置 `alice`、`bob`、`carol` 三个用户与 `dev`、`ops`、`contractors` 三个组；这样可以在没有企业 AD 的环境里真实跑通 LDAP bind、用户搜索、组搜索和 policy 映射。

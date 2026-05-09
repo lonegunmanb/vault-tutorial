@@ -194,6 +194,51 @@ Provider 闭环包含三步：启用 `totp` 引擎、用 `generate=true` 创建 
 TOTP secrets engine 提供完整的 HTTP API。
 官方 TOTP 页面把更细的 HTTP API 细节指向 “TOTP secrets engine API”。
 
+下面给出与第 2、3 节 CLI 等价的最小 `curl` 形态，方便在脚本 / 微服务里直接调用。所有请求都需要带 `X-Vault-Token` header；写入类操作走 `POST`，读取走 `GET`。
+
+```bash
+# 启用 TOTP 引擎（等价：vault secrets enable totp）
+curl \
+  --header "X-Vault-Token: $VAULT_TOKEN" \
+  --request POST \
+  --data '{"type":"totp"}' \
+  $VAULT_ADDR/v1/sys/mounts/totp
+
+# Generator 模式：写入带 otpauth URL 的 key（等价：vault write totp/keys/my-key url=...）
+curl \
+  --header "X-Vault-Token: $VAULT_TOKEN" \
+  --request POST \
+  --data '{"url":"otpauth://totp/Vault:test@test.com?secret=Y64VEVMBTSXCYIWRSHRNDZW62MPGVU2G&issuer=Vault"}' \
+  $VAULT_ADDR/v1/totp/keys/my-key
+
+# Generator 模式：读取当前 code（等价：vault read totp/code/my-key）
+curl \
+  --header "X-Vault-Token: $VAULT_TOKEN" \
+  $VAULT_ADDR/v1/totp/code/my-key
+
+# Provider 模式：让 Vault 生成 key（等价：vault write totp/keys/my-user generate=true ...）
+curl \
+  --header "X-Vault-Token: $VAULT_TOKEN" \
+  --request POST \
+  --data '{"generate":true,"issuer":"Vault","account_name":"user@test.com"}' \
+  $VAULT_ADDR/v1/totp/keys/my-user
+
+# Provider 模式：验证用户提交的 code（等价：vault write totp/code/my-user code=886531）
+curl \
+  --header "X-Vault-Token: $VAULT_TOKEN" \
+  --request POST \
+  --data '{"code":"886531"}' \
+  $VAULT_ADDR/v1/totp/code/my-user
+
+# 清理：删除 key（等价：vault delete totp/keys/my-key）
+curl \
+  --header "X-Vault-Token: $VAULT_TOKEN" \
+  --request DELETE \
+  $VAULT_ADDR/v1/totp/keys/my-key
+```
+
+注意 generator 与 provider 共用 `totp/code/<name>` 这一条路径——区别只在于 HTTP 方法：generator 用 `GET` 输出 code，provider 用 `POST` 携带 `code` 字段做校验。
+
 ---
 
 ## 互动实验

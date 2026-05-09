@@ -9,4 +9,6 @@
 3. 创建 JWT role，验证正确 token 可以登录，错误 audience 或错误 subject 会被拒绝。
 4. 删除 ServiceAccount 后再次登录，观察 JWT auth 不调用 TokenReview 时的撤销边界。
 
+![JWT/OIDC 实验四格图：① k8s 护照办公室签发 SA Token → ② Vault 银行装入 JWKS 公钥 → ③ 护照检验闸机校验签名与 claim → ④ 注销 SA 后旧护照仍能换 token，体现"只验签名 + exp"的撤销边界](../assets/jwt-flow.png)
+
 本实验是 [4.4 Kubernetes 认证](/ch4-k8s) 的对照实验：`auth/kubernetes` 依赖 TokenReview，`auth/jwt` 依赖签名验证与 claim 约束。

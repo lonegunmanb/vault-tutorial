@@ -344,6 +344,66 @@ instance profile → ECS task role）找凭据。也可以显式从命令行传�
 `sts_region` 为对应值，并在登录时显式传 `region=us-gov-west-1`（或
 `-east-1`）。
 
+### 14.1 标准配置流程速记
+
+把 §2 / §4 / §12 出现过的 CLI 调用串成最小可跑的端到端示例——启用
+插件、配置 Vault 自身访问 AWS API 用的凭据、写 role、登录：
+
+```bash
+# 1. 启用 aws 认证方法（默认挂在 auth/aws/）
+vault auth enable aws
+
+# 2. 配置 Vault 自身调 AWS API 用的凭据与可选 IAM server-id header
+vault write auth/aws/config/client \
+    access_key=AKIA... \
+    secret_key=... \
+    iam_server_id_header_value=vault.example.com
+
+# 3a. 创建 iam 类型 role：用 IAM principal ARN 绑定
+vault write auth/aws/role/dev-role-iam \
+    auth_type=iam \
+    bound_iam_principal_arn=arn:aws:iam::123456789012:user/dev-user \
+    policies=default \
+    token_ttl=10m \
+    token_max_ttl=30m
+
+# 3b. 创建 ec2 类型 role：用 AMI / instance profile 等约束
+vault write auth/aws/role/dev-role-ec2 \
+    auth_type=ec2 \
+    bound_ami_id=ami-0123456789abcdef0 \
+    policies=default \
+    token_ttl=10m
+
+# 4a. iam 登录：CLI 自动按 AWS SDK 凭据查找顺序签 GetCallerIdentity
+vault login -method=aws \
+    role=dev-role-iam \
+    header_value=vault.example.com
+```
+
+等价的 HTTP API 调用（iam 登录端点）。`iam_request_url` /
+`iam_request_body` / `iam_request_headers` 三件套需要客户端先按
+SigV4 把一次空的 `sts:GetCallerIdentity` 请求签好，再 base64 编码后
+提交：
+
+```bash
+curl --request POST \
+     --data "{\"role\":\"dev-role-iam\",\
+              \"iam_http_request_method\":\"POST\",\
+              \"iam_request_url\":\"$IAM_REQUEST_URL_B64\",\
+              \"iam_request_body\":\"$IAM_REQUEST_BODY_B64\",\
+              \"iam_request_headers\":\"$IAM_REQUEST_HEADERS_B64\"}" \
+     "$VAULT_ADDR/v1/auth/aws/login"
+```
+
+返回 JSON 的 `auth.client_token` 即为新签发的 Vault token。`ec2`
+方法的登录则把客户端从 EC2 元数据服务取来的 PKCS#7 签名作为
+`pkcs7` 字段提交：
+
+```bash
+PKCS7=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/pkcs7 | tr -d '\n')
+vault write auth/aws/login role=dev-role-ec2 pkcs7="$PKCS7"
+```
+
 ---
 
 ## 15. AWS instance 元数据超时

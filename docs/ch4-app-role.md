@@ -444,7 +444,51 @@ trusted broker 模式下，broker（这里就是 worker / 调度器）必须当*
 
 ---
 
-## 10. 实验
+## 10. 标准配置流程速记
+
+把 §3–§7 出现过的 CLI 调用串成最小可跑的端到端示例——启用插件、写
+role、取出 RoleID + SecretID、用两半凭据登录拿 token：
+
+```bash
+# 1. 启用 AppRole 认证方法（默认挂在 auth/approle/）
+vault auth enable approle
+
+# 2. 创建一个 role（最小可用，没加 CIDR / wrapping 等约束）
+vault write auth/approle/role/my-role \
+    token_type=batch \
+    secret_id_ttl=10m \
+    token_ttl=20m \
+    token_max_ttl=30m \
+    secret_id_num_uses=40
+
+# 3. 取出 RoleID（不是机密，可嵌入镜像 / 环境变量）
+ROLE_ID=$(vault read -field=role_id auth/approle/role/my-role/role-id)
+
+# 4. 取一个 SecretID（Pull 模式：由 role 现场生成）
+SECRET_ID=$(vault write -f -field=secret_id auth/approle/role/my-role/secret-id)
+
+# 5. 用 RoleID + SecretID 登录，换出 Vault token
+vault write auth/approle/login \
+    role_id="$ROLE_ID" \
+    secret_id="$SECRET_ID"
+```
+
+等价的 HTTP API 调用（登录端点）：
+
+```bash
+curl --request POST \
+     --data "{\"role_id\":\"$ROLE_ID\",\"secret_id\":\"$SECRET_ID\"}" \
+     "$VAULT_ADDR/v1/auth/approle/login"
+```
+
+返回 JSON 的 `auth.client_token` 即为新签发的 Vault token。生产场景
+按 §6 的 trusted broker 范式，第 4 步应改为 `vault write -wrap-ttl=120s
+-f auth/approle/role/my-role/secret-id`，由 broker 取 wrapping token、
+final consumer 端再 unwrap 出裸 SecretID。
+
+---
+
+## 11. 实验
 
 下一步进入实验：在 Killercoda 上启用 AppRole，跑一遍 Pull 模式 +
 CIDR 限制 + Response Wrapping + 反模式对照演示，并把每一节的字段都

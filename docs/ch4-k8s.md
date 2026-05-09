@@ -62,6 +62,36 @@ Kubernetes 认证方法在使用前必须由运维或配置管理工具预先启
 
 这样做的主要收益是让信任来源可预期、可审计、可轮换：管理员可以清楚说明 Vault 用哪一个 reviewer JWT 调用 TokenReview、用哪一个 CA 证书或系统信任库校验 Kubernetes API server，而不是让插件根据运行环境中是否存在默认挂载文件自动决定。对于跨集群、受合规约束、由 GitOps 或配置管理系统统一下发的部署，这能减少环境差异带来的误判，也能避免 Pod 本地 token 的权限、轮换周期和使用边界变得不透明。
 
+启用与配置的三种典型写法：
+
+```bash
+# A：Vault 运行在 Kubernetes Pod 内，使用本地 ServiceAccount token 作为 reviewer
+vault auth enable kubernetes
+vault write auth/kubernetes/config \
+    kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443"
+
+# B：Vault 在集群外，显式提供 reviewer JWT 与 CA
+vault write auth/kubernetes/config \
+    kubernetes_host="https://kube-apiserver.example.com:6443" \
+    kubernetes_ca_cert=@/etc/kubernetes/pki/ca.crt \
+    token_reviewer_jwt="$(cat /root/vault-reviewer.jwt)" \
+    disable_local_ca_jwt=true
+
+# C：使用客户端提交的 JWT 去调 TokenReview（需各客户端 SA 拥有 system:auth-delegator）
+vault write auth/kubernetes/config \
+    kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
+    use_annotations_as_alias_metadata=false
+```
+
+为 Vault 本身或外部 reviewer ServiceAccount 授权 TokenReview：
+
+```bash
+kubectl create serviceaccount vault-auth -n vault
+kubectl create clusterrolebinding vault-auth-delegator \
+    --clusterrole=system:auth-delegator \
+    --serviceaccount=vault:vault-auth
+```
+
 ---
 
 ## 5. Role：把 Kubernetes 身份映射到 Vault policy
@@ -75,6 +105,26 @@ role 的必填身份约束是 `bound_service_account_names`；生产配置通常
 `bound_service_account_namespaces` 可以列出允许登录的 namespace，值为 `*` 时允许任意 namespace；`bound_service_account_namespace_selector` 可以使用 namespace label selector 选择允许登录的 namespace，并且当它与显式 namespace 列表同时配置时，两者之间是 OR 关系。
 
 `audience` 用来校验 JWT 的 audience claim，即“这个 token 原本是发给哪个接收方使用的”；Kubernetes TokenReview 也支持 audience 字段，并要求 audience-aware 的认证器返回与 token 兼容的 audience，因此在 Vault role 中设置 audience 可以降低 token 被跨系统误用的范围。
+
+一个完整的 role + policy 示例：
+
+```bash
+vault policy write myapp-read - <<'EOF'
+path "secret/data/myapp/*" {
+  capabilities = ["read"]
+}
+EOF
+
+vault write auth/kubernetes/role/myapp \
+    bound_service_account_names=myapp \
+    bound_service_account_namespaces=default \
+    audience=vault \
+    token_policies=myapp-read \
+    token_ttl=1h \
+    token_max_ttl=24h
+
+vault read auth/kubernetes/role/myapp
+```
 
 ---
 
@@ -135,6 +185,59 @@ Kubernetes auth role 的 `alias_name_source` 控制 Vault Identity alias 的生�
 
 官方同时指出，启用注解到 alias metadata 时 Vault 必须有权限读取 Kubernetes ServiceAccount；这是因为 Vault 需要在登录过程中查询 ServiceAccount 对象并读取其注解。
 
+完整例子：ServiceAccount 注解 + role 启用注解映射 + templated policy：
+
+```bash
+# 1. 在 ServiceAccount 上打注解
+kubectl annotate serviceaccount myapp -n default \
+    vault.hashicorp.com/alias-metadata-env=demo \
+    vault.hashicorp.com/alias-metadata-app=myapp
+
+# 2. 允许 Vault 读取 SA 对象
+kubectl apply -f - <<'EOF'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vault-sa-reader
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-sa-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vault-sa-reader
+subjects:
+  - kind: ServiceAccount
+    name: vault-auth
+    namespace: vault
+EOF
+
+# 3. role 开启注解 → alias metadata
+vault write auth/kubernetes/role/myapp \
+    bound_service_account_names=myapp \
+    bound_service_account_namespaces=default \
+    audience=vault \
+    alias_name_source=serviceaccount_uid \
+    use_annotations_as_alias_metadata=true \
+    token_policies=myapp-templated \
+    token_ttl=1h
+
+# 4. 获取 mount accessor 并写 templated policy
+ACCESSOR=$(vault auth list -format=json | jq -r '."kubernetes/".accessor')
+
+vault policy write myapp-templated - <<EOF
+path "secret/data/{{identity.entity.aliases.${ACCESSOR}.metadata.env}}/{{identity.entity.aliases.${ACCESSOR}.metadata.app}}/*" {
+  capabilities = ["read"]
+}
+EOF
+```
+
 ---
 
 ## 11. CLI 与 API 登录形式
@@ -144,6 +247,43 @@ CLI 层面，默认路径是 `/kubernetes`，可以直接写入登录端点：`v
 API 层面，默认端点是 `POST /v1/auth/kubernetes/login`，请求体包含 `role` 与 `jwt`；如果认证方法挂载在其他路径，API 路径中的 `kubernetes` 同样需要替换为实际 mount path；响应中的 Vault token 位于 `auth.client_token`，metadata 会包含 role、ServiceAccount 名称、namespace、secret name 与 UID 等信息。
 
 官方 Go 示例使用 Vault API 客户端中的 Kubernetes auth helper 读取 ServiceAccount token 文件并登录 Vault；这反映了实际应用中的常见方式：应用从默认挂载路径或管理员指定路径读取本 Pod 的 token，然后把它交给 Vault。
+
+在 Pod 内登录的最小脚本：
+
+```bash
+# Pod 默认挂载的 SA token
+JWT=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+
+# CLI
+vault write auth/kubernetes/login role=myapp jwt="$JWT"
+
+# HTTP API
+curl -sS --request POST \
+  --data "{\"role\":\"myapp\",\"jwt\":\"$JWT\"}" \
+  "$VAULT_ADDR/v1/auth/kubernetes/login" | jq -r '.auth.client_token'
+
+# 一步到位：导入 token 并读取 secret
+export VAULT_TOKEN=$(vault write -field=token auth/kubernetes/login \
+    role=myapp jwt="$JWT")
+vault kv get secret/myapp/config
+```
+
+需要明确 audience/TTL 时使用 projected token：
+
+```yaml
+volumes:
+  - name: vault-token
+    projected:
+      sources:
+        - serviceAccountToken:
+            path: vault-token
+            audience: vault
+            expirationSeconds: 600
+volumeMounts:
+  - name: vault-token
+    mountPath: /var/run/secrets/vault
+    readOnly: true
+```
 
 ---
 

@@ -34,6 +34,19 @@ group_order: 40
 
 Vault 会把提交的用户名转成小写：官方示例说明 `Mary` 和 `mary` 被视为同一个条目。因此，在生产中最好提前约定用户名规范，避免大小写差异给排障带来错觉。
 
+```bash
+# 启用
+vault auth enable userpass
+
+# CLI 登录
+vault login -method=userpass username=alice password=alice-pwd
+
+# HTTP API 登录
+curl -s --request POST \
+  --data '{"password":"alice-pwd"}' \
+  http://127.0.0.1:8200/v1/auth/userpass/login/alice | jq .auth.client_token
+```
+
 ---
 
 ## 3. 创建用户：密码、policy 与 token 参数
@@ -44,6 +57,24 @@ Vault 会把提交的用户名转成小写：官方示例说明 `Mary` 和 `mary
 
 用户条目上可以配置 `token_policies`、`token_ttl`、`token_max_ttl`、`token_bound_cidrs`、`token_num_uses`、`token_type` 等 token 参数。登录成功后，Vault 会按这些参数签发 token。
 
+```bash
+# 创建用户（同时绑定 policy 与 token TTL）
+vault write auth/userpass/users/alice \
+    password="alice-pwd" \
+    token_policies="team-reader" \
+    token_ttl="20m"
+
+# 等价的 HTTP API
+curl -s --header "X-Vault-Token: $VAULT_TOKEN" \
+  --request POST \
+  --data '{"password":"alice-pwd","token_policies":"team-reader","token_ttl":"20m"}' \
+  http://127.0.0.1:8200/v1/auth/userpass/users/alice
+
+# 列出、读取
+vault list auth/userpass/users
+vault read auth/userpass/users/alice
+```
+
 ![userpass 用户登记册：用户条目直接绑定 token 参数](/images/ch4-userpass/userpass-local-user-map.png)
 
 ---
@@ -53,6 +84,17 @@ Vault 会把提交的用户名转成小写：官方示例说明 `Mary` 和 `mary
 userpass API 把常见运维动作拆成明确端点：读取用户用 `GET /auth/userpass/users/:username`，删除用户用 `DELETE /auth/userpass/users/:username`，更新密码用 `POST /auth/userpass/users/:username/password`，更新 policies 用 `POST /auth/userpass/users/:username/policies`，列出用户用 `LIST /auth/userpass/users`。
 
 这几个端点的含义要分清：更新 password 只改变下一次用用户名密码登录所需的密码；更新 policies 改变后续新登录拿到的 token policies；已经签发出去的 token 仍然按照 token 自身的生命周期和权限生效，除非被显式撤销或过期。
+
+```bash
+# 改密码
+vault write auth/userpass/users/alice/password password="new-alice-pwd"
+
+# 改 policies
+vault write auth/userpass/users/alice/policies token_policies="team-operator"
+
+# 删用户
+vault delete auth/userpass/users/alice
+```
 
 读取用户配置时，API 返回的是 token 配置类字段，不会返回明文密码；这也是为什么管理员应使用密码管理、轮换流程和审计日志管理 userpass 账号，而不是把它当成普通用户数据库浏览。
 

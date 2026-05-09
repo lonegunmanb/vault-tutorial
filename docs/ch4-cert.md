@@ -91,6 +91,47 @@ cert auth 的优势是客户端私钥不需要上传给 Vault；Vault 只在登�
 
 ---
 
+## 7.1 标准配置流程速记
+
+把 §3 / §4 的 CLI 调用串成最小可跑的端到端示例——启用插件、登记客户端 CA role、用客户端证书登录：
+
+```bash
+# 1. 启用 cert 认证方法（默认挂在 auth/cert/）
+vault auth enable cert
+
+# 2. 登记 web role：把客户端 CA 写入 certificate，并按 DNS SAN / OU 收紧约束
+vault write auth/cert/certs/web \
+    display_name=web \
+    certificate=@/root/cert-lab/client-ca.crt \
+    allowed_dns_sans="web-*.example.org" \
+    allowed_organizational_units="platform" \
+    token_policies="web-read" \
+    token_ttl="15m"
+
+# 3. 用客户端证书登录（TLS 握手中提交证书）
+vault login \
+    -method=cert \
+    -ca-cert=/root/cert-lab/server-ca.crt \
+    -client-cert=/root/cert-lab/web-client.crt \
+    -client-key=/root/cert-lab/web-client.key \
+    name=web
+```
+
+等价的 HTTP API 调用（登录端点）。客户端证书必须通过 TLS 握手提交，因此 `--cert` / `--key` 由 curl 在握手层送出，请求体只携带 role `name`：
+
+```bash
+curl --request POST \
+     --cacert /root/cert-lab/server-ca.crt \
+     --cert /root/cert-lab/web-client.crt \
+     --key /root/cert-lab/web-client.key \
+     --data '{"name":"web"}' \
+     "$VAULT_ADDR/v1/auth/cert/login"
+```
+
+返回 JSON 的 `auth.client_token` 即为新签发的 Vault token；如果不传 `name`，Vault 会尝试所有受信证书 role 中任意一个匹配项。
+
+---
+
 ## 8. 本章实验设计
 
 本章实验会在 Killercoda Ubuntu 环境中生成两套 CA：一套用于 Vault HTTPS listener 的服务端证书，另一套用于签发客户端认证证书；然后以 TLS 模式启动 Vault，启用 `auth/cert`，登记客户端 CA role，最后用 `vault login -method=cert` 和 `curl --cert --key` 完成真实证书登录。

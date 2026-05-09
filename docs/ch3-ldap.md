@@ -66,6 +66,19 @@ Vault 启用 `ldap/` 引擎后必须先 `vault write ldap/config` 写入：
 | `schema` | `openldap`/`ad`/`racf`，影响改密时操作的目标属性 |
 | `starttls` | 在只开放 389 端口、又要求加密的环境设为 `true`：Vault 先明文连接再发送 StartTLS 指令升级为加密信道 |
 
+最小启用 + 配置 + 立刻轮转 root 密码：
+
+```bash
+vault secrets enable ldap
+vault write ldap/config \
+    binddn="cn=admin,dc=example,dc=org" \
+    bindpass="admin-pwd" \
+    url="ldap://127.0.0.1:389" \
+    userdn="ou=ServiceAccounts,dc=example,dc=org" \
+    schema="openldap"
+vault write -f ldap/rotate-root
+```
+
 > **轮转 binddn 自身的密码**：调用 `vault write -f ldap/rotate-root` 让 Vault 生成一个新随机密码、
 > 写回 LDAP，并在 Vault 内部存储里同步更新。完成后这个新密码**只存在于 Vault 内部**，
 > 任何 API 都**不能再把它读出来**（官方原话：*will only be known to Vault and will not be retrievable once rotated*）——
