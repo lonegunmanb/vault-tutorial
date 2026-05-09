@@ -14,7 +14,7 @@ curl -s -i \
   http://127.0.0.1:8101/v1/sys/health | head -12
 ```
 
-本实验配置了空的 `cache {}` block，因此 Proxy 的 cache 子系统已经启用；但请注意，空 `cache {}` 并不表示所有 KV 读取都会被自动缓存。这里调用 `/proxy/v1/cache-clear`，目的是体验 Proxy 自身的 cache 管理 API。
+本实验在 Proxy 配置文件中声明了一个空的 `cache` 块，因此 Proxy 的 cache 子系统已经启用；但请注意，空的 `cache` 块并不表示所有 KV 读取都会被自动缓存。这里调用 `/proxy/v1/cache-clear` 接口，目的是体验 Proxy 自身的 cache 管理 API。
 
 ```bash
 cat > /tmp/cache-clear.json <<'EOF'
