@@ -293,20 +293,63 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
 * 6.8 核心指标遥测（Telemetry）暴露与可视化 UI 界面底层配置  
 * 6.9 User Lockout
 
-## **第 7 章：应用自动化接入与现代 Kubernetes 云原生集成生态 【架构重大重构】**
+## **第 7 章（再次调整版）：应用自动化接入与 Kubernetes 云原生集成**
 
-* 7.1 技术演进背景：消除应用层代码中的"机密感知 SDK"集成负担  
-* 7.2 现代 Vault Agent 遗留核心应用实践  
-  * 7.2.1 Auto-auth 自动化网络鉴权与 Token 生命守护逻辑  
-  * 7.2.2 Consul-Template 高级模板渲染引擎与动态文件注入  
-  * 7.2.3 进程监督器（Process Supervisor）底层环境变量包裹模式  
-* 7.3 **【核心新增】** 全新解耦的网关层架构：独立运行的 Vault Proxy 代理层  
-  * 7.3.1 API 请求的透明网络拦截与加密 Header 自动注入转发机制  
-  * 7.3.2 应对大规模高并发拉取：Token 与动态租约缓冲层（Caching）调优  
-* 7.4 **【核心新增】** Kubernetes 平台级深度声明式集成体系  
-  * 7.4.1 传统演进模式剖析：Vault Sidecar Agent Injector 与 Webhook 边车注入利弊分析  
-  * 7.4.2 现代原生控制流范式：Vault Secrets Operator (VSO) CRD 部署与机密数据自动化同步（Sync）实战  
-  * 7.4.3 集群级别选型对标：Sidecar 注入模式 vs 原生 Operator CRD 模式的资源、安全与容灾场景对比
+7.1 章节导览与三种接入形态选型（篇内实验：用三种方式各取一次同一份机密做对比）
+7.1.1 应用接入 Vault 的"最后一公里"问题
+7.1.2 三种部署形态：本机 Agent 进程、独立 Proxy 网关、K8s 平台控制器（VSO/CSI/Injector）
+7.1.3 与本书已有章节的衔接（4.4 K8s 认证、4.9 JWT/OIDC、5.6 Proxy CLI、3.11 K8s 机密引擎）
+🧪 动手实验 7.1：在同一台 dev 模式 Vault 上，分别用 ① vault kv get ② Agent 渲染 ③ Proxy 代理读 三种方式取出同一个 KV 机密，对比三者在认证主体、缓存、产物形式上的差异 —— 产出一张三栏对照表
+7.2 Vault Agent 模板渲染：把机密变成本地配置文件
+7.2.1 Agent 与 Proxy 的能力边界（template/exec 留在 Agent）
+7.2.2 Consul-Template 模板语法核心：secret、with、范围与函数
+7.2.3 template 块的源 / 目的 / 权限 / wait 抖动控制
+7.2.4 渲染失败、Vault 不可达时的退化行为
+🧪 动手实验 7.2：用 Agent + AppRole Auto-auth，把一份 KV v2 中的 db_username/db_password 渲染成本机 app.ini 文件，修改 KV 后观察文件被重新渲染
+7.3 Vault Agent 进程供给（vault agent exec）：以 Agent 为业务进程的 supervisor
+7.3.1 exec 模式的进程模型与生命周期：父子进程、信号转发、退出码传播
+7.3.2 把机密注入子进程的两种通道：环境变量与渲染文件
+7.3.3 SIGHUP / 重启策略与 token 续期失败时的行为
+7.3.4 与容器 entrypoint / systemd 的协作模式
+🧪 动手实验 7.3：用 vault agent 以 exec 模式拉起一个简单的 Python HTTP 服务，机密通过环境变量注入；轮换底层凭据后观察子进程被重启并生效
+7.4 Vault Proxy 部署拓扑与缓存边界
+7.4.1 三种部署位置：每应用 sidecar、每节点共享 Proxy、网关式共享 Proxy
+7.4.2 连接复用：把"上千应用 → Vault"收敛成"少量长连接 → Vault"
+7.4.3 缓存边界精确化：Proxy 缓存的是新建 token 响应及其衍生 lease，不自动缓存 KV 读取
+7.4.4 静态机密缓存（Static Secret Caching）的开启条件
+7.4.5 Proxy 自身的健康检查与排障
+🧪 动手实验 7.4：起一个独立的 vault proxy 监听 127.0.0.1:8100，用未持有 token 的 vault CLI 通过 Proxy 访问 Vault，观察审计日志中调用主体为 Proxy 的 Auto-auth token，并用两次相同请求验证 token 复用
+7.5 Kubernetes 集成模式之一：Vault Agent Sidecar Injector（vault-k8s）
+7.5.1 注入器架构：MutatingAdmissionWebhook 改写 Pod spec
+7.5.2 Pod Annotation 契约（vault.hashicorp.com/agent-inject*）
+7.5.3 init container vs sidecar container 的两种注入形态
+7.5.4 利弊：每 Pod 资源放大、Vault 不可达时的启动雪崩
+🧪 动手实验 7.5：在本地 kind/minikube 集群上 Helm 安装 vault-k8s，用 annotation 给一个 nginx Deployment 注入 Agent sidecar，让机密以文件形式出现在 /vault/secrets/ 下
+7.6 Kubernetes 集成模式之二：Secrets Store CSI Driver + Vault Provider
+7.6.1 CSI Volume 模型：节点级 driver pod、按 Pod 生命周期挂载
+7.6.2 SecretProviderClass CRD 字段详解
+7.6.3 可选同步为原生 K8s Secret（syncSecret）的取舍
+7.6.4 与 Sidecar Injector 的差异：无 sidecar、按需挂载
+🧪 动手实验 7.6：安装 secrets-store-csi-driver + vault provider，定义 SecretProviderClass 并在 Pod 中挂载为 volume，验证机密以文件形式出现在挂载点
+7.7 Kubernetes 集成模式之三：Vault Secrets Operator (VSO) 控制器与 CRD 模型
+7.7.1 控制器架构：集群级常驻、把 Vault 数据物化为原生 K8s Secret
+7.7.2 连接与认证 CRD：VaultConnection、VaultAuth
+7.7.3 静态机密同步：VaultStaticSecret 与 KV v1/v2
+7.7.4 滚动触发：rolloutRestartTargets 让消费方 Pod 自动滚动
+7.7.5 Vault 短暂不可达时的降级表现
+🧪 动手实验 7.7：Helm 安装 VSO，配置 VaultConnection + VaultAuth(kubernetes) + VaultStaticSecret 把一份 KV 同步成 K8s Secret，更新 KV 后观察 Secret 被刷新并触发 Deployment 滚动
+7.8 VSO 进阶：动态机密与 PKI 证书的声明式生命周期
+7.8.1 VaultDynamicSecret：动态后端（DB、AWS 等）的同步与 lease 感知刷新
+7.8.2 VaultPKISecret：证书签发、到期前自动重签、与 Ingress / 应用的对接
+7.8.3 refreshAfter vs lease-aware 刷新的语义差异
+7.8.4 与 9.4 ACME / cert-manager 案例的边界划分
+🧪 动手实验 7.8：用 VaultDynamicSecret 把 database 引擎的动态凭据同步进 K8s Secret，并用 VaultPKISecret 为一个示例服务签发一张短 TTL 证书，观察到期前自动续签
+7.9 三种 K8s 集成模式选型与本章小结
+7.9.1 选型矩阵：资源开销、启动耦合、机密呈现形式、刷新机制、Vault 宕机表现、RBAC 面积
+7.9.2 决策树：是否容忍 Secret 落盘、是否需要按 Pod 生命周期、集群规模
+7.9.3 统一心智模型："认证主体 → token 生命周期托管 → 机密物化形式"三段论
+7.9.4 与第 8 章（审计观测）、第 9 章（案例库）的衔接
+🧪 动手实验 7.9：在同一个 K8s 集群里，对同一份 KV 机密分别用 7.5 / 7.6 / 7.7 三种方式各部署一个消费 Pod，观察并填写选型对比表（启动时间、Pod 内机密形式、Vault 断连后新 Pod 能否启动）
 
 ## **第 8 章：安全合规审计与系统观测**
 
@@ -322,7 +365,11 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
 * 9.3 核心生产环境极高安全加固基线：从物理部署防线到最低权限最小化原则的系统级核查清单  
 * 9.4 **【核心新增】** 零接触式的公共信任体系闭环：深度整合 Vault PKI 机密引擎与 ACME 自动化协议（集成 Traefik 或 Cert-Manager 演示 TLS 证书静默全自动签发与轮转）  
 * 9.5 OIDC 认证方法与组治理案例：接入本地 Keycloak / Dex，跑通 Authorization Code Flow、CLI callback、groups claim 与 Vault Group 映射  
-* 9.6 端到端 SSO 应用集成案例：用一个最小 Web 应用接入 Vault OIDC Provider，验证登录跳转、ID Token、UserInfo 与 assignment 拒绝路径
+* 9.6 端到端 SSO 应用集成案例：用一个最小 Web 应用接入 Vault OIDC Provider，验证登录跳转、ID Token、UserInfo 与 assignment 拒绝路径  
+* 9.7 现代 Vault Agent 遗留核心应用实践  
+  * 9.7.1 Auto-auth 自动化网络鉴权与 Token 生命守护逻辑  
+  * 9.7.2 Consul-Template 高级模板渲染引擎与动态文件注入  
+  * 9.7.3 进程监督器（Process Supervisor）底层环境变量包裹模式
 
 ## **第 10 章：技术趋势展望与全课程总结归纳**
 

@@ -101,6 +101,13 @@ export default defineConfig({
              { text: '6.8 核心指标遥测（Telemetry）暴露与可视化 UI 界面底层配置', link: '/ch6-telemetry-ui' },
              { text: '6.9 User Lockout：内核级防暴力破解机制', link: '/ch6-user-lockout' }
            ]
+         },
+         {
+           text: '第 7 章：应用自动化接入与 Kubernetes 云原生集成',
+           collapsed: false,
+           items: [
+             { text: '7.1 章节导览与三种接入形态选型', link: '/ch7-overview' }
+           ]
          }
         ],
       },

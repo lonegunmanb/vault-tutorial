@@ -1,0 +1,43 @@
+{
+  "title": "三种方式取出同一份 KV 机密：CLI、Agent 渲染、Proxy 代理",
+  "description": "在同一台 Vault dev server 上，分别用 vault kv get、Vault Agent 模板渲染、Vault Proxy 代理三种方式取出同一条 KV 机密，并把三者在认证主体、令牌存放位置、机密呈现形式与缓存归属上的差异整理成一张三栏对照表",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "方式一：vault kv get 直接读取",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "方式二：Vault Agent 模板渲染到文件",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "方式三：Vault Proxy 代理请求",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "整理三栏对照表",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
