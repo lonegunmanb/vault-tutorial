@@ -57,8 +57,7 @@ helm upgrade --install vault hashicorp/vault \
 
 kubectl -n vault rollout status deployment/vault-agent-injector --timeout=180s > /dev/null 2>&1
 
-pkill -f "kubectl -n vault port-forward svc/vault 8200:8200" > /dev/null 2>&1 || true
-kubectl -n vault port-forward svc/vault 8200:8200 > /tmp/vault-port-forward.log 2>&1 &
+wait "$INSTALL_VAULT_PID"
 
 export VAULT_ADDR='http://127.0.0.1:8200'
 export VAULT_TOKEN='root'
@@ -69,16 +68,39 @@ EOF
 chmod +x /etc/profile.d/vault.sh
 grep -q "VAULT_ADDR=" /root/.bashrc 2>/dev/null || cat /etc/profile.d/vault.sh >> /root/.bashrc
 
-wait "$INSTALL_VAULT_PID"
+cat > /usr/local/bin/ensure-vault-port-forward <<'EOF'
+#!/bin/bash
+set +e
 
-echo "Waiting for Vault service port-forward..."
-for i in $(seq 1 90); do
+export VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
+export VAULT_TOKEN="${VAULT_TOKEN:-root}"
+
+if vault status > /dev/null 2>&1; then
+  exit 0
+fi
+
+pkill -f "kubectl -n vault port-forward svc/vault 8200:8200" > /dev/null 2>&1 || true
+nohup kubectl -n vault port-forward svc/vault 8200:8200 > /tmp/vault-port-forward.log 2>&1 < /dev/null &
+
+for attempt in $(seq 1 45); do
   if vault status > /dev/null 2>&1; then
-    echo "Vault is ready through port-forward."
-    break
+    exit 0
   fi
   sleep 1
 done
+
+echo "Vault port-forward is not ready. Recent log:" >&2
+tail -20 /tmp/vault-port-forward.log >&2 2>/dev/null || true
+exit 1
+EOF
+chmod +x /usr/local/bin/ensure-vault-port-forward
+
+echo "Waiting for Vault service port-forward..."
+if ensure-vault-port-forward; then
+  echo "Vault is ready through port-forward."
+else
+  echo "WARNING: Vault port-forward did not become ready."
+fi
 
 kubectl create namespace demo > /dev/null 2>&1 || true
 kubectl -n demo create serviceaccount webapp > /dev/null 2>&1 || true

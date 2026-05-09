@@ -11,6 +11,8 @@ kubectl get mutatingwebhookconfigurations | grep vault
 确认 Vault 中已经存在本实验的 Kubernetes auth role 与 KV v2 机密。
 
 ```bash
+ensure-vault-port-forward
+vault status
 vault read auth/kubernetes/role/webapp
 vault kv get secret/injector/web
 kubectl -n demo get serviceaccount webapp

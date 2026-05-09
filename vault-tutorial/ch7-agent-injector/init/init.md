@@ -8,4 +8,4 @@
 4. 写入 KV v2 机密 `secret/injector/web`。
 5. 准备三份 YAML：`/root/baseline.yaml`、`/root/injector-demo.yaml`、`/root/init-only-job.yaml`。
 
-实验开始时，Vault 可通过本机端口转发访问：`VAULT_ADDR=http://127.0.0.1:8200`，root token 为 `root`。你将先观察没有注解的 Pod 不会被改写，再给 Deployment 加上 Injector annotations，最后用 init-only Job 对比 sidecar 与一次性预填充的生命周期差异。
+实验开始时，Vault 可通过本机端口转发访问：`VAULT_ADDR=http://127.0.0.1:8200`，root token 为 `root`。如果 Vault CLI 提示连接被拒绝，运行 `ensure-vault-port-forward` 即可重新建立端口转发。你将先观察没有注解的 Pod 不会被改写，再给 Deployment 加上 Injector annotations，最后用 init-only Job 对比 sidecar 与一次性预填充的生命周期差异。

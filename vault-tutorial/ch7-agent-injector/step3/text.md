@@ -16,6 +16,7 @@ grep -n 'agent-inject-secret-config.txt\|agent-inject-template-config.txt' /root
 现在更新 Vault 中的 KV v2 机密。本实验把 `template-static-secret-render-interval` 设为 `10s`，便于观察 sidecar 在运行期重新渲染静态机密。
 
 ```bash
+ensure-vault-port-forward
 vault kv put secret/injector/web username="injector-demo" password="rotated-password"
 ```
 
