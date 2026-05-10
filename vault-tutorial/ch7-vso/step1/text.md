@@ -22,7 +22,7 @@ helm upgrade --install vault hashicorp/vault \
   --wait \
   --timeout=5m
 
-kubectl -n vault rollout status statefulset/vault --timeout=180s
+kubectl -n vault wait --for=condition=Ready pod/vault-0 --timeout=180s
 ```
 
 创建本实验的应用 namespace 与 ServiceAccount。`vso-demo/vso-app` 是稍后 `VaultAuth` 指定的 Kubernetes 身份；`vault-vso-init` 是一次性初始化 Job 使用的临时身份。

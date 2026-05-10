@@ -45,7 +45,7 @@ helm upgrade --install vault hashicorp/vault \
   --wait \
   --timeout=5m
 
-kubectl -n vault rollout status statefulset/vault --timeout=180s
+kubectl -n vault wait --for=condition=Ready pod/vault-0 --timeout=180s
 kubectl -n vault rollout status daemonset/vault-csi-provider --timeout=180s
 ```
 

@@ -260,7 +260,7 @@ helm upgrade --install vault hashicorp/vault \
   --set "injector.enabled=true" \
   --set "csi.enabled=false"
 
-kubectl -n vault rollout status statefulset/vault --timeout=180s
+kubectl -n vault wait --for=condition=Ready pod/vault-0 --timeout=180s
 kubectl -n vault rollout status deployment/vault-agent-injector --timeout=180s
 ```
 

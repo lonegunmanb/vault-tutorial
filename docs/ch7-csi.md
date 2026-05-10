@@ -364,8 +364,6 @@ kubectl -n csi-demo exec "$ENV_POD" -- env | grep '^APP_'
 
 ![文件模式把 Vault 响应写进 /mnt/secrets-store；环境变量模式先通过 secretObjects 同步 Kubernetes Secret，再由 secretKeyRef 注入容器环境](/images/ch7-csi/csi-sync-secret-boundary.png)
 
-绘图提示词：手绘风格真实事物比喻，钢笔线绘，水彩淡色阴影；画同一个厨房里两条取料路线。左边路线是“CSI volume”传送带直接把“secret file”小罐子送到“/mnt/secrets-store”货架；右边路线是“secretObjects”登记员把同样的小罐子登记成“Kubernetes Secret”账本，然后“secretKeyRef”服务员把账本里的值放进“environment variables”杯子。专业词汇保持 English，其他说明使用中文。
-
 ---
 
 ## 6. 选型提示：什么时候选择 CSI provider
