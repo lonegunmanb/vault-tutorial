@@ -112,7 +112,15 @@ export default defineConfig({
              { text: '7.4 Kubernetes 集成模式之一：Vault Agent Sidecar Injector（vault-k8s）', link: '/ch7-agent-injector' },
              { text: '7.5 Kubernetes 集成模式之二：Secrets Store CSI Driver + Vault Provider', link: '/ch7-csi' },
              { text: '7.6 Kubernetes 集成模式之三：Vault Secrets Operator (VSO) 控制器与 CRD 模型', link: '/ch7-vso' },
-             { text: '7.8 三种 Kubernetes 集成模式选型与本章小结', link: '/ch7-k8s-selection' }
+             { text: '7.7 三种 Kubernetes 集成模式选型与本章小结', link: '/ch7-k8s-selection' }
+           ]
+         },
+         {
+           text: '第 8 章：安全合规审计与系统观测',
+           collapsed: false,
+           items: [
+             { text: '8.1 审计日志综述', link: '/ch8-audit-overview' },
+             { text: '8.2 三种内置审计设备配置详解（File / Syslog / Socket）', link: '/ch8-audit-devices' }
            ]
          }
         ],

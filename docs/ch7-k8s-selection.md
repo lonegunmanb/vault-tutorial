@@ -1,11 +1,11 @@
 ---
-order: 78
-title: 7.8 三种 Kubernetes 集成模式选型与本章小结
+order: 77
+title: 7.7 三种 Kubernetes 集成模式选型与本章小结
 group: 第 7 章：应用自动化接入与 Kubernetes 云原生集成
 group_order: 70
 ---
 
-# 7.8 三种 Kubernetes 集成模式选型与本章小结
+# 7.7 三种 Kubernetes 集成模式选型与本章小结
 
 > **核心结论**：选择 Kubernetes 中的 Vault 接入方式时，不应先问“哪一个功能最多”，而应先问三件事：机密最终以什么形态交给应用、Vault 在 Pod 生命周期的哪个时刻被访问、令牌与租约由谁托管。若团队接受以原生 Kubernetes Secret 作为平台内的二级物化对象，通常优先考虑 Vault Secrets Operator (VSO)；若必须使用 CSI volume 模型或正在统一多家 secret store 的挂载标准，优先考虑 Vault Secrets Store CSI provider；若应用需要 Consul Template 风格的复杂模板渲染、需要在同一个 Pod 内由 Agent 持续写入共享内存卷，或正在迁移已有 annotation 工作流，则保留 Vault Agent Injector。
 

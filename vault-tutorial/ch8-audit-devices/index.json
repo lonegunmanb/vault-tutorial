@@ -1,0 +1,39 @@
+{
+  "title": "三种内置审计设备：File / Syslog / Socket 启用与对照观察",
+  "description": "在单台 Killercoda 主机上启动一个单节点 Vault，依次启用 file、syslog、socket（Unix Socket）三种类型的审计设备，触发同一组 API 操作，验证三类设备各自把审计日志写到了哪里、字段是否被 HMAC、以及 LIST 大响应在 elide_list_responses 选项下被压缩成数字计数的现象；最后通过 SIGHUP 复现 file 设备配合外部日志轮转的关闭/重开文件描述符流程。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 file 审计设备并观察 JSON 行结构与 HMAC",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "并行启用 syslog 与 unix-socket 审计设备并对照",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "用 elide_list_responses 与 SIGHUP 复现两类高频运维场景",
+        "text": "step3/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

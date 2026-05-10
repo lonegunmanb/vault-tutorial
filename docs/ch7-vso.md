@@ -257,7 +257,7 @@ OpenShift 用户可通过内置 OperatorHub 安装，要求集群版本不低于
 
 如果团队的首选是「机密只在 Pod 生命周期内以 volume 形式存在、不进入 K8s Secret 对象」，那么应使用第 7.5 节的 Secrets Store CSI Provider；如果团队仍以 Pod annotation 驱动机密注入并希望机密以共享内存文件形式呈现，则使用第 7.4 节的 Vault Agent Sidecar Injector。
 
-VSO 与 CSI、Sidecar 这三种模式并不互斥，可以根据不同业务的合规与运维偏好在同一集群中共存。本章第 7.8 节会给出统一选型矩阵；本节读完后建议读者先以 VSO 完成最常见的 KV → K8s Secret 场景作为基线。
+VSO 与 CSI、Sidecar 这三种模式并不互斥，可以根据不同业务的合规与运维偏好在同一集群中共存。本章第 7.7 节会给出统一选型矩阵；本节读完后建议读者先以 VSO 完成最常见的 KV → K8s Secret 场景作为基线。
 
 ---
 
