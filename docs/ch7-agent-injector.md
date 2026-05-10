@@ -16,6 +16,8 @@ group_order: 70
 - [Install Vault Agent Injector — Vault Docs](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/injector/installation)
 - [Vault Agent Injector examples — Vault Docs](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/injector/examples)
 
+阅读本节时可以先把几个名词分开：Kubernetes `ServiceAccount` 是 Pod 在集群里的身份；Vault role 是 Vault 里允许这个身份登录并拿到哪些 policy 的规则；Helm chart 是一组可安装的 Kubernetes 资源模板；Helm release 是把 chart 安装到集群后得到的一份实例。文中的 YAML 如果带有 `apiVersion` 和 `kind`，就是可以保存后 `kubectl apply -f` 的 Kubernetes manifest；如果只列出 `vault.hashicorp.com/...`，它只是 Pod annotation 片段，需要放进 Pod 或 Deployment 的 Pod template 里。
+
 ---
 
 ## 1. Injector 的定位：用 Admission Webhook 改写 Pod
@@ -88,6 +90,10 @@ vault.hashicorp.com/agent-inject-template-config.txt: |
 ## 4. 认证链路：ServiceAccount、Vault role 与 policy
 
 使用 Injector 时，主要认证方式是 Pod 绑定的 Kubernetes ServiceAccount。官方文档说明，Kubernetes authentication 要求该 ServiceAccount 被绑定到一个 Vault role，而这个 role 再关联到允许读取目标机密的 Vault policy。
+
+初学者最容易把两类身份混在一起：应用 Pod 的 ServiceAccount，例如本章实验里的 `demo/webapp`，决定“这个应用能不能用某个 Vault role 登录”；Vault server 用于调用 Kubernetes TokenReview 的权限，决定“Vault 能不能向 Kubernetes 核验这个 ServiceAccount token 是否真实”。前者控制应用可读机密的范围，后者是认证校验链路的一部分，二者都需要配置，但作用不同。
+
+![Injector 的 Kubernetes auth 有两条身份线：应用 Pod 的 ServiceAccount 绑定 Vault role 与 policy，Vault server 的 TokenReview 权限负责向 Kubernetes API 核验 token 真伪](/images/ch7-agent-injector/kubernetes-auth-two-identities.png)
 
 不要把课程实验中的“能直接使用 default ServiceAccount”误解为生产建议。官方文档明确指出，使用 Kubernetes auth method 时必须存在 ServiceAccount，并且不建议把 Vault role 绑定到没有显式指定 ServiceAccount 时自动分配给 Pod 的 default ServiceAccount。
 
@@ -240,6 +246,26 @@ EOT
 
 官方文档推荐使用 Vault Helm chart 安装和配置 Agent Injector；安装新实例时，先加入 HashiCorp Helm repository，再通过 `helm install vault hashicorp/vault --set="injector.enabled=true"` 启用注入能力。Vault Agent Injector 要求 Vault 版本不低于 1.3.1。
 
+如果还不熟悉 Helm，可以把安装命令按这几个部分理解：`hashicorp/vault` 是 chart 名称，前面的 `vault` 是安装后的 release 名称，`--namespace vault` 表示把这一组组件安装到 `vault` 命名空间，`--set` 用来临时覆盖 chart 的 values。实验环境中可以使用下面这组命令安装一个 Vault dev server，并显式启用 Injector：
+
+```bash
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm repo update
+
+helm upgrade --install vault hashicorp/vault \
+  --namespace vault \
+  --create-namespace \
+  --set "server.dev.enabled=true" \
+  --set "server.dev.devRootToken=root" \
+  --set "injector.enabled=true" \
+  --set "csi.enabled=false"
+
+kubectl -n vault rollout status statefulset/vault --timeout=180s
+kubectl -n vault rollout status deployment/vault-agent-injector --timeout=180s
+```
+
+这组命令只适合课程实验：`server.dev.enabled=true` 会启动 dev server，`root` token 也是固定的演示值。生产环境应改用持久化存储、TLS、真实初始化与解封流程，并用 Helm values 文件管理配置。
+
 Admission webhook controllers 在 Kubernetes 中运行时需要 TLS。Injector 默认支持 TLS 1.2 及以上，并可通过 `AGENT_INJECT_TLS_MIN_VERSION` 和 `AGENT_INJECT_TLS_CIPHER_SUITES` 配置最低 TLS 版本与 TLS 1.0–1.2 的 cipher suites；官方同时警告 TLS 1.1 及以下通常被认为不安全。
 
 TLS 管理有 Auto TLS 与 Manual TLS 两种方式。默认 Auto TLS 会生成 CA 和 controller 使用的证书/私钥；如果通过 Vault Helm 安装，chart 会自动创建 controller service 的 DNS 项，用于证书校验。Manual TLS 则要求用户提供 server certificate/key 与 base64 PEM encoded CA bundle，也可以与 cert-manager 结合。
@@ -267,6 +293,8 @@ Injector 的优势，是在不改业务镜像的前提下把 Vault 机密以文�
 ## 9. 互动实验
 
 本节配套实验使用 Killercoda 提供的 kubeadm 单节点 Kubernetes 环境。第一步会由学员亲自使用 Helm 安装 Vault dev server 与 Vault Agent Injector，创建 `demo/webapp` ServiceAccount，并授权 Vault server ServiceAccount 调用 TokenReview；随后实验通过 Kubernetes Job 配置 Vault Kubernetes auth method 和 KV v2 机密，再让一个 `busybox` Deployment 通过 Pod template annotations 自动获得 Vault Agent init container、sidecar container 和 `/vault/secrets/config.txt` 文件。
+
+实验中的初始化 Job 不是一个新的产品组件，而是为了避免在 setup 阶段偷偷 `kubectl exec vault-0`。它把本节前面讲到的 Vault auth、policy、role 和 KV 数据准备动作放进 Kubernetes 里执行；学员仍然会在第一步亲自安装 Injector、创建命名空间和 ServiceAccount。
 
 实验还会创建一个 `Job`，通过 `vault.hashicorp.com/agent-pre-populate-only: "true"` 只注入 init container，不注入 sidecar，让学员观察为什么官方建议 Job / CronJob 使用 init-only 模式。
 

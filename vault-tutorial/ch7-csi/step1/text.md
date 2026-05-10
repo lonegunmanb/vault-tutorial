@@ -1,5 +1,14 @@
 # 第一步：安装 CSI 组件并准备实验身份
 
+这一页是“准备舞台”。你会安装两个 Kubernetes 平台组件，并创建后面应用 Pod 使用的身份：
+
+- Secrets Store CSI driver：Kubernetes 侧的通用 CSI driver，负责处理 Pod 的 CSI volume 挂载请求。
+- Vault Secrets Store CSI provider：Vault 专用 provider，负责根据 `SecretProviderClass` 登录 Vault、读取机密并交给 CSI driver。
+- Vault dev server：实验用 Vault 服务，里面会写入一条 KV v2 机密。
+- `csi-demo/app`：后续应用 Pod 使用的 Kubernetes ServiceAccount。
+
+本步骤结束时，你不需要已经看到机密文件；那是第二步才会发生的事。本步骤的完成标志是：CSI driver、Vault provider、Vault Pod 都 Running，`SecretProviderClass` 这个 CRD 已经存在，并且 `/root/csi-file-mount.yaml` 等实验清单已经生成。
+
 后台只准备了 Vault CLI、Helm 和常用工具。本实验演示的 Secrets Store CSI driver、Vault dev server 与 Vault Secrets Store CSI provider 需要你在这一步安装。
 
 先添加 Helm 仓库。
@@ -62,6 +71,8 @@ kubectl create clusterrolebinding vault-tokenreview-binding \
 
 运行课程准备的初始化脚本。它会创建一个 Kubernetes Job，在 Vault 中配置 Kubernetes auth method、写入 `secret/csi/app`，创建 policy 与 Vault role `csi-app`，并生成后续步骤使用的实验清单。
 
+这一步的 Job 做的是 Vault 端准备工作：把 `csi-demo/app` 这个 Kubernetes 身份绑定到 Vault role `csi-app`，并让这个 role 只能读取 `secret/csi/app`。后面 Pod 能不能挂载成功，关键就看它是不是用这个 ServiceAccount 身份发起请求。
+
 ```bash
 /root/configure-vault-csi.sh
 ```
@@ -90,6 +101,8 @@ kubectl get crd secretproviderclasses.secrets-store.csi.x-k8s.io \
 ```
 
 查看实验生成的文件挂载清单。重点观察三处：`provider: vault`、`roleName: "csi-app"`、以及 `objects` 中的 `objectName`、`secretPath` 和 `secretKey`。
+
+先不用完全读懂整份 YAML，只要先建立这个对应关系：`secretPath` 表示去 Vault 哪里读，`secretKey` 表示读响应里的哪个字段，`objectName` 表示最后在 Pod 里看到的文件名。
 
 ```bash
 sed -n '1,140p' /root/csi-file-mount.yaml

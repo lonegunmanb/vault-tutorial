@@ -13,15 +13,15 @@
         "text": "step1/text.md"
       },
       {
-        "title": "用 SecretProviderClass 挂载文件",
+        "title": "把 Vault 机密挂成 Pod 文件",
         "text": "step2/text.md"
       },
       {
-        "title": "验证 ServiceAccount 权限边界",
+        "title": "故意换错 Pod 身份观察失败",
         "text": "step3/text.md"
       },
       {
-        "title": "同步 Kubernetes Secret 并注入环境变量",
+        "title": "同步 K8s Secret 并注入环境变量",
         "text": "step4/text.md"
       }
     ],

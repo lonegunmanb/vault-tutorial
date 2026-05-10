@@ -16,6 +16,8 @@ group_order: 70
 - [Vault Secrets Store CSI provider configurations — Vault Docs](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/csi/configurations)
 - [Vault Secrets Store CSI provider examples — Vault Docs](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/csi/examples)
 
+阅读本节时可以先把四个对象分清楚：Secrets Store CSI driver 是 Kubernetes 侧的通用驱动；Vault CSI provider 是 driver 调用的 Vault 插件；`SecretProviderClass` 是应用命名空间里的配置对象，说明要用哪个 provider、哪个 Vault role 和哪些 Vault 路径；Pod 通过 CSI volume 引用这个 `SecretProviderClass`，才会触发一次挂载。Helm 命令负责安装 driver/provider 这些平台组件，`kubectl apply -f` 负责创建应用侧的 YAML 对象。
+
 ---
 
 ## 1. CSI provider 在 Kubernetes 接入链路中的位置
@@ -78,7 +80,9 @@ helm upgrade --install vault hashicorp/vault \
   --set "injector.enabled=false"
 ```
 
-生产环境中通常不会启用 `server.dev.enabled=true`，也不会使用固定 root token。更常见的做法是把 provider 连接 Vault 的默认地址、认证挂载点和 TLS 参数集中放在 Helm values 或 `csi.extraArgs` 中，让所有 `SecretProviderClass` 复用同一套 provider 配置；只有确实需要按工作负载覆盖时，才在单个 `SecretProviderClass` 里写 `vaultAddress`、`vaultCACertPath` 等参数。
+这组命令里，`csi-secrets-store` 和 `vault` 是 Helm release 名称，后面的 `secrets-store-csi-driver/secrets-store-csi-driver` 与 `hashicorp/vault` 是 chart 名称。`helm upgrade --install` 的意思是“没有就安装，已经存在就升级”，适合课程实验反复执行；多个 `--set` 会合并成临时 values，用来覆盖 chart 默认配置。
+
+生产环境中通常不会启用 `server.dev.enabled=true`，也不会使用固定 root token。上面的实验命令为了便于复制使用了 `--set`；如果要把 provider 连接 Vault 的默认地址、认证挂载点和 TLS 参数集中管理，更常见的做法是改写成 Helm values 文件，例如 `vault-csi-values.yaml`，让所有 `SecretProviderClass` 复用同一套 provider 配置；只有确实需要按工作负载覆盖时，才在单个 `SecretProviderClass` 里写 `vaultAddress`、`vaultCACertPath` 等参数。
 
 ```yaml
 csi:
@@ -87,6 +91,15 @@ csi:
     - "-vault-addr=https://vault.vault.svc:8200"
     - "-vault-mount=kubernetes"
     - "-vault-tls-ca-cert=/vault/tls/ca.crt"
+```
+
+使用 values 文件时，安装命令仍然是同一个 Vault Helm chart，只是把多个 `--set` 参数换成 `-f` 指定文件：
+
+```bash
+helm upgrade --install vault hashicorp/vault \
+  --namespace vault \
+  --create-namespace \
+  -f vault-csi-values.yaml
 ```
 
 OpenShift 环境有单独要求：需要 OpenShift 4.14 或更高版本，需要 Red Hat 提供的 Secrets Store CSI driver operator，并且需要创建 `secrets-store.csi.k8s.io` 的 `ClusterCSIDriver` 实例。由于 Vault CSI provider 需要 `hostPath` mount access，安装前还要把 `vault-csi-provider` ServiceAccount 加入 `privileged` security context constraint。
@@ -108,6 +121,8 @@ Vault Secrets Store CSI provider 的大多数设置可以通过三层来源配�
 对象还可以设置 `filePermission` 与 `encoding`。`filePermission` 控制写入文件的权限，默认值是 `0o644`；`encoding` 默认是 `utf-8`，并支持 `hex` 与 `base64` 解码。对于需要向 Vault 发送请求体的场景，可以使用 `secretArgs`；官方提醒，`secretArgs` 作为 HTTP request body 发送，因此只对 HTTP `PUT` 或 `POST` 一类请求有效，例如 PKI 证书生成；如果是 HTTP `GET`，额外参数应写在 `secretPath` 的 URI 参数中。在该 provider 的 `method` 字段中，官方列出的支持值仍是 `GET` 与 `PUT`。
 
 在写 `SecretProviderClass` 之前，先要把 Vault 端的认证、policy 与 role 配好。下面这个例子使用 Kubernetes auth method、KV v2 与专用 ServiceAccount：`csi-demo/app` 这个 Kubernetes ServiceAccount 可以用 Vault role `csi-app` 登录，而 `csi-app` policy 只允许读取 `secret/data/csi/app`。如果 Vault 部署在集群外，生产配置还需要按官方 Kubernetes auth 文档补齐 reviewer token、CA 与 API server 地址等参数。
+
+在互动实验里，这段 Vault 端准备工作由 `/root/configure-vault-csi.sh` 创建的 Kubernetes Job 完成；正文把命令展开，是为了说明 Job 实际配置了什么。自己手动练习时，需要先让 `vault` CLI 指向目标 Vault server，并确保当前 token 有权限启用 auth method、写 policy 和写 KV 数据。
 
 ```bash
 kubectl create namespace csi-demo
@@ -140,6 +155,8 @@ vault write auth/kubernetes/role/csi-app \
 ```
 
 接下来才是 Kubernetes 侧的 `SecretProviderClass`。这个例子沿用官方 examples 页面中的字段结构，把动态数据库示例换成本教程的 KV v2 路径：`objectName` 会成为挂载目录里的文件名，`secretPath` 指向 Vault API 读取路径，`secretKey` 决定从响应里抽取哪个字段。若集群中的 CRD 版本较旧，`apiVersion` 可能需要改成 `secrets-store.csi.x-k8s.io/v1alpha1`。
+
+如果手动复制下面的例子，可以把这个 `SecretProviderClass` 与下一节的 `Deployment` 保存到同一个文件，例如 `csi-file-mount.yaml`，中间用 `---` 分隔；也可以分别保存成两个文件并按顺序 `kubectl apply`。课程实验中的 `/root/csi-file-mount.yaml` 已经把二者放在同一个文件里。
 
 ```yaml
 apiVersion: secrets-store.csi.x-k8s.io/v1
@@ -211,7 +228,7 @@ spec:
 可以用下面的命令验证挂载结果。这里看到的文件名来自 `objectName`，文件内容来自对应 `secretKey`。
 
 ```bash
-kubectl apply -f csi-file-app.yaml
+kubectl apply -f csi-file-mount.yaml
 kubectl -n csi-demo rollout status deployment/csi-file-app --timeout=180s
 
 POD=$(kubectl -n csi-demo get pod -l app=csi-file-app -o jsonpath='{.items[0].metadata.name}')
@@ -223,6 +240,10 @@ kubectl -n csi-demo exec "$POD" -- cat /mnt/secrets-store/appPassword
 第二种消费模式是在文件挂载之外额外同步 Kubernetes Secret。官方示例在同一个 `SecretProviderClass` 中增加 `secretObjects`，把 `dbUsername` 映射到 Kubernetes Secret 的 `username` 键，把 `dbPassword` 映射到 `password` 键；应用容器随后通过 `env[].valueFrom.secretKeyRef` 引用这个 Kubernetes Secret，把值注入为 `DB_USERNAME` 与 `DB_PASSWORD` 环境变量。
 
 下面的 `secretObjects` 示例同样来自官方 examples 页的结构：`data[].objectName` 必须引用 `objects` 里已经声明过的对象别名，`key` 才是同步出来的 Kubernetes Secret 键名。要让同步发生，仍然需要有一个 Pod 挂载这个 `SecretProviderClass`；CSI driver 在处理 volume mount 时才会把对象同步为 Kubernetes Secret。
+
+这也是初学者常见的误区：创建 `SecretProviderClass` 本身不会立刻读取 Vault，也不会立刻生成 Kubernetes Secret；只有某个 Pod 使用 CSI volume 引用它时，driver/provider 才会开始工作。
+
+![SecretProviderClass 像一张配置菜单，单独创建时不会读取 Vault；只有 Pod 的 CSI volume 引用它时，Secrets Store CSI driver 才调用 Vault CSI provider，把 Vault 数据写入挂载目录并可选同步 Kubernetes Secret](/images/ch7-csi/secretproviderclass-trigger.png)
 
 ```yaml
 apiVersion: secrets-store.csi.x-k8s.io/v1

@@ -1,12 +1,16 @@
-# 第三步：验证 ServiceAccount 权限边界
+# 第三步：故意换错 Pod 身份，观察挂载失败
 
-Vault role `csi-app` 只允许 `csi-demo` namespace 中名为 `app` 的 ServiceAccount 登录。现在创建一个几乎相同的 Pod，但让它使用默认 ServiceAccount。
+这一页是一个故意失败的实验。目的不是让应用跑起来，而是让你看到权限边界在哪里。
+
+上一页能成功，是因为 Pod 使用了 `csi-demo/app` 这个 ServiceAccount；Vault role `csi-app` 也正好绑定了这个身份。现在我们创建一个几乎相同的 Pod，但让它使用 `csi-demo/default` 这个默认 ServiceAccount。它仍然引用同一个 `SecretProviderClass`，但身份不匹配，所以应该挂载失败。
 
 ```bash
 kubectl apply -f /root/csi-bad-sa.yaml
 ```
 
 这个 Pod 预期不会进入正常 Running 状态，因为它在 `ContainerCreation` 阶段无法用默认 ServiceAccount 通过 Vault role 约束。先观察 Pod 状态。
+
+如果你看到 `ContainerCreating`、`CreateContainerConfigError` 或类似状态，不要急着修它；这一步就是要观察失败。
 
 ```bash
 kubectl -n csi-demo get pods -l app=csi-bad-sa
@@ -36,3 +40,5 @@ kubectl -n csi-demo delete deployment csi-bad-sa
 ```
 
 这个失败示例说明，CSI provider 使用的是发起挂载的 Pod 的 ServiceAccount 身份。只要 Vault role 没有绑定该 ServiceAccount，挂载就不会成功。
+
+这也是生产中要使用专用 ServiceAccount 的原因：不同应用绑定不同 Vault role，才能限制每个应用只能读取自己需要的 Vault 路径。

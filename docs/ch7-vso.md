@@ -21,6 +21,8 @@ group_order: 70
 - [Vault Secrets Operator examples — Vault Docs](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/vso/examples)
 - [Run the Vault Secrets Operator on OpenShift — Vault Docs](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/vso/openshift)
 
+阅读本节时可以先把 VSO 的三层对象分开：Helm 安装的是 operator 控制器和 CRD；`VaultConnection` 说明“连到哪个 Vault”；`VaultAuth` 说明“用哪个 Kubernetes ServiceAccount 和哪个 Vault role 登录”；`VaultStaticSecret`、`VaultDynamicSecret`、`VaultPKISecret` 这类资源才说明“把 Vault 里的哪条数据同步成哪个 Kubernetes Secret”。CRD 是 Kubernetes 新增的资源类型，CR 是你为这些类型创建出来的具体对象。
+
 ---
 
 ## 1. VSO 在 Kubernetes 接入链路中的位置
@@ -52,6 +54,8 @@ VSO 通过两个基础 CRD 描述「连接到哪个 Vault」和「以什么身�
 `VaultAuth` 描述如何登录该 Vault 实例。其 `vaultConnectionRef` 字段引用上面的 `VaultConnection`；如果留空，控制器会回退到 operator 自身命名空间下名为 `default` 的 `VaultConnection`。`spec.method` 是认证方法名（取值范围：`kubernetes`、`jwt`、`appRole`、`aws`、`gcp`），`spec.mount` 指定该方法在 Vault 中挂载的路径，对应字段还包括 `kubernetes`、`jwt`、`appRole`、`aws`、`gcp` 等方法专属配置块。
 
 `VaultAuth` 中的 `kubernetes` 块包含 `role`、`serviceAccount`、`audiences` 与 `tokenExpirationSeconds` 等字段。其中 `serviceAccount` 必须位于「消费者机密 CR」（即 `VaultStaticSecret` 等 CR）所在的 Kubernetes 命名空间内；这是 VSO 跨命名空间访问的硬约束，目的是防止 A 命名空间利用 B 命名空间的 ServiceAccount 间接访问 B 命名空间能访问的 Vault 数据。
+
+换成实验里的名字理解：如果 `VaultStaticSecret` 创建在 `vso-demo` 命名空间，那么 `VaultAuth.spec.kubernetes.serviceAccount` 指向的 `vso-app` 也必须在 `vso-demo` 命名空间。operator 可以安装在自己的命名空间里，但应用身份和要同步的 Secret 归属应用命名空间。
 
 `VaultAuth` 还提供 `allowedNamespaces` 字段，用于控制哪些 Kubernetes 命名空间内的机密 CR 可以引用该 `VaultAuth`：未设置时，只允许 operator 自身命名空间和 `VaultAuth` 自身命名空间使用；设为 `["*"]` 时放开为全部命名空间；也可以列出具体命名空间名。
 
@@ -217,14 +221,18 @@ VSO 内部维护一份「Vault client cache」，用于缓存 Vault token 与动
 
 VSO 的官方安装前置要求是 Kubernetes 1.23+ 与 Helm 3.7+；推荐通过 HashiCorp Helm 仓库的 `vault-secrets-operator` chart 安装。chart 0.10.0 对应 VSO 应用版本 0.10.0。
 
-最小化安装命令如下：
+最小化安装命令如下。这里的 `vault-secrets-operator` 第一次出现时是 Helm release 名称，`hashicorp/vault-secrets-operator` 是 chart 名称，`--namespace vault-secrets-operator` 是 operator 控制器运行的命名空间；它不会自动替你创建应用命名空间里的 `VaultConnection`、`VaultAuth` 或 `VaultStaticSecret`。
 
-```shell-session
-$ helm repo add hashicorp https://helm.releases.hashicorp.com
-$ helm install --version 0.10.0 \
-    --create-namespace \
-    --namespace vault-secrets-operator \
-    vault-secrets-operator hashicorp/vault-secrets-operator
+```bash
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm repo update
+
+helm upgrade --install vault-secrets-operator hashicorp/vault-secrets-operator \
+  --version 0.10.0 \
+  --create-namespace \
+  --namespace vault-secrets-operator
+
+kubectl -n vault-secrets-operator get pods
 ```
 
 
@@ -250,6 +258,10 @@ VSO 与 CSI、Sidecar 这三种模式并不互斥，可以根据不同业务的�
 ## 10. 互动实验
 
 本节配套实验在 Killercoda 提供的 Kubernetes 单节点环境中完成。第一步会由学员亲自使用 Helm 安装 Vault dev server 与 VSO，创建 `vso-demo/vso-app` ServiceAccount，并授权 Vault server ServiceAccount 调用 TokenReview；随后实验通过 Kubernetes Job 启用 Kubernetes auth method、写入一条 KV v2 机密，再通过 `VaultConnection` + `VaultAuth` + `VaultStaticSecret` 三件套把该机密物化为应用命名空间下的原生 Kubernetes Secret，最后给 `VaultStaticSecret` 配置 `rolloutRestartTargets`，亲手验证 Vault 侧的更新如何触发 Deployment 滚动。
+
+如果第一次接触 operator，可以把实验顺序理解成三条互相分工的线：Helm 在 Kubernetes 里安装 VSO controller 和 CRD，相当于先把工厂和工位模具建好；初始化 Job 只准备 Vault 端的 auth、policy、role 和 KV 数据，相当于把 Vault 仓库备好；随后学员在应用命名空间创建 `VaultConnection`、`VaultAuth`、`VaultStaticSecret` 这些 CR，operator 才按这些 CR 的声明登录 Vault、读取机密，并写出 Kubernetes Secret。注意：CRD 是 Kubernetes 里的资源类型定义，像模具；车上流转和装配的是 CR，也就是这些类型的具体对象。
+
+![VSO 实验像汽车装配线：Helm 先搭好 Kubernetes 里的 operator controller 和 CRD 工位模具，init Job 在另一侧把 Vault 仓库准备好，应用命名空间里的 VaultConnection、VaultAuth、VaultStaticSecret 等 CR 像车上的装配指令，经过 controller reconciliation 后把 Vault KV data 像底盘电池组一样装配成 Kubernetes Secret 成品车](/images/ch7-vso/operator-install-vs-app-crs.png)
 
 实验分为四步：第一步安装 Vault 与 VSO、创建实验身份，并检查 VSO 控制器与 CRD；第二步创建 `VaultConnection` 与 `VaultAuth`，让 operator 能以 ServiceAccount 身份登录 Vault；第三步创建 `VaultStaticSecret` 把 Vault 的 `secret/vso/app` 同步为应用命名空间下的 `vso-app-secret`；第四步给 `VaultStaticSecret` 增加 `rolloutRestartTargets`，更新 Vault 中的密码，观察消费 Pod 是否被自动滚动重启。
 
