@@ -121,6 +121,119 @@ Injector 有两种配置 Agent 渲染机密的方法：使用 `vault.hashicorp.c
 
 官方 ConfigMap 示例展示了完整 Agent HCL：其中包括 Kubernetes auto-auth、file sink、`template` destination 以及 Vault 连接参数。这种方式更接近直接运行 Vault Agent，适合需要更细粒度控制模板、sink、TLS 或 auto-auth 参数的团队。
 
+下面这个例子按官方 ConfigMap 示例的结构改写：Pod template 里只保留 `agent-inject`、`agent-configmap` 和 TLS Secret 注解，不再写 `agent-inject-secret-*` 或 `agent-inject-template-*`；具体读取哪条 Vault 机密、如何渲染、写到哪个文件，都由 ConfigMap 中的 Agent HCL 决定。这里的 `config.hcl` 给 sidecar 使用，因此 `exit_after_auth = false`；`config-init.hcl` 给 init container 使用，因此 `exit_after_auth = true`。
+
+::: v-pre
+```yaml
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: app-example
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-example
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-example
+  template:
+    metadata:
+      labels:
+        app: app-example
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-configmap: "web-agent-config"
+        vault.hashicorp.com/tls-secret: "vault-tls-client"
+    spec:
+      serviceAccountName: app-example
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["sh", "-c", "cat /vault/secrets/db-creds && sleep 3600"]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-agent-config
+data:
+  config.hcl: |
+    auto_auth {
+      method "kubernetes" {
+        mount_path = "auth/kubernetes"
+        config = {
+          role = "db-app"
+        }
+      }
+
+      sink "file" {
+        config = {
+          path = "/home/vault/.token"
+        }
+      }
+    }
+
+    exit_after_auth = false
+    pid_file        = "/home/vault/.pid"
+
+    template {
+      destination = "/vault/secrets/db-creds"
+      contents    = <<EOT
+{{- with secret "database/creds/db-app" -}}
+postgres://{{ .Data.username }}:{{ .Data.password }}@postgres:5432/appdb?sslmode=disable
+{{- end }}
+EOT
+    }
+
+    vault {
+      address     = "https://vault.demo.svc.cluster.local:8200"
+      ca_cert     = "/vault/tls/ca.crt"
+      client_cert = "/vault/tls/client.crt"
+      client_key  = "/vault/tls/client.key"
+    }
+
+  config-init.hcl: |
+    auto_auth {
+      method "kubernetes" {
+        mount_path = "auth/kubernetes"
+        config = {
+          role = "db-app"
+        }
+      }
+
+      sink "file" {
+        config = {
+          path = "/home/vault/.token"
+        }
+      }
+    }
+
+    exit_after_auth = true
+    pid_file        = "/home/vault/.pid"
+
+    template {
+      destination = "/vault/secrets/db-creds"
+      contents    = <<EOT
+{{- with secret "database/creds/db-app" -}}
+postgres://{{ .Data.username }}:{{ .Data.password }}@postgres:5432/appdb?sslmode=disable
+{{- end }}
+EOT
+    }
+
+    vault {
+      address     = "https://vault.demo.svc.cluster.local:8200"
+      ca_cert     = "/vault/tls/ca.crt"
+      client_cert = "/vault/tls/client.crt"
+      client_key  = "/vault/tls/client.key"
+    }
+```
+:::
+
+如果课程实验使用的是 HTTP dev server，可以去掉 `vault.hashicorp.com/tls-secret`，并把两个 `vault` stanza 简化为 `address = "http://vault.default.svc.cluster.local:8200"`。无论是否使用 TLS，关键约束都一样：使用 `agent-configmap` 后，机密路径和模板来自 HCL，不能再同时配置 `agent-inject-secret-*` 注解。
+
 ---
 
 ## 7. 安装与 TLS：Helm 是推荐路径
