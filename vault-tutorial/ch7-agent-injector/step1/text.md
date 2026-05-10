@@ -1,6 +1,53 @@
-# 第一步：检查 Injector 与基线 Pod
+# 第一步：安装 Injector 并准备基线 Pod
 
-先确认 Vault Helm chart 已经部署出 Vault Agent Injector。Injector 是一个运行在 Kubernetes 集群中的 webhook controller，后续 Pod 创建请求会先经过它判断是否需要注入。
+后台只准备了 Vault CLI、Helm 和后续 YAML。本实验演示的 Vault dev server 与 Vault Agent Injector 需要你在这一步用 Helm 安装。
+
+先添加 HashiCorp Helm 仓库，然后安装启用了 Injector 的 Vault dev server。
+
+```bash
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm repo update
+
+helm upgrade --install vault hashicorp/vault \
+  --namespace vault \
+  --create-namespace \
+  --set='server.dev.enabled=true' \
+  --set='server.dev.devRootToken=root' \
+  --set='injector.enabled=true' \
+  --set='injector.metrics.enabled=true' \
+  --wait \
+  --timeout=5m
+
+kubectl -n vault rollout status deployment/vault-agent-injector --timeout=180s
+```
+
+创建本实验的应用 namespace 与 ServiceAccount。`demo/webapp` 是稍后被注入 Pod 使用的身份；`vault-agent-injector-init` 是一次性初始化 Job 使用的临时身份。
+
+```bash
+kubectl create namespace demo --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n demo create serviceaccount webapp --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n vault create serviceaccount vault-agent-injector-init --dry-run=client -o yaml | kubectl apply -f -
+```
+
+授权 Vault server Pod 的 ServiceAccount 调用 Kubernetes TokenReview API。Vault Kubernetes auth method 后续会用它校验应用 Pod 提交的 ServiceAccount token。
+
+```bash
+VAULT_SERVER_SA=$(kubectl -n vault get pod vault-0 -o jsonpath='{.spec.serviceAccountName}')
+VAULT_SERVER_SA="${VAULT_SERVER_SA:-vault}"
+
+kubectl create clusterrolebinding vault-tokenreview-binding \
+  --clusterrole=system:auth-delegator \
+  --serviceaccount="vault:${VAULT_SERVER_SA}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+现在运行课程准备的初始化脚本。它会创建一个 Kubernetes Job，通过集群内 Vault Pod DNS 配置 Vault 的 Kubernetes auth method、写入 KV v2 机密，并创建只允许 `demo/webapp` 登录的 Vault role `webapp`。
+
+```bash
+/root/configure-vault-agent-injector.sh
+```
+
+确认 Vault Agent Injector 已经部署出来，且 admission webhook 已注册。
 
 ```bash
 kubectl -n vault get pods

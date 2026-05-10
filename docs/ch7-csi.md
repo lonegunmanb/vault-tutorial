@@ -30,8 +30,6 @@ Vault Secrets Store CSI provider 并不是一个新的 Vault 机密引擎。官�
 
 ![Secrets Store CSI driver 根据 Pod 的 CSI volume 请求找到 SecretProviderClass，再把 provider=vault 的请求交给 Vault Secrets Store CSI provider，由后者使用 Pod ServiceAccount 向 Vault 取回机密并写入挂载卷](/images/ch7-csi/csi-request-flow.png)
 
-绘图提示词：手绘风格真实事物比喻，钢笔线绘，水彩淡色阴影；画一个 Kubernetes 仓库码头。左侧是贴着“Pod”的小货车，车厢里有“CSI volume”空箱；中间是写着“Secrets Store CSI driver”的调度台，调度员查看“SecretProviderClass”清单；右侧是贴着“Vault Secrets Store CSI provider”的专用搬运员，拿着“ServiceAccount token”通行证去“Vault Server”保险库取出“secret file”包裹，再放回 Pod 的箱子里。专业词汇保持 English，其他标注使用中文。
-
 ---
 
 ## 2. 能力边界：文件、同步 Secret 与 Vault Agent 缓存
@@ -60,6 +58,37 @@ CSI provider 自身也有 token 缓存参数：`-cache-size` 默认值为 `1000`
 
 升级已有安装时可以使用 `helm upgrade`，但官方建议在任何 install 或 upgrade 前先执行 Helm 的 `--dry-run` 检查变更。可通过 `helm inspect values hashicorp/vault` 查看可用 values；安装文档特别提到，常用 values 包括限制 Vault CSI provider 运行的 namespace、TLS 选项等。
 
+下面这组命令把官方安装路径改写成一个可在实验集群中复现的最小配置：先安装 Secrets Store CSI driver，再用 Vault Helm chart 启用 `csi.enabled=true`。其中 `syncSecret.enabled=true` 是为了支持后文的 `secretObjects` 同步 Kubernetes Secret 示例；如果只做文件挂载，可以先不打开同步能力。
+
+```bash
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm repo add secrets-store-csi-driver https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+helm repo update
+
+helm upgrade --install csi-secrets-store secrets-store-csi-driver/secrets-store-csi-driver \
+  --namespace kube-system \
+  --set syncSecret.enabled=true
+
+helm upgrade --install vault hashicorp/vault \
+  --namespace vault \
+  --create-namespace \
+  --set "server.dev.enabled=true" \
+  --set "server.dev.devRootToken=root" \
+  --set "csi.enabled=true" \
+  --set "injector.enabled=false"
+```
+
+生产环境中通常不会启用 `server.dev.enabled=true`，也不会使用固定 root token。更常见的做法是把 provider 连接 Vault 的默认地址、认证挂载点和 TLS 参数集中放在 Helm values 或 `csi.extraArgs` 中，让所有 `SecretProviderClass` 复用同一套 provider 配置；只有确实需要按工作负载覆盖时，才在单个 `SecretProviderClass` 里写 `vaultAddress`、`vaultCACertPath` 等参数。
+
+```yaml
+csi:
+  enabled: true
+  extraArgs:
+    - "-vault-addr=https://vault.vault.svc:8200"
+    - "-vault-mount=kubernetes"
+    - "-vault-tls-ca-cert=/vault/tls/ca.crt"
+```
+
 OpenShift 环境有单独要求：需要 OpenShift 4.14 或更高版本，需要 Red Hat 提供的 Secrets Store CSI driver operator，并且需要创建 `secrets-store.csi.k8s.io` 的 `ClusterCSIDriver` 实例。由于 Vault CSI provider 需要 `hostPath` mount access，安装前还要把 `vault-csi-provider` ServiceAccount 加入 `privileged` security context constraint。
 
 ---
@@ -78,9 +107,64 @@ Vault Secrets Store CSI provider 的大多数设置可以通过三层来源配�
 
 对象还可以设置 `filePermission` 与 `encoding`。`filePermission` 控制写入文件的权限，默认值是 `0o644`；`encoding` 默认是 `utf-8`，并支持 `hex` 与 `base64` 解码。对于需要向 Vault 发送请求体的场景，可以使用 `secretArgs`；官方提醒，`secretArgs` 作为 HTTP request body 发送，因此只对 HTTP `PUT` 或 `POST` 一类请求有效，例如 PKI 证书生成；如果是 HTTP `GET`，额外参数应写在 `secretPath` 的 URI 参数中。在该 provider 的 `method` 字段中，官方列出的支持值仍是 `GET` 与 `PUT`。
 
-![SecretProviderClass 中 provider、roleName、vaultAddress、vaultAuthMountPath、audience 与 objects 字段共同决定一次挂载请求如何登录 Vault、读取路径并生成文件](/images/ch7-csi/secretproviderclass-fields.png)
+在写 `SecretProviderClass` 之前，先要把 Vault 端的认证、policy 与 role 配好。下面这个例子使用 Kubernetes auth method、KV v2 与专用 ServiceAccount：`csi-demo/app` 这个 Kubernetes ServiceAccount 可以用 Vault role `csi-app` 登录，而 `csi-app` policy 只允许读取 `secret/data/csi/app`。如果 Vault 部署在集群外，生产配置还需要按官方 Kubernetes auth 文档补齐 reviewer token、CA 与 API server 地址等参数。
 
-绘图提示词：手绘风格真实事物比喻，钢笔线绘，水彩淡色阴影；画一张夹在木板上的“SecretProviderClass”表格清单，表格格子分别写着“provider: vault”、“roleName”、“vaultAddress”、“vaultAuthMountPath”、“audience”、“objects”。旁边有三盒彩色文件夹：“objectName = 文件名”、“secretPath = Vault 路径”、“secretKey = 抽取字段”。一只手拿着 ServiceAccount token 印章在表格上盖章。专业词汇保持 English，其他说明使用中文。
+```bash
+kubectl create namespace csi-demo
+kubectl -n csi-demo create serviceaccount app
+
+K8S_ISSUER=$(kubectl get --raw /.well-known/openid-configuration | jq -r '.issuer')
+
+vault auth enable kubernetes
+vault write auth/kubernetes/config \
+  kubernetes_host="https://kubernetes.default.svc:443" \
+  issuer="$K8S_ISSUER"
+
+vault secrets enable -path=secret kv-v2
+vault kv put secret/csi/app \
+  username="csi-user" \
+  password="initial-password" \
+  api_key="csi-api-key"
+
+vault policy write csi-app - <<'HCL'
+path "secret/data/csi/app" {
+  capabilities = ["read"]
+}
+HCL
+
+vault write auth/kubernetes/role/csi-app \
+  bound_service_account_names="app" \
+  bound_service_account_namespaces="csi-demo" \
+  token_policies="csi-app" \
+  token_ttl="20m"
+```
+
+接下来才是 Kubernetes 侧的 `SecretProviderClass`。这个例子沿用官方 examples 页面中的字段结构，把动态数据库示例换成本教程的 KV v2 路径：`objectName` 会成为挂载目录里的文件名，`secretPath` 指向 Vault API 读取路径，`secretKey` 决定从响应里抽取哪个字段。若集群中的 CRD 版本较旧，`apiVersion` 可能需要改成 `secrets-store.csi.x-k8s.io/v1alpha1`。
+
+```yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: vault-kv-files
+  namespace: csi-demo
+spec:
+  provider: vault
+  parameters:
+    roleName: "csi-app"
+    vaultAddress: "http://vault.vault.svc:8200"
+    vaultAuthMountPath: "kubernetes"
+    objects: |
+      - objectName: "appUsername"
+        secretPath: "secret/data/csi/app"
+        secretKey: "username"
+      - objectName: "appPassword"
+        secretPath: "secret/data/csi/app"
+        secretKey: "password"
+```
+
+如果 provider 已经通过 Helm values 配好了默认 Vault 地址，生产中可以删除上例中的 `vaultAddress`，让请求继续经过 Helm chart 安装的 Vault Agent cache。需要读取 KV v2 的旧版本时，可以把版本号写成官方配置页展示的 URI 参数形式，例如 `secretPath: "secret/data/csi/app?version=1"`。
+
+![SecretProviderClass 中 provider、roleName、vaultAddress、vaultAuthMountPath、audience 与 objects 字段共同决定一次挂载请求如何登录 Vault、读取路径并生成文件](/images/ch7-csi/secretproviderclass-fields.png)
 
 ---
 
@@ -88,7 +172,172 @@ Vault Secrets Store CSI provider 的大多数设置可以通过三层来源配�
 
 第一种消费模式是文件挂载。官方示例使用 database secrets engine 生成动态数据库用户名与密码，并在 `objects` 中把 `database/creds/db-app` 响应里的 `username` 与 `password` 分别映射为 `dbUsername` 与 `dbPassword` 两个文件。Pod 只需要把 CSI volume 挂载到 `/mnt/secrets-store`，容器启动后就能在该目录中读取这两个文件。
 
+对应到上一节的 `vault-kv-files`，应用只需要使用同一个 namespace 下的 `app` ServiceAccount，并在 `volumes[].csi.volumeAttributes.secretProviderClass` 中引用 `vault-kv-files`。容器启动后，`/mnt/secrets-store/appUsername` 与 `/mnt/secrets-store/appPassword` 就是普通文件，应用可以按读取文件的方式消费它们。
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-file-app
+  namespace: csi-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-file-app
+  template:
+    metadata:
+      labels:
+        app: csi-file-app
+    spec:
+      serviceAccountName: app
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["/bin/sh", "-c", "ls -l /mnt/secrets-store && sleep 3600"]
+          volumeMounts:
+            - name: vault-kv
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: vault-kv
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: vault-kv-files
+```
+
+可以用下面的命令验证挂载结果。这里看到的文件名来自 `objectName`，文件内容来自对应 `secretKey`。
+
+```bash
+kubectl apply -f csi-file-app.yaml
+kubectl -n csi-demo rollout status deployment/csi-file-app --timeout=180s
+
+POD=$(kubectl -n csi-demo get pod -l app=csi-file-app -o jsonpath='{.items[0].metadata.name}')
+kubectl -n csi-demo exec "$POD" -- ls -l /mnt/secrets-store
+kubectl -n csi-demo exec "$POD" -- cat /mnt/secrets-store/appUsername
+kubectl -n csi-demo exec "$POD" -- cat /mnt/secrets-store/appPassword
+```
+
 第二种消费模式是在文件挂载之外额外同步 Kubernetes Secret。官方示例在同一个 `SecretProviderClass` 中增加 `secretObjects`，把 `dbUsername` 映射到 Kubernetes Secret 的 `username` 键，把 `dbPassword` 映射到 `password` 键；应用容器随后通过 `env[].valueFrom.secretKeyRef` 引用这个 Kubernetes Secret，把值注入为 `DB_USERNAME` 与 `DB_PASSWORD` 环境变量。
+
+下面的 `secretObjects` 示例同样来自官方 examples 页的结构：`data[].objectName` 必须引用 `objects` 里已经声明过的对象别名，`key` 才是同步出来的 Kubernetes Secret 键名。要让同步发生，仍然需要有一个 Pod 挂载这个 `SecretProviderClass`；CSI driver 在处理 volume mount 时才会把对象同步为 Kubernetes Secret。
+
+```yaml
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: vault-kv-env
+  namespace: csi-demo
+spec:
+  provider: vault
+  secretObjects:
+    - secretName: vault-csi-app-env
+      type: Opaque
+      data:
+        - objectName: appUsername
+          key: username
+        - objectName: appPassword
+          key: password
+  parameters:
+    roleName: "csi-app"
+    vaultAddress: "http://vault.vault.svc:8200"
+    vaultAuthMountPath: "kubernetes"
+    objects: |
+      - objectName: "appUsername"
+        secretPath: "secret/data/csi/app"
+        secretKey: "username"
+      - objectName: "appPassword"
+        secretPath: "secret/data/csi/app"
+        secretKey: "password"
+```
+
+下面这个 Deployment 的主要作用是触发同步：它挂载 `vault-kv-env`，因此 CSI driver 会读取 Vault 数据，并创建名为 `vault-csi-app-env` 的 Kubernetes Secret。真实应用也可以把“触发同步”和“读取环境变量”放在同一个工作负载中；本教程拆开写，是为了让同步边界更清楚。
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-env-syncer
+  namespace: csi-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-env-syncer
+  template:
+    metadata:
+      labels:
+        app: csi-env-syncer
+    spec:
+      serviceAccountName: app
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["/bin/sh", "-c", "ls -l /mnt/secrets-store && sleep 3600"]
+          volumeMounts:
+            - name: vault-kv
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: vault-kv
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: vault-kv-env
+```
+
+同步出的 Kubernetes Secret 可以像普通 Secret 一样被 `secretKeyRef` 使用。注意，这一步读取的是 Kubernetes Secret 中已经物化的数据，不再是容器直接从 `/mnt/secrets-store` 读取文件。
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: csi-env-app
+  namespace: csi-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-env-app
+  template:
+    metadata:
+      labels:
+        app: csi-env-app
+    spec:
+      serviceAccountName: app
+      containers:
+        - name: app
+          image: busybox:1.36
+          command: ["/bin/sh", "-c", "env | grep '^APP_' && sleep 3600"]
+          env:
+            - name: APP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: vault-csi-app-env
+                  key: username
+            - name: APP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vault-csi-app-env
+                  key: password
+```
+
+完成同步后，可以用下面的命令检查 Kubernetes Secret 与应用环境变量。`base64 -d` 只是为了查看 Kubernetes Secret 的编码值；生产排障时应避免把真实机密直接打印到共享终端或日志里。
+
+```bash
+kubectl apply -f csi-env-sync.yaml
+kubectl -n csi-demo rollout status deployment/csi-env-syncer --timeout=180s
+kubectl -n csi-demo get secret vault-csi-app-env -o jsonpath='{.data.username}' | base64 -d && echo
+
+kubectl apply -f csi-env-app.yaml
+kubectl -n csi-demo rollout status deployment/csi-env-app --timeout=180s
+
+ENV_POD=$(kubectl -n csi-demo get pod -l app=csi-env-app -o jsonpath='{.items[0].metadata.name}')
+kubectl -n csi-demo exec "$ENV_POD" -- env | grep '^APP_'
+```
 
 需要把这两种模式的责任边界分清楚：CSI provider 的基本产物是挂载到 Pod 文件系统中的文件；环境变量模式并不是 provider 直接修改容器环境，而是先把对象同步为 Kubernetes Secret，再由 Kubernetes 的常规 `secretKeyRef` 机制注入环境变量。即使采用环境变量模式，官方示例仍然让 Pod 通过 CSI volume 引用同一个 `SecretProviderClass`；示例说明该 Pod 挂载 CSI volume 后，机密会挂载到 `/mnt/secrets-store`，同时额外创建 Kubernetes Secret 并由 `secretKeyRef` 引用。
 
@@ -112,6 +361,6 @@ CSI provider 的官方描述集中在 Pod 创建并请求 CSI volume 时读取 V
 
 本节实验是对官方安装路径与 `SecretProviderClass` 文件挂载模式的本地改编：官方文档支持安装 Secrets Store CSI driver、通过 Vault Helm chart 启用 `csi.enabled=true`，以及让 Pod 通过 `SecretProviderClass` 挂载 Vault 机密；Killercoda 单节点环境、Vault dev server 与 KV v2 数据准备属于本教程实验设置。
 
-实验步骤基于官方认证说明与两个官方示例设计：文件挂载与 `secretObjects` 同步有官方示例支撑；检查组件状态、CRD，以及用未绑定 ServiceAccount 触发失败，是本教程用于观察边界的实验设计。实验分为四步：第一步检查 CSI driver、Vault CSI provider 与 `SecretProviderClass` CRD；第二步创建文件挂载示例并读取 `/mnt/secrets-store` 下的文件；第三步故意使用未绑定到 Vault role 的 ServiceAccount 触发挂载失败，观察 ServiceAccount 与 Vault role 的边界；第四步用 `secretObjects` 把同一份 Vault 数据同步为 Kubernetes Secret，再用 `secretKeyRef` 注入环境变量。
+实验步骤基于官方认证说明与两个官方示例设计：文件挂载与 `secretObjects` 同步有官方示例支撑；安装并检查组件状态、CRD，以及用未绑定 ServiceAccount 触发失败，是本教程用于观察边界的实验设计。实验分为四步：第一步由学员使用 Helm 安装 Secrets Store CSI driver、Vault dev server 与 Vault CSI provider，创建 `csi-demo/app` ServiceAccount，并检查 `SecretProviderClass` CRD；第二步创建文件挂载示例并读取 `/mnt/secrets-store` 下的文件；第三步故意使用未绑定到 Vault role 的 ServiceAccount 触发挂载失败，观察 ServiceAccount 与 Vault role 的边界；第四步用 `secretObjects` 把同一份 Vault 数据同步为 Kubernetes Secret，再用 `secretKeyRef` 注入环境变量。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch7-csi" title="实验：用 Secrets Store CSI Driver 与 Vault Provider 挂载机密" />

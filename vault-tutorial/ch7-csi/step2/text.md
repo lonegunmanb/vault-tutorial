@@ -1,6 +1,6 @@
 # 第二步：用 SecretProviderClass 挂载文件
 
-应用文件挂载清单。该清单会创建 `csi-demo` namespace、`app` ServiceAccount、`vault-kv-files` 这个 `SecretProviderClass`，以及一个挂载 CSI volume 的 Deployment。
+应用文件挂载清单。`csi-demo` namespace 与 `app` ServiceAccount 已经在第一步创建；这个清单会创建 `vault-kv-files` 这个 `SecretProviderClass`，以及一个挂载 CSI volume 的 Deployment。
 
 ```bash
 kubectl apply -f /root/csi-file-mount.yaml

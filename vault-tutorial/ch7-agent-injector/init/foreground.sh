@@ -6,6 +6,7 @@ done
 cd /root
 clear
 echo "Chapter 7.4 lab is ready."
+echo "Start with Step 1 to install Vault and Injector."
 echo "Vault address:     ${VAULT_ADDR:-http://127.0.0.1:8200}"
 echo "Kubernetes ns:     demo"
 echo "Annotated deploy:  /root/injector-demo.yaml"

@@ -9,7 +9,7 @@
     },
     "steps": [
       {
-        "title": "检查 Injector 与基线 Pod",
+        "title": "安装 Injector 与准备基线 Pod",
         "text": "step1/text.md"
       },
       {
@@ -30,7 +30,8 @@
     },
     "assets": {
       "host01": [
-        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"},
+        {"file": "configure-vault-agent-injector.sh", "target": "/root", "chmod": "+x"}
       ]
     }
   },

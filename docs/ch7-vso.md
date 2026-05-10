@@ -109,9 +109,97 @@ spec:
 
 `VaultDynamicSecret` 的刷新时机有两类来源：当 Vault 响应中带 lease duration 时，控制器以 lease 为准在 `renewalPercent` 时点续期/重新生成；当响应不携带 lease（例如某些非租约式引擎）时，需要通过 `refreshAfter` 显式指定一个时间间隔，且该值应落在源引擎配置的 `ttl`/`max_ttl` 范围内。
 
+下面是一个数据库动态凭据例子。它假设前面已经创建了 `vso-example` 命名空间中的 `VaultConnection` 与 `VaultAuth`，并且 `vault-auth` 绑定的 Vault policy 至少允许读取 `db/creds/my-postgresql-role`。VSO 会向 `db/creds/my-postgresql-role` 请求一组动态用户名和密码，写入名为 `dynamic-db` 的 Kubernetes Secret；当 lease 接近 67% 生命周期时，控制器会续期或重新生成凭据。
+
+```hcl
+path "db/creds/my-postgresql-role" {
+  capabilities = ["read"]
+}
+```
+
+```yaml
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  namespace: vso-example
+  name: app-database-creds
+spec:
+  vaultAuthRef: vault-auth
+  mount: db
+  path: creds/my-postgresql-role
+  renewalPercent: 67
+  revoke: true
+  destination:
+    create: true
+    name: dynamic-db
+  rolloutRestartTargets:
+    - kind: Deployment
+      name: app
+```
+
+如果读取的是 Database 引擎的 static role，Vault 返回的是由服务端周期性轮换的一组固定账号，而不是每次请求都新建的 lease 型账号。此时路径通常是 `static-creds/<role>`，并应显式打开 `allowStaticCreds`；由于这类响应的刷新节奏来自 Vault 中 static role 的轮换配置，示例中用 `refreshAfter` 让 VSO 定期拉取最新密码。
+
+```yaml
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultDynamicSecret
+metadata:
+  namespace: vso-example
+  name: reporting-database-creds
+spec:
+  vaultAuthRef: vault-auth
+  mount: db
+  path: static-creds/reporting-role
+  allowStaticCreds: true
+  refreshAfter: 1h
+  destination:
+    create: true
+    name: reporting-db
+```
+
 `VaultPKISecret` 用于把 Vault PKI 引擎签发的一张证书同步为 Kubernetes Secret，常见用法是配合 `destination.type: kubernetes.io/tls` 直接得到 `tls.crt` / `tls.key` 字段。关键字段包括：`mount`（PKI 引擎挂载点）、`role`（PKI role 名）、`commonName`、`altNames`、`ipSans`、`uriSans`、`ttl`、`format`、`expiryOffset`（在到期前多久触发续签的偏移），以及 `revoke`（资源被删除时是否撤销证书）。
 
 `VaultPKISecret` 的 `destination.type` 与文本格式之间有约定：当类型是 `kubernetes.io/tls` 时，VSO 把 Vault 响应中的 `private_key` 写入 `tls.key`；把 `certificate` 与 `ca_chain` 拼接后写入 `tls.crt`（若 `ca_chain` 为空则使用 `issuing_ca`），并启用 `remove_roots_from_chain=true` 把根 CA 排除出链。
+
+下面是一个服务证书例子。Vault 端 policy 需要允许对 `pki/issue/web` 执行 `update`，因为签发证书是一次写请求；Kubernetes 端把 `destination.type` 设为 `kubernetes.io/tls` 后，应用或 Ingress 可以按普通 TLS Secret 使用 `web-tls`。
+
+```hcl
+path "pki/issue/web" {
+  capabilities = ["update"]
+}
+```
+
+```yaml
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultPKISecret
+metadata:
+  namespace: vso-example
+  name: web-tls
+spec:
+  vaultAuthRef: vault-auth
+  mount: pki
+  role: web
+  commonName: web.vso-example.svc.cluster.local
+  altNames:
+    - web
+    - web.vso-example
+    - web.vso-example.svc
+    - web.vso-example.svc.cluster.local
+  uriSans:
+    - spiffe://cluster.local/ns/vso-example/sa/web
+  ttl: 24h
+  format: pem
+  expiryOffset: 2h
+  revoke: true
+  destination:
+    create: true
+    name: web-tls
+    type: kubernetes.io/tls
+  rolloutRestartTargets:
+    - kind: Deployment
+      name: web
+```
+
+这个例子里的续签时点由 `expiryOffset` 决定：证书距离到期还剩 2 小时时，VSO 会重新向 Vault PKI role `web` 申请证书并更新 `web-tls`。如果消费端不会自动热加载证书，`rolloutRestartTargets` 会在 Secret 变化后触发 `web` Deployment 滚动。
 
 ---
 
@@ -161,8 +249,8 @@ VSO 与 CSI、Sidecar 这三种模式并不互斥，可以根据不同业务的�
 
 ## 10. 互动实验
 
-本节配套实验在 Killercoda 提供的 Kubernetes 单节点环境中完成。实验会用 Helm 安装 Vault dev server 与 VSO，启用 Kubernetes auth method，写入一条 KV v2 机密，再通过 `VaultConnection` + `VaultAuth` + `VaultStaticSecret` 三件套把该机密物化为应用命名空间下的原生 Kubernetes Secret，最后给 `VaultStaticSecret` 配置 `rolloutRestartTargets`，亲手验证 Vault 侧的更新如何触发 Deployment 滚动。
+本节配套实验在 Killercoda 提供的 Kubernetes 单节点环境中完成。第一步会由学员亲自使用 Helm 安装 Vault dev server 与 VSO，创建 `vso-demo/vso-app` ServiceAccount，并授权 Vault server ServiceAccount 调用 TokenReview；随后实验通过 Kubernetes Job 启用 Kubernetes auth method、写入一条 KV v2 机密，再通过 `VaultConnection` + `VaultAuth` + `VaultStaticSecret` 三件套把该机密物化为应用命名空间下的原生 Kubernetes Secret，最后给 `VaultStaticSecret` 配置 `rolloutRestartTargets`，亲手验证 Vault 侧的更新如何触发 Deployment 滚动。
 
-实验分为四步：第一步检查 VSO 控制器与 CRD；第二步创建 `VaultConnection` 与 `VaultAuth`，让 operator 能以 ServiceAccount 身份登录 Vault；第三步创建 `VaultStaticSecret` 把 Vault 的 `secret/vso/app` 同步为应用命名空间下的 `vso-app-secret`；第四步给 `VaultStaticSecret` 增加 `rolloutRestartTargets`，更新 Vault 中的密码，观察消费 Pod 是否被自动滚动重启。
+实验分为四步：第一步安装 Vault 与 VSO、创建实验身份，并检查 VSO 控制器与 CRD；第二步创建 `VaultConnection` 与 `VaultAuth`，让 operator 能以 ServiceAccount 身份登录 Vault；第三步创建 `VaultStaticSecret` 把 Vault 的 `secret/vso/app` 同步为应用命名空间下的 `vso-app-secret`；第四步给 `VaultStaticSecret` 增加 `rolloutRestartTargets`，更新 Vault 中的密码，观察消费 Pod 是否被自动滚动重启。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch7-vso" title="实验：用 Vault Secrets Operator 把 Vault 机密同步为 K8s Secret 并触发滚动" />

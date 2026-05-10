@@ -1,10 +1,12 @@
 # 实验说明
 
-本实验使用 Killercoda 提供的 Kubernetes 单节点环境。后台脚本会完成以下准备工作：安装 Vault CLI 与 Helm，安装 Secrets Store CSI driver，使用 Vault Helm chart 安装一个 dev 模式 Vault Server 与 Vault Secrets Store CSI provider，并在 Vault 中预置 `secret/csi/app` 这条 KV v2 机密。
+本实验使用 Killercoda 提供的 Kubernetes 单节点环境。后台脚本只安装 Vault CLI、Helm 与常用命令行工具；Secrets Store CSI driver、Vault dev server、Vault Secrets Store CSI provider，以及实验 namespace / ServiceAccount 都会在第一步由你执行安装与创建。
+
+第一步会运行 `/root/configure-vault-csi.sh`，通过 Kubernetes Job 在 Vault 中配置 Kubernetes auth method、KV v2 机密 `secret/csi/app`、policy 与 Vault role `csi-app`，并生成后续步骤使用的 `/root/csi-file-mount.yaml`、`/root/csi-bad-sa.yaml`、`/root/csi-env-sync.yaml` 与 `/root/csi-env-app.yaml`。
 
 你将依次完成四个任务：
 
-1. 检查 Secrets Store CSI driver、Vault provider 与 `SecretProviderClass` CRD。
+1. 安装 Secrets Store CSI driver、Vault provider，创建实验身份，并检查 `SecretProviderClass` CRD。
 2. 创建 `SecretProviderClass` 与 Deployment，把 Vault 机密挂载到 `/mnt/secrets-store`。
 3. 使用未授权 ServiceAccount 触发挂载失败，观察 Vault role 与 Pod 身份的边界。
 4. 使用 `secretObjects` 把同一份数据同步为 Kubernetes Secret，并通过 `secretKeyRef` 注入环境变量。

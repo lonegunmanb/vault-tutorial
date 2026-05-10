@@ -266,7 +266,7 @@ Injector 的优势，是在不改业务镜像的前提下把 Vault 机密以文�
 
 ## 9. 互动实验
 
-本节配套实验使用 Killercoda 提供的 kubeadm 单节点 Kubernetes 环境。实验会用 Helm 安装 Vault dev server 与 Vault Agent Injector，配置 Kubernetes auth method，创建一条 KV v2 机密，再让一个 `busybox` Deployment 通过 Pod template annotations 自动获得 Vault Agent init container、sidecar container 和 `/vault/secrets/config.txt` 文件。
+本节配套实验使用 Killercoda 提供的 kubeadm 单节点 Kubernetes 环境。第一步会由学员亲自使用 Helm 安装 Vault dev server 与 Vault Agent Injector，创建 `demo/webapp` ServiceAccount，并授权 Vault server ServiceAccount 调用 TokenReview；随后实验通过 Kubernetes Job 配置 Vault Kubernetes auth method 和 KV v2 机密，再让一个 `busybox` Deployment 通过 Pod template annotations 自动获得 Vault Agent init container、sidecar container 和 `/vault/secrets/config.txt` 文件。
 
 实验还会创建一个 `Job`，通过 `vault.hashicorp.com/agent-pre-populate-only: "true"` 只注入 init container，不注入 sidecar，让学员观察为什么官方建议 Job / CronJob 使用 init-only 模式。
 

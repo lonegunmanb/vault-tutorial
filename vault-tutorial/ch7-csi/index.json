@@ -9,7 +9,7 @@
     },
     "steps": [
       {
-        "title": "检查 CSI 组件与 CRD",
+        "title": "安装 CSI 组件与准备身份",
         "text": "step1/text.md"
       },
       {
@@ -30,7 +30,8 @@
     },
     "assets": {
       "host01": [
-        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"},
+        {"file": "configure-vault-csi.sh", "target": "/root", "chmod": "+x"}
       ]
     }
   },
