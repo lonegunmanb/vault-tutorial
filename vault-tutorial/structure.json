@@ -48,6 +48,7 @@
     { "path": "ch7-agent" },
     { "path": "ch7-vault-proxy" },
     { "path": "ch7-agent-injector" },
-    { "path": "ch7-csi" }
+    { "path": "ch7-csi" },
+    { "path": "ch7-vso" }
   ]
 }

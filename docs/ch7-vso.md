@@ -209,9 +209,15 @@ spec:
 
 ## 7. 客户端缓存与即时更新的能力边界
 
-VSO 内部维护一份「Vault client cache」，用于缓存 Vault token 与动态机密 lease，使控制器在 leader 切换、滚动升级等场景下仍能延续既有 token/lease 的跟踪与续期。该缓存默认**不**持久化，也**不**默认开启加密；要把缓存持久化并加密存储到 Kubernetes Secret 中，需要在 Vault 侧启用 `transit` 机密引擎并准备加密密钥，再在 VSO Helm values 中把 `controller.manager.clientCache.persistenceModel` 设为 `direct-encrypted` 并配置 `storageEncryption` 块。
+VSO 内部维护一份「Vault client cache」。这里的 client 不是业务 Pod，也不是 Kubernetes ServiceAccount，而是 VSO controller 进程里创建的 Vault API client：它代表某个 `VaultConnection` + `VaultAuth` 组合，持有登录 Vault 后得到的 token，并负责后续读取、续期和撤销操作。cache 里保存的是这些已认证 Vault client 的运行时状态；`VaultDynamicSecret.status` 里记录的是本资源上次同步到的 lease 摘要，例如 lease id、duration、是否 renewable，以及用于找到 client cache 条目的 `cacheKey`。
 
-官方对动态机密场景给出强烈建议：如果使用 `VaultDynamicSecret`，应启用并加密 client cache，以便在 VSO 重启或升级后仍能维护既有 lease 而不是触发大量重新签发。本课程实验环境使用单节点 Killercoda Kubernetes，仅演示静态 KV 同步与 rolloutRestartTargets，不强制开启加密缓存；当读者把 VSO 投入生产时，应把这一项作为 Day-2 必做项。
+这两份数据故意不一样。`VaultDynamicSecret.status` 属于 Kubernetes CR 的可观察状态，适合放 lease id、过期时间、`cacheKey` 这类控制面摘要，但不应该放 Vault token 这类敏感登录凭证；client cache 则是运行时内部状态，包含能代表该 `VaultAuth` 继续访问 Vault 的已认证 client/token。换句话说，CR status 记录的是“上次拿到哪张 lease 单据”，client cache 保存的是“当时拿着哪位 Vault client 的登录凭证去维护它”。
+
+默认情况下，client cache 只在 VSO controller Pod 的内存里。准确地说，VSO 运行时一直有这份内存 cache；问题是它默认不持久化。Pod 重启、滚动升级、leader 切换到另一个 controller 实例时，新的进程仍能从 `VaultDynamicSecret.status` 看到旧 lease id 和 `cacheKey`，但原来这个 `cacheKey` 对应的已认证 Vault client/token 缓存条目已经随旧进程消失。它可以重新根据 CR 登录 Vault、拿到新的 token，但这只是创建一个新的 client，不等于恢复了旧 client 的完整运行时状态。对 `VaultDynamicSecret` 来说，读取 `db/creds/...`、`aws/creds/...` 这类路径通常会签发一套新的账号或云凭据；如果 VSO 重启后无法恢复原 client/lease 状态，重新 reconcile 很多 `VaultDynamicSecret` 时就可能集中触发新凭据签发，而不是平滑续期原有 lease。
+
+这也是官方强烈建议动态机密场景启用并加密 client cache 的原因：它不是把 `VaultDynamicSecret.status` 再复制一份，而是把 status 不能安全承载的已认证 client/token 状态加密后持久化。启用后，需要在 Vault 侧准备 `transit` 加密密钥，并在 VSO Helm values 中把 `controller.manager.clientCache.persistenceModel` 设为 `direct-encrypted`、配置 `storageEncryption` 块。加密操作由 Vault `transit` 完成，密文 cache 会以 Kubernetes Secret 的形式存放在 operator 命名空间里，名称通常带有 `vso-cc-<auth method>` 前缀；这样 VSO 重启或升级后可以用 `VaultDynamicSecret.status.cacheKey` 找回对应的 client cache 条目，继续维护既有 lease。
+
+本课程实验环境使用单节点 Killercoda Kubernetes，仅演示静态 KV 同步与 `rolloutRestartTargets`。`VaultStaticSecret` 读取 KV 不会像动态数据库账号那样每次签发新 lease，因此实验不强制开启加密缓存；当读者把 VSO 用于 `VaultDynamicSecret` 等生产场景时，应把加密持久化 client cache 作为 Day-2 必做项。
 
 `VaultStaticSecret` 还有一个名为「instant updates」的事件驱动更新通道：当 Vault 发生 KV 变更时，VSO 通过 Vault 的事件订阅 WebSocket 立刻收到通知并触发同步，不必等 `refreshAfter` 周期到来。该能力**仅适用于 Vault Enterprise 1.16.3+**，启用方式是在 `VaultStaticSecret.spec.syncConfig.instantUpdates` 中设为 `true`，并给绑定的 Vault 角色 policy 增加 `subscribe` capability 与 `sys/events/subscribe/kv*` 的读取权限。开源版 Vault 不支持这一通道，本课程仅简要提及。
 
