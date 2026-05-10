@@ -52,9 +52,13 @@ vault kv put secret/demo trigger=after-sighup > /dev/null
 echo "SIGHUP 之后 vault 重新打开了文件描述符，新 vault-audit.log 已被创建并继续写入："
 ls -la /var/log/vault/vault-audit.log
 tail -n 1 /var/log/vault/vault-audit.log | jq -c '{type, "path": .request.path, "id": .request.id}'
+
+echo
+echo "现在目录里同时存在「归档的 .1」与「全新的 .log」两份文件："
+ls -la /var/log/vault/ | grep -E 'vault-audit\.log(\.1)?$'
 ```
 
-预期可以看到：原始 `vault-audit.log` 被重命名为 `.1` 后，vault 在 `SIGHUP` 之后立刻在原路径重建一份新 `vault-audit.log`，并把后续审计记录平滑写入新文件——正是 `file` 审计设备配合 logrotate 的标准时序。
+预期最后一条 `ls` 会同时列出两行：被改名归档的 `vault-audit.log.1`（保留所有历史记录、字节数较大），以及 `kill -HUP` 之后 vault 在原路径重建的全新 `vault-audit.log`（仅包含 SIGHUP 之后写入的新记录、字节数较小）。这正是 `file` 审计设备配合 logrotate 的标准时序。
 
 ## 3.4 这一步的核心闭环
 

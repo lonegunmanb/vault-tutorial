@@ -120,7 +120,8 @@ export default defineConfig({
            collapsed: false,
            items: [
              { text: '8.1 审计日志综述', link: '/ch8-audit-overview' },
-             { text: '8.2 三种内置审计设备配置详解（File / Syslog / Socket）', link: '/ch8-audit-devices' }
+             { text: '8.2 三种内置审计设备配置详解（File / Syslog / Socket）', link: '/ch8-audit-devices' },
+             { text: '8.3 审计日志最佳实践（含 CVE-2025-6000 安全加固指导）', link: '/ch8-audit-best-practices' }
            ]
          }
         ],
