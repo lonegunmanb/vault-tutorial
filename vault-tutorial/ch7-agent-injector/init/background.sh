@@ -75,7 +75,7 @@ set +e
 export VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8200}"
 export VAULT_TOKEN="${VAULT_TOKEN:-root}"
 
-if vault status > /dev/null 2>&1; then
+if vault auth list 2>/dev/null | grep -q '^kubernetes/'; then
   exit 0
 fi
 
@@ -83,7 +83,7 @@ pkill -f "kubectl -n vault port-forward svc/vault 8200:8200" > /dev/null 2>&1 ||
 nohup kubectl -n vault port-forward svc/vault 8200:8200 > /tmp/vault-port-forward.log 2>&1 < /dev/null &
 
 for attempt in $(seq 1 45); do
-  if vault status > /dev/null 2>&1; then
+  if vault auth list 2>/dev/null | grep -q '^kubernetes/'; then
     exit 0
   fi
   sleep 1
@@ -95,13 +95,6 @@ exit 1
 EOF
 chmod +x /usr/local/bin/ensure-vault-port-forward
 
-echo "Waiting for Vault service port-forward..."
-if ensure-vault-port-forward; then
-  echo "Vault is ready through port-forward."
-else
-  echo "WARNING: Vault port-forward did not become ready."
-fi
-
 kubectl create namespace demo > /dev/null 2>&1 || true
 kubectl -n demo create serviceaccount webapp > /dev/null 2>&1 || true
 kubectl -n vault create serviceaccount vault-reviewer > /dev/null 2>&1 || true
@@ -109,10 +102,7 @@ kubectl create clusterrolebinding vault-reviewer-tokenreview \
   --clusterrole=system:auth-delegator \
   --serviceaccount=vault:vault-reviewer > /dev/null 2>&1 || true
 
-REVIEWER_JWT=$(kubectl -n vault create token vault-reviewer --duration=1h 2>/dev/null)
 WEBAPP_TEST_JWT=$(kubectl -n demo create token webapp --duration=10m 2>/dev/null)
-K8S_CA_CERT=/tmp/k8s-ca.crt
-kubectl config view --raw --minify -o 'jsonpath={.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$K8S_CA_CERT"
 decode_jwt_issuer() {
   local payload
   payload=$(printf '%s' "$1" | cut -d. -f2 | tr -- '-_' '+/')
@@ -128,32 +118,98 @@ if [ -z "$K8S_ISSUER" ]; then
 fi
 echo "Kubernetes ServiceAccount issuer: ${K8S_ISSUER:-unknown}"
 
-vault auth enable kubernetes > /dev/null 2>&1 || true
-vault write auth/kubernetes/config \
-  token_reviewer_jwt="$REVIEWER_JWT" \
-  kubernetes_host="https://kubernetes.default.svc:443" \
-  kubernetes_ca_cert=@"$K8S_CA_CERT" \
-  issuer="$K8S_ISSUER" > /dev/null
+VAULT_TARGETS=$(kubectl -n vault get pods \
+  -l app.kubernetes.io/name=vault,component=server \
+  -o jsonpath='{range .items[*]}{.metadata.name}{".vault-internal "}{end}' 2>/dev/null)
+if [ -z "$VAULT_TARGETS" ]; then
+  VAULT_TARGETS="vault-0.vault-internal"
+fi
+VAULT_JOB_IMAGE=$(kubectl -n vault get pod vault-0 \
+  -o jsonpath='{.spec.containers[?(@.name=="vault")].image}' 2>/dev/null)
+VAULT_JOB_IMAGE="${VAULT_JOB_IMAGE:-hashicorp/vault:1.21.2}"
 
-vault secrets enable -path=secret kv-v2 > /dev/null 2>&1 || true
-vault kv put secret/injector/web username="injector-demo" password="initial-password" > /dev/null
+kubectl -n vault delete job vault-agent-injector-init --ignore-not-found=true > /dev/null 2>&1
+cat > /tmp/vault-agent-injector-init-job.yaml <<EOF
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-agent-injector-init
+  namespace: vault
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: vault-agent-injector-init
+    spec:
+      restartPolicy: Never
+      serviceAccountName: vault-reviewer
+      containers:
+        - name: init
+          image: ${VAULT_JOB_IMAGE}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: VAULT_TOKEN
+              value: root
+            - name: K8S_ISSUER
+              value: "${K8S_ISSUER}"
+            - name: VAULT_TARGETS
+              value: "${VAULT_TARGETS}"
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              REVIEWER_JWT="\$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+              K8S_CA_CERT=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 
-cat > /root/webapp-policy.hcl <<'EOF'
+              for target in \$VAULT_TARGETS; do
+                export VAULT_ADDR="http://\${target}:8200"
+                echo "Initializing \${VAULT_ADDR}"
+
+                ready=false
+                for attempt in \$(seq 1 60); do
+                  if vault status > /dev/null 2>&1; then
+                    ready=true
+                    break
+                  fi
+                  sleep 2
+                done
+                if [ "\$ready" != "true" ]; then
+                  echo "Vault target did not become ready: \${VAULT_ADDR}" >&2
+                  exit 1
+                fi
+
+                vault auth enable kubernetes > /dev/null 2>&1 || true
+                vault write auth/kubernetes/config \
+                  token_reviewer_jwt="\$REVIEWER_JWT" \
+                  kubernetes_host="https://kubernetes.default.svc:443" \
+                  kubernetes_ca_cert=@"\$K8S_CA_CERT" \
+                  issuer="\$K8S_ISSUER" > /dev/null
+
+                vault secrets enable -path=secret kv-v2 > /dev/null 2>&1 || true
+                vault kv put secret/injector/web \
+                  username="injector-demo" \
+                  password="initial-password" > /dev/null
+
+                vault policy write webapp - > /dev/null <<'POLICY'
 path "secret/data/injector/web" {
   capabilities = ["read"]
 }
+POLICY
+
+                vault write auth/kubernetes/role/webapp \
+                  bound_service_account_names="webapp" \
+                  bound_service_account_namespaces="demo" \
+                  token_policies="webapp" \
+                  token_ttl="24h" > /dev/null
+              done
 EOF
-vault policy write webapp /root/webapp-policy.hcl > /dev/null
 
-vault write auth/kubernetes/role/webapp \
-  bound_service_account_names="webapp" \
-  bound_service_account_namespaces="demo" \
-  policies="webapp" \
-  ttl="24h" > /dev/null
-
-if [ -n "$WEBAPP_TEST_JWT" ]; then
-  vault write auth/kubernetes/login role="webapp" jwt="$WEBAPP_TEST_JWT" > /dev/null 2>&1 \
-    || echo "WARNING: Vault Kubernetes auth login test failed for demo/webapp"
+kubectl apply -f /tmp/vault-agent-injector-init-job.yaml > /dev/null
+if ! kubectl -n vault wait --for=condition=complete job/vault-agent-injector-init --timeout=240s > /tmp/vault-agent-injector-init.log 2>&1; then
+  echo "WARNING: Vault initialization job did not complete. Recent logs:"
+  kubectl -n vault logs job/vault-agent-injector-init --tail=120 || true
 fi
 
 cat > /root/baseline.yaml <<'EOF'

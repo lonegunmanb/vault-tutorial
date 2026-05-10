@@ -15,7 +15,7 @@ INJECTED_POD=$(kubectl -n demo get pod -l app=injector-demo -o jsonpath='{.items
 echo "$INJECTED_POD"
 ```
 
-如果 rollout 超时，先不要删除 Deployment。通常可以从 Deployment、ReplicaSet、Pod events 以及 `vault-agent-init` 日志中判断问题发生在 webhook mutation、Pod 调度、镜像拉取，还是 Vault Kubernetes auth 初始化阶段；需要时可以向助教索取诊断命令。
+如果 rollout 超时，先不要删除 Deployment，保留现场方便排查。
 
 Injector 成功改写后，会给 Pod 增加 `vault.hashicorp.com/agent-inject-status: injected` 注解，用来阻止重复 mutation。
 
