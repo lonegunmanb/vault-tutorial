@@ -12,7 +12,7 @@ group_order: 80
 > LIST 响应省略、自定义前缀等），并各自有一组「类型专属选项」（`file` 关注
 > 文件路径与文件权限模式、`syslog` 关注 facility 与 tag、`socket` 关注地址、
 > 套接字类型与写超时）。本节先把三类设备的启用方式、专属选项、可观察行为
-> 与各自的失效模式逐一拆开讲透，作为后续 [8.3 最佳实践](/ch8-audit-best-practices)
+> 与各自的失效模式逐一拆开讲透，作为后续 8.3 最佳实践
 > 中各项推荐配置的事实依据。本节配套实验：
 
 
@@ -240,6 +240,6 @@ socket 审计设备一旦阻塞太久，会反过来拖累 Vault 自身。
 台非 socket 设备兜底；TCP 在连接断开瞬间可能丢一条且长期不可达会反
 拖累 Vault；最稳妥的 socket 部署形态是本机 Unix Socket。
 
-掌握这三类设备的差异之后，即可进入配套实验完成可观察的全流程复现；进一步则进入 [8.3 最佳实践](/ch8-audit-best-practices)，在本节事实基础上提炼推荐的部署形态与告警指标组合。
+掌握这三类设备的差异之后，即可进入配套实验完成可观察的全流程复现；进一步则进入 8.3 最佳实践（待发布），在本节事实基础上提炼推荐的部署形态与告警指标组合。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch8-audit-devices" title="实验：File / Syslog / Socket 三种审计设备启用与对照观察" />
