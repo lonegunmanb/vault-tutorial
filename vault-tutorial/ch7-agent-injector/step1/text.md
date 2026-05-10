@@ -8,7 +8,7 @@ kubectl -n vault get deployment vault-agent-injector
 kubectl get mutatingwebhookconfigurations | grep vault
 ```
 
-确认 Vault 中已经存在本实验的 Kubernetes auth role 与 KV v2 机密。
+确认 Vault 中已经存在本实验的 Kubernetes auth role 与 KV v2 机密。下面的 Vault CLI 命令是在 controlplane 上执行的，因此先手动建立到集群内 Vault Service 的端口转发；这一步只用于本地 CLI 访问，不负责初始化 Vault。
 
 ```bash
 ensure-vault-port-forward
