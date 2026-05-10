@@ -51,7 +51,7 @@ vault token lookup > /dev/null
 tail -n 3 /var/log/vault/vault-audit.log | jq -c '{type, time, "request.path": .request.path, "request.id": .request.id}'
 ```
 
-预期可看到形如 `{"type":"request","time":"...","request.path":"secret/data/demo","request.id":"..."}` 的结构化条目。每一次 API 调用都会产生一条 `type=request` 与一条 `type=response`，二者通过 `request.id` 配对。
+预期可看到形如 `{"type":"request","time":"...","request.path":"secret/data/demo","request.id":"..."}` 的结构化条目。每一次 API 调用都会产生一条 type=request 与一条 type=response，二者通过 request.id 配对。
 
 ## 1.4 验证敏感字段默认被 HMAC
 

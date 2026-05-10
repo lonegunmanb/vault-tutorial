@@ -31,7 +31,7 @@ vault audit enable -path=socket/ socket \
 vault audit list -detailed
 ```
 
-预期看到 `file/`、`syslog/`、`socket/` 三行。
+预期看到 file/、syslog/、socket/ 三行。
 
 ## 2.3 触发同一组操作，并对照三处目的地的产物
 

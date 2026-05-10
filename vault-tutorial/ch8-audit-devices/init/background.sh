@@ -64,11 +64,32 @@ EOF
 chmod +x /root/stop-vault.sh
 
 # 启动 rsyslog，并把 local0 facility 单独引到一份方便观察的文件中。
+# Killercoda Ubuntu 的两个坑：
+#   1. /dev/log 被 systemd-journald 的 syslog.socket 占用，rsyslog 收不到消息；
+#   2. rsyslog 默认 PrivDrop 到 syslog 用户，对自定义日志路径无写权限。
+# 下面一次性消除这两个问题，让 logger 与 vault 的 syslog 审计都能落盘。
 cat > /etc/rsyslog.d/49-vault-audit.conf <<'EOF'
 local0.* /var/log/vault/vault-audit.syslog
 EOF
-service rsyslog restart > /dev/null 2>&1
+
+# 取消 PrivDrop，让 rsyslog 以 root 运行（教学环境专用）。
+sed -i 's|^\$PrivDropToUser .*||; s|^\$PrivDropToGroup .*||' /etc/rsyslog.conf
+sed -i 's|PrivDropToUser="syslog"||g; s|PrivDropToGroup="syslog"||g' /etc/rsyslog.conf
+# 显式让 imuxsock 监听 /dev/log。
+if grep -q '^module(load="imuxsock")' /etc/rsyslog.conf; then
+  sed -i 's|^module(load="imuxsock").*|module(load="imuxsock" SysSock.Name="/dev/log")|' /etc/rsyslog.conf
+fi
+
+# 释放 systemd 对 /dev/log 的占用，再让 rsyslog 自己 bind 该 socket。
+systemctl stop syslog.socket 2>/dev/null
+systemctl mask syslog.socket 2>/dev/null
+pkill -9 rsyslogd 2>/dev/null
+rm -f /dev/log
+nohup rsyslogd -n -iNONE > /var/log/rsyslogd.out 2>&1 &
+sleep 1
+
 touch /var/log/vault/vault-audit.syslog
+chown root:root /var/log/vault/vault-audit.syslog
 chmod 644 /var/log/vault/vault-audit.syslog
 
 touch /tmp/.setup-done

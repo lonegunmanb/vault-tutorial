@@ -8,7 +8,7 @@
 
 为完全规避真实云成本，整个实验都在单台 Killercoda 主机上完成：
 
-- 已安装 `vault`（1.19.2）、`jq`、`curl`、`rsyslog`、`socat`；
+- 已安装 vault（1.19.2）、jq、curl、rsyslog、socat；
 - 已预置 `/root/vault.hcl`：单节点 raft 存储位于 `/opt/vault/data`、监听 `0.0.0.0:8200`、`tls_disable = true`；
 - 已写入 `VAULT_ADDR=http://127.0.0.1:8200`；
 - 已生成便捷脚本 `/root/start-vault.sh`、`/root/stop-vault.sh`；
