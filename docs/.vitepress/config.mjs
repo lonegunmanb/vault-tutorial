@@ -111,7 +111,8 @@ export default defineConfig({
              { text: '7.3 Vault Proxy：API 代理、缓存与应用身份边界', link: '/ch7-vault-proxy' },
              { text: '7.4 Kubernetes 集成模式之一：Vault Agent Sidecar Injector（vault-k8s）', link: '/ch7-agent-injector' },
              { text: '7.5 Kubernetes 集成模式之二：Secrets Store CSI Driver + Vault Provider', link: '/ch7-csi' },
-             { text: '7.6 Kubernetes 集成模式之三：Vault Secrets Operator (VSO) 控制器与 CRD 模型', link: '/ch7-vso' }
+             { text: '7.6 Kubernetes 集成模式之三：Vault Secrets Operator (VSO) 控制器与 CRD 模型', link: '/ch7-vso' },
+             { text: '7.8 三种 Kubernetes 集成模式选型与本章小结', link: '/ch7-k8s-selection' }
            ]
          }
         ],

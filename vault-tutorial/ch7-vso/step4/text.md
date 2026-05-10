@@ -13,11 +13,13 @@ kubectl apply -f /root/vso-static-secret-rollout.yaml
 kubectl -n vso-demo describe vaultstaticsecret vso-app-static | tail -20
 ```
 
-记录当前 Deployment 的 `pod-template-hash`，用作稍后比对滚动是否发生的基线。
+记录当前 Deployment 的 `pod-template-hash`，用作稍后比对滚动是否发生的基线。这里同时显示 `DESIRED` 和 `READY`：旧 ReplicaSet 如果已经被缩到 0，`READY` 可能显示为 `<none>`，这不是错误。
 
 ```bash
-kubectl -n vso-demo get rs -l app=vso-app \
-  -o custom-columns=NAME:.metadata.name,PODHASH:.metadata.labels.pod-template-hash,READY:.status.readyReplicas
+printf 'NAME\tPODHASH\tDESIRED\tREADY\n'
+kubectl -n vso-demo get rs -l app=vso-app -o json \
+  | jq -r '.items[] | [.metadata.name, .metadata.labels["pod-template-hash"], (.spec.replicas // 0), (.status.readyReplicas // 0)] | @tsv' \
+  | sort
 ```
 
 再次更新 Vault 中的 KV，把密码改成下一个值。
@@ -38,15 +40,22 @@ kubectl -n vso-demo get deployment vso-app \
 应该可以看到一个名为 `vso.secrets.hashicorp.com/restartedAt` 的 annotation，其值是触发滚动时的时间戳。Kubernetes 会因为 pod template 变化创建新的 ReplicaSet，并按 Deployment 的更新策略滚动 Pod。
 
 ```bash
-kubectl -n vso-demo get rs -l app=vso-app \
-  -o custom-columns=NAME:.metadata.name,PODHASH:.metadata.labels.pod-template-hash,READY:.status.readyReplicas
 kubectl -n vso-demo rollout status deployment/vso-app --timeout=120s
+
+printf 'NAME\tPODHASH\tDESIRED\tREADY\n'
+kubectl -n vso-demo get rs -l app=vso-app -o json \
+  | jq -r '.items[] | [.metadata.name, .metadata.labels["pod-template-hash"], (.spec.replicas // 0), (.status.readyReplicas // 0)] | @tsv' \
+  | sort
 ```
+
+如果你看到多条 ReplicaSet，其中只有最新的一条 `DESIRED=1`、`READY=1`，旧的几条 `DESIRED=0`、`READY=0`，就说明滚动已经成功。关键是新旧 `PODHASH` 发生了变化，而不是旧 ReplicaSet 是否还留在列表里；Kubernetes 会保留历史 ReplicaSet 作为 Deployment 的 rollout revision。
 
 进入新的 Pod 验证 `APP_PASSWORD` 已经被替换。
 
 ```bash
-NEW_POD=$(kubectl -n vso-demo get pod -l app=vso-app -o jsonpath='{.items[0].metadata.name}')
+NEW_POD=$(kubectl -n vso-demo get pod -l app=vso-app \
+  --field-selector=status.phase=Running \
+  -o jsonpath='{.items[0].metadata.name}')
 kubectl -n vso-demo exec "$NEW_POD" -- env | grep '^APP_'
 ```
 

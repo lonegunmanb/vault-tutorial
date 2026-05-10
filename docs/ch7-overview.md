@@ -165,7 +165,7 @@ Vault 拉取或同步机密。区分清楚两者的方向有助于避免后续�
 > - 7.2 聚焦 Vault Agent 的两条主线（模板渲染、进程供给）；
 > - 7.3 专门讨论 Vault Proxy 的部署拓扑、身份边界与缓存边界；
 > - 7.4 / 7.5 / 7.6 分别动手实战 Agent Injector、CSI provider、VSO 静态机密；
-> - 7.9 收束三种 K8s 集成的选型矩阵与决策树。
+> - 7.8 收束三种 K8s 集成的选型矩阵与决策树。
 
 ---
 
@@ -187,6 +187,6 @@ Vault 拉取或同步机密。区分清楚两者的方向有助于避免后续�
   锚点。
 
 本实验只覆盖单机三种方式的对比，不在此处部署 Kubernetes 控制器；
-Kubernetes 三件套的实验留到 7.5 / 7.6 / 7.7 / 7.8 节再展开。
+Kubernetes 三件套的实验留到 7.4 / 7.5 / 7.6 节展开，7.8 节再做统一选型收束。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch7-overview" title="实验：用三种方式各取一次同一份 KV 机密" />
