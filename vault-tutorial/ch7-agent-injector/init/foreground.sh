@@ -4,7 +4,6 @@ while [ ! -f /tmp/.setup-done ]; do
 done
 
 cd /root
-/usr/local/bin/ensure-vault-port-forward > /dev/null 2>&1 || true
 clear
 echo "Chapter 7.4 lab is ready."
 echo "Vault address:     ${VAULT_ADDR:-http://127.0.0.1:8200}"
