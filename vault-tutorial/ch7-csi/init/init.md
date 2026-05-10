@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | Step 1 | 安装平台组件，创建实验身份，准备 Vault 端数据 | 先把“厨房”和“食材”准备好，后面 Pod 才能点单取机密 |
 | Step 2 | 创建 `SecretProviderClass` 和一个 Deployment | Pod 可以把 Vault 机密挂载成容器里的普通文件 |
-| Step 3 | 故意让 Pod 使用错误的 ServiceAccount | Vault role 会检查 Pod 身份，不是任何 Pod 都能取同一份机密 |
+| Step 3 | 先让 Pod 使用错误的 ServiceAccount，再修回正确身份 | Vault role 会检查 Pod 身份；修回 `csi-demo/app` 后挂载会恢复成功 |
 | Step 4 | 使用 `secretObjects` 同步 Kubernetes Secret，再注入环境变量 | 如果应用只能读环境变量，可以先同步成 K8s Secret，再用 `secretKeyRef` 注入 |
 
 本实验里几个名字的含义如下：
@@ -33,7 +33,7 @@
 
 1. 安装 Secrets Store CSI driver、Vault provider，创建实验身份，并检查 `SecretProviderClass` CRD。
 2. 创建 `SecretProviderClass` 与 Deployment，把 Vault 机密挂载到 `/mnt/secrets-store`。
-3. 使用未授权 ServiceAccount 触发挂载失败，观察 Vault role 与 Pod 身份的边界。
+3. 使用未授权 ServiceAccount 触发挂载失败，再修回正确身份，观察 Vault role 与 Pod 身份的边界。
 4. 使用 `secretObjects` 把同一份数据同步为 Kubernetes Secret，并通过 `secretKeyRef` 注入环境变量。
 
 实验使用 KV v2 静态机密来聚焦 CSI 挂载链路。动态数据库凭据、证书 lease 与轮转策略会在后续数据库、PKI 与 VSO 章节继续展开。
