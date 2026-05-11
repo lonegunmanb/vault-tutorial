@@ -341,9 +341,9 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
 
 ## **第 9 章：全栈架构防线升级与现代工程实战案例 【案例库全面更新】**
 
-* 9.1 密码学原语解耦应用：基于 Transit 机密引擎构建"加密即服务（EaaS）"的无密钥应用平台  
-* 9.2 从静态密码到动态凭据：以 Database / SSH / AWS 机密引擎改造长效凭据使用方式  
-* 9.3 核心生产环境极高安全加固基线：从物理部署防线到最低权限最小化原则的系统级核查清单  
+* 9.1
+* 9.2 密码学原语解耦应用：基于 Transit 机密引擎构建"加密即服务（EaaS）"的无密钥应用平台  
+* 9.3 从静态密码到动态凭据：以 Database / SSH / AWS 机密引擎改造长效凭据使用方式   
 * 9.4 **【核心新增】** 零接触式的公共信任体系闭环：深度整合 Vault PKI 机密引擎与 ACME 自动化协议（集成 Traefik 或 Cert-Manager 演示 TLS 证书静默全自动签发与轮转）  
 * 9.5 OIDC 认证方法与组治理案例：接入本地 Keycloak / Dex，跑通 Authorization Code Flow、CLI callback、groups claim 与 Vault Group 映射  
 * 9.6 端到端 SSO 应用集成案例：用一个最小 Web 应用接入 Vault OIDC Provider，验证登录跳转、ID Token、UserInfo 与 assignment 拒绝路径  

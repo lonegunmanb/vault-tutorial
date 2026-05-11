@@ -44,6 +44,7 @@
     { "path": "ch6-service-registration" },
     { "path": "ch6-telemetry-ui" },
     { "path": "ch6-user-lockout" },
-    { "path": "ch8-audit-devices" }
+    { "path": "ch8-audit-devices" },
+    { "path": "ch9-production-hardening" }
   ]
 }
