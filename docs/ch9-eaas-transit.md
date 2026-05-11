@@ -7,18 +7,18 @@ group_order: 90
 
 # 9.2 加密即服务（EaaS）：让一个 Go Web 应用『不再保管密钥』
 
-> **核心结论**：**加密即服务（Encryption as a Service, 简称 EaaS）** 是 Vault transit 引擎背后的工程范式——它把『加密 / 解密这件事』从应用代码中**整体抽离**给 Vault：**应用持密文 / Vault 持钥匙**，应用代码里既没有任何密钥变量、也没有任何密码学库的调用，只有一句『把这串明文交给 Vault 加密』和一句『把这串密文交给 Vault 解密』。这一节先用 HashiCorp 官方 *Encryption as a service: transit secrets engine* 教程的语言把这套思想讲清楚，再把官方配套的 Spring Cloud 演示应用『按原样』改写成一个最小可运行的 Go + [Gin](https://github.com/gin-gonic/gin) Web 应用，让学员在终端里**亲眼看到** 业务数据库里只有 `vault:v1:...` 形式的密文、看到密钥轮转后旧密文如何无中断升级、看到吊销应用 Token 如何在毫秒级内切断整条业务读链路。
+> **核心结论**：**加密即服务（Encryption as a Service, 简称 EaaS）** 是 Vault transit 引擎背后的工程范式——它把『加密 / 解密这件事』从应用代码中**整体抽离**给 Vault：**应用持密文 / Vault 持钥匙**，应用代码里既没有任何密钥变量、也没有任何密码学库的调用，只有一句『把这串明文交给 Vault 加密』和一句『把这串密文交给 Vault 解密』。本节先把 EaaS 这套思想在责任边界上讲清楚，再用一份最小可运行的 Go + [Gin](https://github.com/gin-gonic/gin) Web 应用把它落到代码层面，让学员在终端里**亲眼看到** 业务数据库里只有 `vault:v1:...` 形式的密文、看到密钥轮转后旧密文如何无中断升级、看到吊销应用 Token 如何在毫秒级内切断整条业务读链路。
 
 参考：
-- 思想来源：[Encryption as a service: transit secrets engine — HashiCorp Tutorials](https://developer.hashicorp.com/vault/tutorials/encryption-as-a-service/eaas-transit)
-- 官方 Spring Cloud 演示（本节将其改写为 Gin）：[Encryption as a service: Spring demo — HashiCorp Tutorials](https://developer.hashicorp.com/vault/tutorials/encryption-as-a-service/eaas-spring-demo)、[hashicorp-education/learn-vault-spring-cloud (GitHub)](https://github.com/hashicorp-education/learn-vault-spring-cloud)
+- 思想渊源（本节在此基础上重新组织与扩充）：[Encryption as a service: transit secrets engine — HashiCorp Tutorials](https://developer.hashicorp.com/vault/tutorials/encryption-as-a-service/eaas-transit)
+- 对照参考的 Java 实现（本节的 Gin 应用与之在外部行为上对齐）：[Encryption as a service: Spring demo — HashiCorp Tutorials](https://developer.hashicorp.com/vault/tutorials/encryption-as-a-service/eaas-spring-demo)、[hashicorp-education/learn-vault-spring-cloud (GitHub)](https://github.com/hashicorp-education/learn-vault-spring-cloud)
 - 已学衔接：[3.13 Transit 机密引擎](/ch3-transit)（密钥版本化、`rotate` / `rewrap`、`min_decryption_version`、信封加密等机制）、[2.6 Policies](/ch2-policies)（最小权限策略）、[5.6 Vault Proxy](/ch5-vault-proxy)（应用接入层缓存）、[7.3 Vault Proxy 在 K8s 中的部署](/ch7-vault-proxy)
 
 ---
 
-## 1. 把官方 EaaS 教程的思想讲一遍
+## 1. EaaS 范式：三件事的责任边界
 
-HashiCorp 官方的 *Encryption as a service: transit secrets engine* 教程要传达的不是『一个新功能怎么用』，而是一个**架构选择**——它把传统应用里『谁来加密』『谁来保管密钥』『谁来轮转密钥』『谁来撤销访问』四件事的责任边界**重新划分**。
+本节要谈的不是『一个新功能怎么用』，而是一个**架构选择**——它把传统应用里『谁来加密』『谁来保管密钥』『谁来轮转密钥』『谁来撤销访问』四件事的责任边界**重新划分**。
 
 ### 1.1 传统做法的三个老大难
 
@@ -38,7 +38,7 @@ HashiCorp 官方的 *Encryption as a service: transit secrets engine* 教程要�
 - **谁保管密钥**：Vault 的存储后端（对应用完全透明）；业务应用进程的内存里**只有 Vault Token**，**没有任何密钥材料**；
 - **谁轮转 / 撤销**：Vault 自带『密钥版本化』——`rotate` 在密钥下追加一个新版本而非替换旧版本，旧密文用 `vault:v1:...` 这个前缀『自报家门』、Vault 自动按版本号选私钥；要把旧密文升级到新版本，用 `transit/rewrap` 在 Vault 内部一次完成『解密 + 重新加密』，**应用与运维都看不到明文**；要让旧版本彻底失效，用 `min_decryption_version` 一刀关旧版。
 
-这就是 9.2 节正文中『**应用持密文 / Vault 持钥匙**』这句口号的全部含义——它不是个修辞，它对应的是上述三件事的责任真实地、整体地搬到 Vault 这一侧。3.13 节已经把 `transit/` 引擎里这套机制讲透了，本节聚焦的不是『怎么用 transit 引擎』，而是『怎么用这套思路改造一个真实的 Web 应用』。
+这就是 9.2 节『**应用持密文 / Vault 持钥匙**』这句口号的全部含义——它不是个修辞，它对应的是上述三件事的责任真实地、整体地搬到 Vault 这一侧。3.13 节已经把 `transit/` 引擎里这套机制讲透了，本节聚焦的不是『怎么用 transit 引擎』，而是『怎么用这套思路改造一个真实的 Web 应用』。
 
 ### 1.3 EaaS 与『把机密存进 Vault』的对照
 
@@ -51,40 +51,40 @@ HashiCorp 官方的 *Encryption as a service: transit secrets engine* 教程要�
 
 ---
 
-## 2. 官方 Spring Cloud 演示在做什么
+## 2. 为什么选『支付记录 + 信用卡号』作为范例
 
-为了让本节的 Go 改写有一个明确的对照对象，先把 HashiCorp 官方仓库 [hashicorp-education/learn-vault-spring-cloud](https://github.com/hashicorp-education/learn-vault-spring-cloud) 中的 `vault-transit/` 子项目拆解一下。学员**完全不需要**懂 Java 或 Spring，只要知道它『在做什么』即可。
+为了让本节的动手实验有一个具体、可参证、并且可以与社区现有代码互相印证的业务场景，本节选用与 HashiCorp 官方 [`vault-transit/`](https://github.com/hashicorp-education/learn-vault-spring-cloud/tree/main/vault-transit) 示例一致的『支付记录 + 信用卡号』这组业务语义。信用卡号是 PCI DSS 合规要求加密存储的高敏感字段，是 EaaS 模式最典型的目标场景之一。
 
-那个演示应用是一个最小的 Spring Boot REST 服务，对外暴露的接口语义大致是：
+本节动手实验中的 Go 应用在所有**外部可观察行为**上与上述 Java 示例严格一致，以便学员随时可以参照同一个 Java 实现看哪一步其实被『拆到框架背后』了：
 
-- `POST /payments` —— 接收一笔支付记录的 JSON，里面带有 `name` 与 **`cc_info`（信用卡号）** 等字段。信用卡号是 PCI DSS 合规要求加密存储的高敏感字段，正是 EaaS 模式最典型的目标场景。
-- `GET /payments` —— 把所有支付记录取出来，`cc_info` 还原成明文一并返回。
-- 后台数据库是 PostgreSQL（仓库通过 `docker compose` 起一台）；支付表里 `cc_info` 字段被声明为 `String`，**实际存的是密文**。
+- `POST /payments` —— 接收一笔支付记录的 JSON，里面带有 `name` 与 **`cc_info`（信用卡号）** 等字段；
+- `GET /payments` —— 把所有支付记录取出来，`cc_info` 还原成明文一并返回；
+- 后台数据库是 PostgreSQL；支付表里 `cc_info` 字段被声明为 `String`，**实际存的是密文**。
 
-它的内部数据流，剥掉 Spring 的注解和 Spring Cloud Vault 的封装，本质是这样三步：
+不论语言、框架、数据库怎么选，EaaS 闭环本身只有三步：
 
-1. 写入路径：业务对象 `Payment` 在被持久化到 PostgreSQL **之前**，被一段拦截逻辑把 `cc_info` 字段送给 `POST /v1/transit/encrypt/<key>`，把返回的 `vault:v1:...` 字符串覆盖原字段，再交给 ORM 落盘；
-2. 读取路径：从数据库取出对象**之后**，把 `cc_info` 字段（此时仍是 `vault:vN:...`）送给 `POST /v1/transit/decrypt/<key>`，把返回的 base64 明文还原后覆盖原字段，再交给 Web 层序列化为 JSON 返回；
-3. 与 Vault 通信使用 `X-Vault-Token` HTTP 头携带 Token，Token 来自启动时由 Spring Cloud Vault 注入的环境配置；密钥名是事先在 Vault 里 `vault write -f transit/keys/<key>` 创建好的。
+1. 写入路径：在记录被持久化到数据库**之前**，把 `cc_info` 字段送给 `POST /v1/transit/encrypt/<key>`，把返回的 `vault:v1:...` 字符串覆盖原字段，再交给 ORM / SQL 落盘；
+2. 读取路径：从数据库取出记录**之后**，把 `cc_info` 字段（此时仍是 `vault:vN:...`）送给 `POST /v1/transit/decrypt/<key>`，把返回的 base64 明文还原后覆盖原字段，再交给 Web 层序列化为 JSON 返回；
+3. 与 Vault 通信使用 `X-Vault-Token` HTTP 头携带 Token；密钥名是事先在 Vault 里 `vault write -f transit/keys/<key>` 创建好的。
 
-这就是这套示例应用的全部 EaaS 部分——其余的 Spring Boot / Spring Cloud Vault / PostgreSQL / Maven 配置，都是为了把这三步『包装成一个能跑起来的 Spring 应用』所必须的样板代码。**EaaS 闭环本身只有三步，与具体语言、具体 Web 框架、具体数据库无关**。
+这就是 EaaS 架构在代码层面的全部细节——其余的 Spring Boot / Spring Cloud Vault / PostgreSQL / Maven（或 Go 侧的 net/http / database/sql / Gin）都是为了把这三步『包装成一个能跑起来的应用』所必须的样板代码。**EaaS 闭环本身只有三步，与具体语言、具体 Web 框架、具体数据库无关**。
 
 ---
 
-## 3. 用 Go + Gin 把同一套闭环重写一遍
+## 3. 本节的 Go + Gin 实现
 
-本节配套的动手实验把上述三步在 Go + [Gin](https://github.com/gin-gonic/gin) 框架下重写。Gin 是 Go 生态最常用的 HTTP 路由框架，本节选择它的理由只有一个：它的写法直观、不掩盖底层 HTTP 细节，便于学员把每一段代码与 Spring 版本一一对应。
+本节配套的动手实验把上述三步在 Go + [Gin](https://github.com/gin-gonic/gin) 框架下实现。Gin 是 Go 生态最常用的 HTTP 路由框架，本节选择它的理由只有一个：它的写法直观、不掩盖底层 HTTP 细节，便于学员从源码中看清『请求进来后到底发生了什么』。
 
-为了让学员能把『Java 版本怎么做 → Go 版本怎么做』一条条对上，本节的 Go 改写在所有**外部可观察行为**上严格沿用官方 Java 版本的取值：
+为了让本节与官方 Java 示例互相参证，本节的 Go 实现在所有**外部可观察行为**上严格对齐：
 
-- **端点路径与字段名完全相同**——`POST /payments` 接收 `{"name":"...","cc_info":"..."}`、`GET /payments` 列出全部记录；`POST /payments` 的返回值同样是『包含刚插入这一条的数组』，且数组里的 `cc_info` 字段返回的是『刚刚落库的密文』本身（这是官方 Java 版本的真实行为，本节如实保留）；
-- **数据库与表结构完全相同**——PostgreSQL 16，表 `payments(id VARCHAR(255) PK, name VARCHAR(255), cc_info VARCHAR(255), created_at TIMESTAMP)`，与官方 [`schema.sql`](https://github.com/hashicorp-education/learn-vault-spring-cloud/blob/main/vault-transit/src/main/resources/schema.sql) 一一对应；连接口令 `postgres-admin-password`、库名 `payments` 也来自官方 [`docker-compose.yaml`](https://github.com/hashicorp-education/learn-vault-spring-cloud/blob/main/vault-transit/docker-compose.yaml)；
+- **端点路径与字段名完全相同**——`POST /payments` 接收 `{"name":"...","cc_info":"..."}`、`GET /payments` 列出全部记录；`POST /payments` 的返回值同样是『包含刚插入这一条的数组』，且数组里的 `cc_info` 字段返回的是『刚刚落库的密文』本身（与 Java 示例一致，本节保持这一行为以便课堂上直观看到密文长什么样）；
+- **数据库与表结构完全相同**——PostgreSQL 16，表 `payments(id VARCHAR(255) PK, name VARCHAR(255), cc_info VARCHAR(255), created_at TIMESTAMP)`，与官方 [`schema.sql`](https://github.com/hashicorp-education/learn-vault-spring-cloud/blob/main/vault-transit/src/main/resources/schema.sql) 一一对应；连接口令 `postgres-admin-password`、库名 `payments` 也沿用官方 [`docker-compose.yaml`](https://github.com/hashicorp-education/learn-vault-spring-cloud/blob/main/vault-transit/docker-compose.yaml) 的取值；
 - **Vault 密钥名也完全相同**——`transit/keys/payments`，与官方 docker-compose 中 `vault-configure` 容器初始化的密钥一致。
 
-唯一的实现差异有两点：
+与官方 Java 示例相比有两点刻意为之的实现差异：
 
-- **不引入任何 Vault SDK**。Java 版本通过 `VaultTemplate.opsForTransit(path).encrypt(key, ccInfo)` 这种 Spring Cloud Vault 封装来调 Vault；Go 版本直接用标准库 `net/http` 调 Vault 的 REST 接口，`X-Vault-Token` 头由代码显式贴上去。这样学员看到的是 Vault HTTP API 本身的样子，而不是某个 SDK 的封装。
-- **多了一个运维端点 `POST /admin/rewrap`**——官方 Java 版本没有这个端点，本节为了让学员能在终端里直接观察『密钥轮转后用 `rewrap` 升级存量密文』的现象（实验第 2 步），自加了一个。它的实现就是遍历表、对每条 `cc_info` 调一次 `transit/rewrap/payments`、把返回的新密文 `UPDATE` 回数据库。
+- **不引入任何 Vault SDK**。Java 示例通过 `VaultTemplate.opsForTransit(path).encrypt(key, ccInfo)` 这种 Spring Cloud Vault 封装来调 Vault；本节的 Go 实现直接用标准库 `net/http` 调 Vault 的 REST 接口，`X-Vault-Token` 头由代码显式贴上去。这样学员看到的是 Vault HTTP API 本身的样子，而不是某个 SDK 的封装。
+- **多了一个运维端点 `POST /admin/rewrap`**——官方 Java 示例没有这个端点，本节为了在实验第 2 步中让学员能在终端里直接观察『密钥轮转后用 `rewrap` 升级存量密文』的现象而增加。它的实现就是遍历表、对每条 `cc_info` 调一次 `transit/rewrap/payments`、把返回的新密文 `UPDATE` 回数据库。
 
 应用对外暴露三个 HTTP 接口：
 
