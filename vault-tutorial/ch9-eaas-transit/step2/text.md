@@ -14,7 +14,7 @@ vault write -f transit/keys/payments/rotate
 vault read transit/keys/payments
 ```
 
-预期：返回的 `keys` 字段从原来的 `{"1": <ts>}` 变成 `{"1": <ts>, "2": <ts>}`，`latest_version` 变成 `2`。
+预期：返回的 keys 字段从原来的 `{"1": <ts>}` 变成 `{"1": <ts>, "2": <ts>}`，latest_version 变成 2。
 
 > 关键概念：`rotate` 是**追加新版本**而非替换旧版本。版本 `1` 的密钥材料仍保留在 Vault 里，因此第 1 步用 `v1` 加密的那两条记录现在仍然能正常解密。
 
@@ -99,7 +99,7 @@ vault write transit/keys/payments/config min_decryption_version=1
 
 ## ✅ 验收
 
-- [ ] 轮转后 `vault read transit/keys/payments` 的 `latest_version = 2`、`keys` 同时含 `1` 与 `2`
+- [ ] 轮转后 `vault read transit/keys/payments` 的 latest_version = 2、keys 同时含 1 与 2
 - [ ] 新写入的那条记录密文以 `vault:v2:` 开头
 - [ ] 旧记录在轮转后、rewrap 前仍可被正常解密
 - [ ] `/admin/rewrap` 返回 `{"rewrapped":3,"total":3}`，数据库里所有 `cc_info` 都以 `vault:v2:` 开头

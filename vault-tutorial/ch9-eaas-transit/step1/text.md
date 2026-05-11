@@ -12,7 +12,7 @@
 vault read transit/keys/payments
 ```
 
-预期输出中关键字段：`name = payments`、`type = aes256-gcm96`、`latest_version = 1`、`min_decryption_version = 1`、`deletion_allowed = true`。这两个版本号字段会在第 2 步密钥轮转中变化，先记住它们的初始值。
+预期输出中关键字段：name = payments、type = aes256-gcm96、latest_version = 1、min_decryption_version = 1、deletion_allowed = true。这两个版本号字段会在第 2 步密钥轮转中变化，先记住它们的初始值。
 
 PostgreSQL 容器与表也已经建好：
 
@@ -131,7 +131,7 @@ echo
 
 ## ✅ 验收
 
-- [ ] `vault read transit/keys/payments` 显示 `latest_version = 1`、`deletion_allowed = true`
+- [ ] `vault read transit/keys/payments` 显示 latest_version = 1、deletion_allowed = true
 - [ ] `POST /payments` 返回的数组里 `cc_info` 字段以 `vault:v1:` 开头
 - [ ] `psql -c 'SELECT id, name, cc_info FROM payments;'` 看到 `cc_info` 列存的就是 `vault:v1:...`，且 `LIKE '%4242%'` 搜不到任何记录
 - [ ] `GET /payments` 能成功还原 `"cc_info":"4242424242424242"`

@@ -11,7 +11,7 @@
 为完全规避真实云成本，整个实验都在单台 Killercoda 主机上完成：
 
 - 已安装 vault（1.19.2，dev 模式后台运行）、go（1.22.10 官方 tarball）、jq、curl、postgresql-client；
-- 已写入 `VAULT_ADDR=http://127.0.0.1:8200`、`VAULT_TOKEN=root`；并已写入 `PGHOST` / `PGUSER` / `PGDATABASE` / `PGPASSWORD` / `DATABASE_URL` 等便捷连接环境变量；
+- 已写入 `VAULT_ADDR=http://127.0.0.1:8200`、`VAULT_TOKEN=root`；并已写入 PGHOST / PGUSER / PGDATABASE / PGPASSWORD / DATABASE_URL 等便捷连接环境变量；
 - 已启用 `transit/` 引擎、创建 `transit/keys/payments` 密钥、把 `deletion_allowed` 调成 `true`（与官方 docker-compose.yaml 中 `vault-configure` 容器的初始化行为完全一致）；
 - 已用 `docker run --rm postgres:16` 起一个名为 `learn-postgres` 的 PostgreSQL 容器，监听本机 `127.0.0.1:5432`，与官方仓库一致的口令 `postgres-admin-password`、库名 `payments`；建表 DDL 与官方 [`schema.sql`](https://github.com/hashicorp-education/learn-vault-spring-cloud/blob/main/vault-transit/src/main/resources/schema.sql) 一一对应；
 - 已在 `/root/eaas-app/` 准备好 `app.go`（Gin 应用源码）与 `go.mod`（依赖清单），并已预先 `go mod tidy` 与 `go build` 出二进制 `/root/eaas-app/app`，避免课堂上等待网络下载。
