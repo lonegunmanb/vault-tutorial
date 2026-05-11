@@ -80,8 +80,6 @@ group_order: 80
 
 ![从 Vault 的 telemetry 指标里观测每台审计设备的请求/响应写入计数；任一计数趋零或失败计数尖峰均提示审计设备失效](/images/ch8-audit-best-practices/audit-telemetry-spikes.png)
 
-> **AI 绘图提示词（手绘风格真实事物比喻钢笔线绘水彩淡色阴影风格）**：画面中央一台医生听诊器搭在 Vault 保险柜上方，听诊器另一端连接到一张羊皮纸图表，图表上画三条折线分别标注 `file/.log_request`、`syslog/.log_request`、`socket/.log_request`，其中 file 那条线在画面右半段突然垂直跌至零并被一只红色感叹号圈出；图表下方一行小字写着 `log_request_failure 计数同时尖峰`；hand-drawn pen line illustration, watercolor light shading, warm beige paper background, fine ink hatching。
-
 ---
 
 ## 6. 按挂载点配置「字段级别」的哈希策略
