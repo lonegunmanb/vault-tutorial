@@ -14,7 +14,13 @@ stage() { echo "===== [$(date +%H:%M:%S)] $* ====="; }
 
 stage "background.sh start"
 
+if [ ! -f /root/setup-common.sh ]; then
+  echo "FATAL: /root/setup-common.sh missing — assets were not copied. Aborting."
+  exit 1
+fi
 source /root/setup-common.sh
+type install_vault finish_setup start_vault_dev || {
+  echo "FATAL: setup-common.sh did not define expected helpers"; exit 1; }
 
 export DEBIAN_FRONTEND=noninteractive
 
