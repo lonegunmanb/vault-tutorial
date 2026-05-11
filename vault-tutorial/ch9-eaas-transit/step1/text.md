@@ -20,7 +20,7 @@ PostgreSQL 容器与表也已经建好：
 psql -c '\d payments'
 ```
 
-预期会列出 4 个列：`id`、`name`、`cc_info`（VARCHAR(255)）、`created_at`。这与官方仓库 [`schema.sql`](https://github.com/hashicorp-education/learn-vault-spring-cloud/blob/main/vault-transit/src/main/resources/schema.sql) 一一对应。
+预期会列出 4 个列：id、name、cc_info（VARCHAR(255)）、created_at。这与官方仓库 [`schema.sql`](https://github.com/hashicorp-education/learn-vault-spring-cloud/blob/main/vault-transit/src/main/resources/schema.sql) 一一对应。
 
 确认一下表是空的：
 
@@ -41,8 +41,8 @@ sed -n '1,30p' /root/eaas-app/app.go
 只需要记住三件事——它们与官方 Java 版本（[`VaultTransitApplication.java`](https://github.com/hashicorp-education/learn-vault-spring-cloud/blob/main/vault-transit/src/main/java/com/hashicorp/vaulttransit/VaultTransitApplication.java)）的对外行为是完全一致的：
 
 1. 应用通过两个环境变量与 Vault 通信：`VAULT_ADDR` 与 `VAULT_TOKEN`；通过 `DATABASE_URL` 与 PostgreSQL 通信；
-2. 写入接口 `POST /payments` 接收 `{"name":"...","cc_info":"..."}`（客户端不传 `id`，由服务器生成 UUID）；`cc_info` 不会被原样存入数据库——它会先被发到 `transit/encrypt/payments`，把返回的 `ciphertext`（形如 `vault:v1:...`）写进 `payments.cc_info` 列；
-3. 读取接口 `GET /payments` 反过来：从数据库取出每条记录后，把 `cc_info` 列里的密文发到 `transit/decrypt/payments`，再把还原出来的明文随其余字段一并返回。
+2. 写入接口 `POST /payments` 接收 `{"name":"...","cc_info":"..."}`（客户端不传 id，由服务器生成 UUID）；cc_info 不会被原样存入数据库——它会先被发到 transit/encrypt/payments，把返回的 ciphertext（形如 `vault:v1:...`）写进 payments.cc_info 列；
+3. 读取接口 `GET /payments` 反过来：从数据库取出每条记录后，把 cc_info 列里的密文发到 transit/decrypt/payments，再把还原出来的明文随其余字段一并返回。
 
 > **官方实现的一点小特例**：`POST /payments` 在 Java 版本与本节 Go 版本中都返回**包含刚插入这一条记录的数组**，而该数组里的 `cc_info` 字段返回的是『刚刚落库的密文』本身，**不会**再经一次解密——这是官方的真实行为，本节如实保留，便于学员一眼看到刚才落库的密文长什么样。1.4 节验证这一点。
 
@@ -69,7 +69,7 @@ curl -s -X POST -H 'Content-Type: application/json' \
 echo
 ```
 
-预期返回（`id`、`createdAt`、`cc_info` 的具体字节每次都不一样，UUID 随机、时间戳与 GCM nonce 都会变化）：
+预期返回（id、createdAt、cc_info 的具体字节每次都不一样，UUID 随机、时间戳与 GCM nonce 都会变化）：
 
 ```json
 [{"id":"e67ee875-fb66-4135-95d6-2f0bfa185e5e","name":"Test Customer","cc_info":"vault:v1:NNFKub3wEVQj4SVS9cM7KP0F9CL/aVQA0mfdqZ0LpohVHX9VeWPQwej3vVk=","createdAt":"2026-05-11T08:29:16.486125315Z"}]

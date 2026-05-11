@@ -4,7 +4,7 @@
 
 | 步骤 | 已验证 |
 | --- | --- |
-| **Step 1** | 应用从不保管业务密钥；写入接口把 `cc_info` 送给 `transit/encrypt/payments`、只把 `vault:v1:...` 密文写入 `payments` 表的 `cc_info` 列；`SELECT ... LIKE '%4242%'` 在数据库里搜不到任何明文卡号；`GET /payments` 反向调用 `transit/decrypt` 还原明文 |
+| **Step 1** | 应用从不保管业务密钥；写入接口把 cc_info 送给 transit/encrypt/payments、只把 `vault:v1:...` 密文写入 payments 表的 cc_info 列；`SELECT ... LIKE '%4242%'` 在数据库里搜不到任何明文卡号；`GET /payments` 反向调用 transit/decrypt 还原明文 |
 | **Step 2** | `rotate` 在密钥下追加 `v2`；新写入自动用 `v2`；旧 `v1` 密文仍可解；`/admin/rewrap` 在 Vault 内部完成『解密 + 重新加密』，应用与运维都看不到明文；`min_decryption_version` 可一刀关旧版 |
 | **Step 3** | 用最小权限策略 `eaas-app` 给应用发一个专用 Token；吊销该 Token 后，业务读接口立即返回 `502`、内部夹带 Vault 的 `403 permission denied`；换一个新 Token、应用立即恢复，业务数据库本身从未被触碰 |
 

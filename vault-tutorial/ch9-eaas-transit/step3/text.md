@@ -2,7 +2,7 @@
 
 前两步用的是 dev 模式 Vault 的 `root` Token，权限过大、不能反映真实部署。本步要做的事情：
 
-1. 写一份只允许做 `transit/encrypt/payments`、`transit/decrypt/payments`、`transit/rewrap/payments` 三件事的最小策略；
+1. 写一份只允许做 transit/encrypt/payments、transit/decrypt/payments、transit/rewrap/payments 三件事的最小策略；
 2. 创建一个绑定了这条策略的『应用专用』Token；
 3. 用这个 Token 重启 Gin 应用；
 4. **吊销这个 Token**；再次访问读取接口，观察应用立即收到 Vault 返回的 `403 permission denied` 与应用本身回写给客户端的 `502`。
