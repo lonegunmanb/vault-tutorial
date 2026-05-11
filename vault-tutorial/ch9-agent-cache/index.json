@@ -1,0 +1,43 @@
+{
+  "title": "Vault Agent Caching：用 LocalStack + AWS 动态凭据演示缓存命中、续期托管与 cache-clear 驱逐",
+  "description": "Practice Vault Agent caching on a single Killercoda host. Start LocalStack to back the AWS secrets engine, configure AppRole auto-auth, run a Vault Agent with cache + listener + use_auto_auth_token, then observe (1) two consecutive AWS dynamic IAM requests through the agent's listener returning the same lease (cache hit), (2) /agent/v1/cache-clear evicting that lease and a third request creating a new IAM user, and (3) static KV reads NOT being cached.",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启动 LocalStack 与 AWS 引擎、配置 AppRole",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "启动带 cache + listener 的 Vault Agent",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "观察动态 IAM 凭据的缓存命中",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "用 cache-clear 驱逐租约并验证静态 KV 不被缓存",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
