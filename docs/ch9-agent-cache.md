@@ -15,7 +15,7 @@ group_order: 90
 - [Vault Agent caching tutorial — HashiCorp Tutorials](https://developer.hashicorp.com/vault/tutorials/vault-agent/agent-caching)
 - [Use built-in persistent caching — Vault Docs](https://developer.hashicorp.com/vault/docs/agent-and-proxy/agent/caching/persistent-caches)
 - [Vault Proxy static secret caching — Vault Docs](https://developer.hashicorp.com/vault/docs/agent-and-proxy/proxy/caching/static-secret-caching)
-- 已学衔接：[7.2 Vault Agent](/ch7-agent)（Auto-auth 与模板渲染主线）、[5.6 Vault Proxy](/ch5-vault-proxy)（独立代理与静态机密缓存）、[3.3 AWS 机密引擎](/ch3-aws-engine)（动态 IAM 凭据与租约）、[2.3 租约（Lease）](/ch2-lease)（租约生命周期）
+- 已学衔接：[7.2 Vault Agent](/ch7-agent)（Auto-auth 与模板渲染主线）、[5.6 Vault Proxy](/ch5-vault-proxy)（独立代理与静态机密缓存）、[3.3 AWS 机密引擎](/ch3-aws)（动态 IAM 凭据与租约）、[2.3 租约（Lease）](/ch2-lease)（租约生命周期）
 
 ---
 
