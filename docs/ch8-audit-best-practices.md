@@ -51,8 +51,6 @@ group_order: 80
 
 ![两台不同类型的审计设备并行落地，其中一台转发到远端长期归档；事后分析需要把多台设备日志按 `request.id` 合并去重才能拿到完整视图](/images/ch8-audit-best-practices/two-devices-fanout.png)
 
-> **AI 绘图提示词（手绘风格真实事物比喻钢笔线绘水彩淡色阴影风格）**：画面中央一个金色 Vault 保险柜，柜门上方一只机械手把同一张审计卡片复印两份，左侧一份沿着传送带送入本地木质文件托盘并标注 `file 本地长期可读`，右侧一份沿着另一条传送带送入远方山丘上的电报塔并标注 `远端归档系统`；远处一位戴眼镜的小工程师把两份卡片摞在桌上，用一根线串起两张卡片上相同的 `request.id` 编号并旁注「合并去重」；hand-drawn pen line illustration, watercolor light shading, warm beige paper background, professional cross-hatching。
-
 ---
 
 ## 4. 公共配置选项的推荐默认值
