@@ -18,8 +18,12 @@ tail -n 30 /var/log/vault-agent.log
 
 应能看到：
 
-- 一行类似 `auth.handler: starting auth handler` 与 `auth.handler: authenticating`，紧接着 `auth.handler: authentication successful` —— 这是 Auto-auth 用 AppRole 完成首次登录；
-- 一行 `cache: starting cache listener` 或类似含义的提示，说明 listener 已经绑上 `127.0.0.1:8100`。
+- 启动横幅里有一行 `Api Address 1: http://127.0.0.1:8100` —— 这就是 `cache` 块加上 `listener "tcp" { address = "127.0.0.1:8100" ... }` 之后 Agent 暴露给客户端的入口；
+- `agent.auth.handler: authenticating` 紧接着 `agent.auth.handler: authentication successful, sending token to sinks` —— Auto-auth 用 AppRole 完成首次登录；
+- `agent.auth.handler: starting renewal process` 与 `agent.auth.handler: renewed auth token` —— Agent 已经接管了这枚 token 的续期；
+- `agent.sink.file: token written: path=/root/agent-cache/auto-auth-token` —— Auto-auth 拿到的 token 已落到 sink 文件。
+
+> 启动横幅顶部那行 `Vault Agent will be deprecating API proxy functionality in a future release` 是官方的弃用提示，针对的是 Agent 内置的 **API proxy** 能力（教程第 2 节末尾解释过：静态 KV 缓存等 API proxy 工作流应迁移到 Vault Proxy）。本节用到的『Token / Lease 响应缓存』属于 caching 能力，并未被弃用，提示可以忽略。
 
 如果日志里出现 `error` / `failed to authenticate`，请回到 Step 1 检查 `agent-role-id` / `agent-secret-id` 是否被覆盖、Vault 是否在 8200 上还活着。
 
