@@ -1,0 +1,41 @@
+{
+  "title": "用 Gin Web 应用演示 Transit 加密即服务（EaaS）",
+  "description": "用 Go + Gin 实现一个最小 Web 应用，演示『应用持密文 / Vault 持钥匙』的加密即服务模式：写入客户记录时把敏感字段送给 Vault transit/encrypt 加密、把密文存进本地数据文件；读取时把密文送回 transit/decrypt 还原；并演示密钥轮转 + rewrap 升级存量密文、撤销 Token 后密文彻底失效这两条关键运维链路。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启用 transit、运行 Gin 应用、亲眼看到数据库里只有密文",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "无中断密钥轮转：rotate + rewrap 升级存量密文",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "撤销应用 Token：验证『没有 Vault 一个字也读不出』",
+        "text": "step3/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"},
+        {"file": "app.go",          "target": "/root/eaas-app/"},
+        {"file": "go.mod",          "target": "/root/eaas-app/"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
