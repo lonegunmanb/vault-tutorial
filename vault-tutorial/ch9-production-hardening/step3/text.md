@@ -9,7 +9,7 @@ vault delete sys/quotas/rate-limit/transit-limit
 vault list sys/quotas/rate-limit
 ```
 
-预期：列表中不再包含 `transit-limit`。
+预期：第一条命令输出 `Success! Data deleted (if it existed) at: sys/quotas/rate-limit/transit-limit`；第二条命令输出 `No value found at sys/quotas/rate-limit`——这是 Vault 在该路径下"已经一条规则都不剩"时的标准提示，并非错误（`vault list` 在结果集为空时统一以此种形式回复，而不是返回一个空列表）。
 
 ## 3.2 创建一条全局速率限流：`rate=5, interval=1`
 
