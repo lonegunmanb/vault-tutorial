@@ -3,14 +3,36 @@ set +e
 
 source /root/setup-common.sh
 
+export DEBIAN_FRONTEND=noninteractive
+
+# 先把 apt 依赖装齐（包含 install_vault 内部可能要用的 unzip），避免 install_vault
+# 在后台再起一个 apt-get 与本进程争抢 /var/lib/dpkg/lock-frontend 而无限等待。
+# 不再通过 apt 安装 golang-go：Ubuntu 22.04 上的 golang-go 是 1.18，无法满足
+# go.mod 中的 `go 1.22` directive；改用官方二进制 tarball 安装一份 1.22.x。
+apt-get update -qq
+apt-get install -y -qq unzip jq curl postgresql-client > /dev/null 2>&1
+
 install_vault &
 INSTALL_VAULT_PID=$!
 
-# go 用于编译 Gin 应用；jq / curl 用于直接打 Vault 与应用的 HTTP 接口；
-# postgresql-client 提供 psql，便于学员在 step1 直接看数据库里的密文。
-apt-get update -qq && apt-get install -y -qq golang-go jq curl postgresql-client > /dev/null 2>&1
+# 并行安装 Go 1.22.x（官方 tarball ~70MB，比 apt 的 golang-go 元包快得多）。
+install_go() {
+  if command -v go > /dev/null 2>&1 && go version 2>/dev/null | grep -q 'go1.22'; then
+    return 0
+  fi
+  curl --connect-timeout 10 --max-time 180 -fsSL \
+    https://go.dev/dl/go1.22.10.linux-amd64.tar.gz -o /tmp/go.tgz \
+    && rm -rf /usr/local/go \
+    && tar -C /usr/local -xzf /tmp/go.tgz \
+    && rm -f /tmp/go.tgz
+  ln -sf /usr/local/go/bin/go /usr/local/bin/go
+  ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+}
+install_go &
+INSTALL_GO_PID=$!
 
 wait "$INSTALL_VAULT_PID"
+wait "$INSTALL_GO_PID"
 
 start_vault_dev
 
