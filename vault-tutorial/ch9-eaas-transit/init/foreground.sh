@@ -3,10 +3,14 @@
 echo "================================================="
 echo "  正在为你准备实验环境..."
 echo "  请稍候，预计需要 60-120 秒"
-echo "  (后台会安装 vault / golang-go / jq / curl /"
+echo "  (后台会安装 vault / go 1.22 / jq / curl /"
 echo "   postgresql-client；启动 Postgres 容器；"
 echo "   启用 transit、创建 payments 密钥；"
 echo "   预编译 Gin 应用)"
+echo ""
+echo "  若长时间停在这一行，请新开一个终端运行："
+echo "    tail -f /var/log/eaas-init.log"
+echo "  即可看到当前卡在哪一步。"
 echo "================================================="
 
 while [ ! -f /tmp/.setup-done ]; do

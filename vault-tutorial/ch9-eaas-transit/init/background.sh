@@ -1,6 +1,19 @@
 #!/bin/bash
 set +e
 
+# ─── 全量日志 ──────────────────────────────────────────────
+# 把 stdout/stderr 都重定向到 /var/log/eaas-init.log，并用带时间戳的 xtrace
+# 打印每条命令；卡住时学员可 `tail -f /var/log/eaas-init.log` 直接看到
+# 当前停在哪一行。
+LOG=/var/log/eaas-init.log
+exec > >(tee -a "$LOG") 2>&1
+export PS4='+ [\D{%H:%M:%S}] '
+set -x
+
+stage() { echo "===== [$(date +%H:%M:%S)] $* ====="; }
+
+stage "background.sh start"
+
 source /root/setup-common.sh
 
 export DEBIAN_FRONTEND=noninteractive
@@ -9,10 +22,13 @@ export DEBIAN_FRONTEND=noninteractive
 # 在后台再起一个 apt-get 与本进程争抢 /var/lib/dpkg/lock-frontend 而无限等待。
 # 不再通过 apt 安装 golang-go：Ubuntu 22.04 上的 golang-go 是 1.18，无法满足
 # go.mod 中的 `go 1.22` directive；改用官方二进制 tarball 安装一份 1.22.x。
+stage "apt-get update"
 apt-get update -qq
-apt-get install -y -qq unzip jq curl postgresql-client > /dev/null 2>&1
+stage "apt-get install unzip jq curl postgresql-client"
+apt-get install -y -qq unzip jq curl postgresql-client
 
-install_vault &
+stage "start install_vault (background)"
+install_vault > /var/log/install-vault.log 2>&1 &
 INSTALL_VAULT_PID=$!
 
 # 并行安装 Go 1.22.x（官方 tarball ~70MB，比 apt 的 golang-go 元包快得多）。
@@ -28,12 +44,18 @@ install_go() {
   ln -sf /usr/local/go/bin/go /usr/local/bin/go
   ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 }
-install_go &
+stage "start install_go (background)"
+install_go > /var/log/install-go.log 2>&1 &
 INSTALL_GO_PID=$!
 
-wait "$INSTALL_VAULT_PID"
-wait "$INSTALL_GO_PID"
+stage "wait install_vault"
+wait "$INSTALL_VAULT_PID"; echo "install_vault rc=$?"
+stage "wait install_go"
+wait "$INSTALL_GO_PID"; echo "install_go rc=$?"
+command -v vault && vault version || echo "vault MISSING"
+command -v go && go version || echo "go MISSING"
 
+stage "start_vault_dev"
 start_vault_dev
 
 export VAULT_ADDR='http://127.0.0.1:8200'
@@ -42,12 +64,14 @@ export VAULT_TOKEN='root'
 # 与官方 docker-compose.yaml 中的 vault-configure 容器对齐：
 # 启用 transit、创建一把 payments 密钥、把 deletion_allowed 调成 true 以便
 # 学员在 finish 中自由清理。
-vault secrets enable transit 2>/dev/null
-vault write -force transit/keys/payments > /dev/null 2>&1
-vault write transit/keys/payments/config deletion_allowed=true > /dev/null 2>&1
+stage "enable transit + create payments key"
+vault secrets enable transit
+vault write -force transit/keys/payments
+vault write transit/keys/payments/config deletion_allowed=true
 
 # Postgres 16：与官方 docker-compose.yaml 一致的口令、库名。
 # Killercoda Ubuntu 容器自带 docker，setup-common.sh 也一直用这种方式起 Postgres。
+stage "docker run learn-postgres"
 docker rm -f learn-postgres > /dev/null 2>&1 || true
 docker run -d --name learn-postgres \
   -e POSTGRES_USER=postgres \
@@ -55,11 +79,12 @@ docker run -d --name learn-postgres \
   -e POSTGRES_DB=payments \
   -p 5432:5432 \
   --rm \
-  postgres:16 > /dev/null 2>&1
+  postgres:16
 
-# 等 Postgres 就绪
+stage "wait postgres ready"
 for i in $(seq 1 60); do
   if docker exec learn-postgres pg_isready -U postgres -d payments > /dev/null 2>&1; then
+    echo "postgres ready after ${i}s"
     break
   fi
   sleep 1
@@ -90,13 +115,17 @@ export DATABASE_URL='postgres://postgres:postgres-admin-password@127.0.0.1:5432/
 export PAGER=cat
 EOF
 
-# 预先把 Gin 应用的依赖下载好、二进制编译好，避免课堂上等 go mod tidy 拉网。
+stage "go mod tidy + build"
 mkdir -p /root/eaas-app
 cd /root/eaas-app
 # go.mod 与 app.go 已通过 assets 拷贝到这里
 GOPROXY=https://proxy.golang.org,direct go mod tidy > /var/log/go-tidy.log 2>&1
+echo "go mod tidy rc=$?"
 go build -o app . > /var/log/go-build.log 2>&1
-ls -l /root/eaas-app/app > /var/log/go-build-out.log 2>&1
+echo "go build rc=$?"
+ls -l /root/eaas-app/app || echo "app binary MISSING"
 
 cd /root
+stage "finish_setup (touch /tmp/.setup-done)"
 finish_setup
+stage "background.sh DONE"
