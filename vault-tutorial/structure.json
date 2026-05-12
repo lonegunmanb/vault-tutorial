@@ -47,6 +47,7 @@
     { "path": "ch8-audit-devices" },
     { "path": "ch9-production-hardening" },
     { "path": "ch9-eaas-transit" },
+    { "path": "ch9-acme-caddy" },
     { "path": "ch9-agent-cache" }
   ]
 }

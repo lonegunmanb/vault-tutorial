@@ -1,0 +1,40 @@
+{
+  "title": "用 ACME 协议让 Caddy 从 Vault PKI 自动获取并续期 TLS 证书",
+  "description": "在单台 Killercoda 主机上启动 dev 模式 Vault 与 Caddy 容器，依次完成『纯 HTTP 反例 → 启用并配置 PKI + ACME → Caddy 全自动从 Vault 拿到证书并对外提供 HTTPS』三段操作；用 curl 与 openssl 亲眼看到证书的颁发者就是 Vault 的 pki_int 中间 CA。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "先把 Caddy 以纯 HTTP 跑一遍：建立对照基线",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "在 Vault 上搭两级 PKI 并启用 ACME",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "重启 Caddy：让它从 Vault 自动签发证书并对外提供 HTTPS",
+        "text": "step3/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh",   "target": "/root", "chmod": "+x"},
+        {"file": "enable_engines.sh", "target": "/root/pki/", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
