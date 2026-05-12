@@ -66,11 +66,22 @@ curl 校验证书时需要从『服务端证书 → 中间 CA → 根 CA』完�
 
 ```bash
 curl -s http://127.0.0.1:8200/v1/pki_int/ca_chain > /root/pki/ca_bundle.pem
-openssl storeutl -noout -certs /root/pki/ca_bundle.pem | grep -E 'Subject:|Issuer:'
+openssl crl2pkcs7 -nocrl -certfile /root/pki/ca_bundle.pem \
+  | openssl pkcs7 -print_certs -noout
 curl --cacert /root/pki/ca_bundle.pem https://caddy.local/
 ```
 
-预期 bundle 里能看到中间 CA（`learn.internal Intermediate Authority`）与根 CA（`learn.internal`）两张证书；最后一行输出：
+预期 bundle 里能看到中间 CA（`learn.internal Intermediate Authority`）与根 CA（`learn.internal`）两张证书，类似：
+
+```
+subject=CN = learn.internal Intermediate Authority
+issuer=CN = learn.internal
+
+subject=CN = learn.internal
+issuer=CN = learn.internal
+```
+
+最后一行 `curl` 输出：
 
 ```
 hello world
