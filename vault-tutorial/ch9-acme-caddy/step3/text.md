@@ -104,10 +104,10 @@ echo | openssl s_client -connect caddy.local:443 -servername caddy.local 2>/dev/
 
 ```
 issuer=CN = learn.internal Intermediate Authority
-subject=CN = caddy.local
+subject=
 notBefore=... GMT
 notAfter=... GMT  (约 30 天后)
-X509v3 Subject Alternative Name:
+X509v3 Subject Alternative Name: critical
     DNS:caddy.local
 ```
 
@@ -115,7 +115,7 @@ X509v3 Subject Alternative Name:
 
 1. **issuer = `learn.internal Intermediate Authority`** —— 这正是第 2.1 节那张中间 CA 的 `common_name`；证明这张证书是 Vault 的 `pki_int/` 签出来的，不是 Caddy 自签的、也不是 Let's Encrypt 签的；
 2. **notBefore → notAfter** 之间约 **30 天** —— 与第 2.1 节中 `pki_int/roles/learn` 配置的 `max_ttl=720h` 相符；ACME 客户端会在剩余寿命走过约 2/3 时静默续期；
-3. **SAN 含有 `DNS:caddy.local`** —— Caddy 自动把站点名作为证书的主体备用名（SAN）申请下来。
+3. **`subject=` 为空、SAN 是 `critical` 且含 `DNS:caddy.local`** —— ACME 协议下 Caddy 申请的证书**完全靠 SAN 标识身份**，故意不把域名塞进 CN（这是 RFC 5280 与现代浏览器/Go 的推荐做法）。`critical` 标记意味着任何 TLS 实现都**必须**校验 SAN，不能退回到 CN。
 
 ## 3.5 看一眼 Caddy 把证书藏在哪里
 
@@ -160,7 +160,7 @@ find /root/caddy_data/caddy/certificates -type f | sort
 
 - [ ] `docker logs caddy-server` 中能看到 `certificate obtained successfully` 字样且 `identifier` 是 `caddy.local`
 - [ ] `curl --cacert /root/pki/ca_bundle.pem https://caddy.local/` 输出 `hello world`
-- [ ] `openssl s_client -connect caddy.local:443 -servername caddy.local` 拿到的证书 issuer = `learn.internal Intermediate Authority`、SAN 含 `DNS:caddy.local`、有效期约 30 天
+- [ ] `openssl s_client -connect caddy.local:443 -servername caddy.local` 拿到的证书 issuer = `learn.internal Intermediate Authority`、SAN（critical）含 `DNS:caddy.local`、有效期约 30 天
 - [ ] `/root/caddy_data/caddy/certificates/...` 下能看到 `caddy.local.crt` 与 `caddy.local.key`
 
 至此完成本实验全部三步：从『纯 HTTP 反例』到『PKI + ACME 一次性配齐』再到『Caddy 全自动从 Vault 拿到证书』，9.3 节正文中所有关键论断都已在终端里得到亲手验证。
