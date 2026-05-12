@@ -97,7 +97,7 @@ hello world
 再尝试 HTTPS：
 
 ```bash
-curl -v https://caddy.local/ 2>&1 | head -5
+curl -sv https://caddy.local/ 2>&1 | grep -Ei 'connect|refused|trying'
 ```
 
 预期会立即看到类似：
@@ -107,7 +107,6 @@ curl -v https://caddy.local/ 2>&1 | head -5
 * connect to 127.0.0.1 port 443 failed: Connection refused
 * Failed to connect to caddy.local port 443 after 0 ms: Couldn't connect to server
 * Closing connection
-curl: (7) Failed to connect to caddy.local port 443 after 0 ms: Couldn't connect to server
 ```
 
 这是预期内的失败：本步的 Caddy 配置里已经显式 `auto_https off`，所以它根本没在 :443 监听任何东西——更不用说去申请证书了。
