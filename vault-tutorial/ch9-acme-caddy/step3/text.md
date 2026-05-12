@@ -125,16 +125,17 @@ ACME 客户端会自己管理私钥与证书的存储，运维全程**从未亲�
 find /root/caddy_data/caddy/certificates -type f | sort
 ```
 
-预期会列出 4 个文件，类似：
+预期会列出 3 个文件，类似：
 
 ```
-/root/caddy_data/caddy/certificates/.../caddy.local/caddy.local.crt
-/root/caddy_data/caddy/certificates/.../caddy.local/caddy.local.key
-/root/caddy_data/caddy/certificates/.../caddy.local/caddy.local.json
-... (Caddy 内部账号信息)
+/root/caddy_data/caddy/certificates/127.0.0.1-8200-v1-pki_int-acme-directory/caddy.local/caddy.local.crt
+/root/caddy_data/caddy/certificates/127.0.0.1-8200-v1-pki_int-acme-directory/caddy.local/caddy.local.json
+/root/caddy_data/caddy/certificates/127.0.0.1-8200-v1-pki_int-acme-directory/caddy.local/caddy.local.key
 ```
 
-`caddy.local.crt` 是这张证书本身，`caddy.local.key` 是 Caddy 自己生成的私钥（**它从未离开过这台机器**）。再过约 20 天 ACME 客户端会自动续期、覆盖这两个文件——而**整个流程不需要任何人插手**。
+注意中间那段路径 `127.0.0.1-8200-v1-pki_int-acme-directory` —— Caddy 把 ACME directory URL 转义后作为 issuer 子目录名，**实证了证书确实是从 Vault 这个 ACME 端点拿来的**，不是内置自签 CA（那种情况下子目录会叫 `local`）。
+
+`caddy.local.crt` 是这张证书本身，`caddy.local.key` 是 Caddy 自己生成的私钥（**它从未离开过这台机器**），`caddy.local.json` 是 Caddy 记录这张证书所属 issuer / 续期元信息的小账本。再过约 20 天 ACME 客户端会自动续期、覆盖这三个文件——而**整个流程不需要任何人插手**。
 
 ## 3.6 复盘：刚才到底发生了什么
 
