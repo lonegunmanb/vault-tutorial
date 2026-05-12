@@ -9,11 +9,12 @@
 ```bash
 rm -rf /root/caddy_data/caddy   # 清掉第 1 步残留的 Caddy 状态目录
 cat > /root/caddy_config/Caddyfile <<'EOF'
-{
-    acme_ca http://127.0.0.1:8200/v1/pki_int/acme/directory
-}
-
 caddy.local {
+    tls {
+        issuer acme {
+            dir http://127.0.0.1:8200/v1/pki_int/acme/directory
+        }
+    }
     root * /usr/share/caddy
     file_server
 }
@@ -23,8 +24,10 @@ cat /root/caddy_config/Caddyfile
 
 与第 1 步的差别只有两处：
 
-1. **顶层全局块**多了一行 `acme_ca http://127.0.0.1:8200/v1/pki_int/acme/directory` —— 把 Caddy 默认的 ACME 服务器从 Let's Encrypt 改为我们刚搭好的 Vault `pki_int` ACME 端点；
-2. **站点名**前面**没有** `http://` —— 这就是 Caddy『默认即自动 HTTPS』的入口：看到一个裸域名，Caddy 就会自动对它启用 HTTPS、自动找 ACME 服务器申请证书。
+1. **站点名前面没有 `http://`** —— 这是 Caddy『默认即自动 HTTPS』的入口：看到一个裸域名，Caddy 就会自动启用 HTTPS；
+2. **新增 `tls { issuer acme { dir ... } }` 块** —— 显式把 ACME 服务器指向我们刚搭好的 Vault `pki_int` ACME 端点。
+
+> **为什么不能只在全局块里写 `acme_ca`？** Caddy 看到 `*.local` 这种『非公网可解析』的站点名时，会**自动跳过任何 ACME 配置**、改用内置的 `internal` 自签 CA（日志里会出现 `"issuer":"local"`）。只有在站点块里**显式声明 `issuer acme`** 才能强制它走 ACME 流程。这是初学者最容易踩的一个坑。
 
 ## 3.2 启动 Caddy，等它把第一张证书拿下来
 
@@ -57,23 +60,25 @@ docker logs caddy-server 2>&1 | grep -E 'certificate obtained|serving initial co
 
 ## 3.3 用 curl 验证 HTTPS 已经自动通了
 
-curl 校验证书时需要从『服务端证书 → 中间 CA → 根 CA』完整地验签到一个它信任的根。Vault 通过 ACME 颁发的证书链里通常已经带了中间 CA，但为了让 curl 在任何情况下都能验通，**显式把『根 + 中间』两张 CA 拼成一个 bundle** 给它最稳妥：
+curl 校验证书时需要从『服务端证书 → 中间 CA → 根 CA』完整地验签到一个它信任的根。最稳妥的做法是直接问 Vault 要一份**与当前签发者完全对应**的 CA 链——`pki_int/ca_chain` 返回中间 CA 与根 CA 拼好的 PEM 包：
 
 ```bash
-cat /root/pki/intermediate.cert.pem /root/pki/root_2024_ca.crt \
-  > /root/pki/ca_bundle.pem
+curl -s http://127.0.0.1:8200/v1/pki_int/ca_chain > /root/pki/ca_bundle.pem
+openssl storeutl -noout -certs /root/pki/ca_bundle.pem | grep -E 'Subject:|Issuer:'
 curl --cacert /root/pki/ca_bundle.pem https://caddy.local/
 ```
 
-预期输出：
+预期 bundle 里能看到中间 CA（`learn.internal Intermediate Authority`）与根 CA（`learn.internal`）两张证书；最后一行输出：
 
 ```
 hello world
 ```
 
-回想第 1 步那次 `Connection refused`——这是同一台机器、同一个 Caddy 镜像、同一个域名 `caddy.local`，**唯一的差异**是 Caddyfile 多了一行 `acme_ca` 与少了一句 `auto_https off`。整条『生成 CSR / 与 ACME 服务器对话 / 监听 :443』的链路完全自动化。
+回想第 1 步那次 `Connection refused`——这是同一台机器、同一个 Caddy 镜像、同一个域名 `caddy.local`，**唯一的差异**是 Caddyfile 多了 `tls { issuer acme { dir ... } }` 与少了一句 `auto_https off`。整条『生成 CSR / 与 ACME 服务器对话 / 监听 :443』的链路完全自动化。
 
 > **`--cacert` 这个选项做了什么？** curl 默认会校验服务器证书是否由系统信任的根 CA 签发；本实验里证书的颁发者是『一个我们自己刚刚在 Vault 里建的中间 CA』，curl 默认当然不信。`--cacert /root/pki/ca_bundle.pem` 显式告诉 curl：『把这两张自建 CA 也临时加入信任』。生产环境里，应当把根 CA 一次性下发到所有公司设备的系统信任链里（例如 Linux 的 `/etc/pki/ca-trust/source/anchors/`、Windows 的『受信任的根证书颁发机构』），之后所有服务的证书无需再带 `--cacert`。
+
+> **为什么不直接拼 `intermediate.cert.pem` + `root_2024_ca.crt`？** 那两个文件是 2.1 节脚本运行时落盘的快照；如果脚本被多次运行、或 Vault 后续轮换了中间 CA 的 issuer，落盘文件里的中间 CA 就可能与 ACME 实际签发用的中间 CA 对不上，导致 curl 报 `unable to get local issuer certificate`。直接从 `pki_int/ca_chain` 拉，永远拿到的是『当前正在用』的链，最不容易出错。
 
 ## 3.4 用 openssl 看清这张证书到底是谁签的
 
@@ -122,7 +127,7 @@ find /root/caddy_data/caddy/certificates -type f | sort
 
 回顾本步实际做的事（按时间顺序）：
 
-1. 改了一份 Caddyfile（去掉 `auto_https off`、加一行 `acme_ca`）；
+1. 改了一份 Caddyfile（去掉 `auto_https off`、加一段 `tls { issuer acme { dir ... } }`）；
 2. `docker run` 重启 Caddy；
 3. `curl` 验证 HTTPS。
 
