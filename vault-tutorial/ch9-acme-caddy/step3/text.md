@@ -46,17 +46,19 @@ docker run -d \
 证书签发是异步的：Caddy 启动后会先在 `:80` 准备好挑战路径、向 Vault 下单、应答挑战、拿到证书、再监听 `:443`。整个过程通常在 5 秒内完成。耐心等一下并观察日志：
 
 ```bash
-sleep 5
-docker logs caddy-server 2>&1 | grep -E 'certificate obtained|serving initial configuration|tls' | head -10
+sleep 8
+docker logs caddy-server 2>&1 | tail -30
 ```
 
 预期能看到一行类似：
 
 ```
-{"level":"info","ts":...,"logger":"tls.obtain","msg":"certificate obtained successfully","identifier":"caddy.local"}
+{"level":"info","ts":...,"logger":"tls.obtain","msg":"certificate obtained successfully","identifier":"caddy.local","issuer":"acme.../pki_int/acme/directory-..."}
 ```
 
-如果一时还没看到，等几秒再 `docker logs caddy-server | tail -30` 一次。
+关键是 `"issuer"` 字段里出现 `acme` / `pki_int`，**不是** `"local"`——后者代表 Caddy 又退回到了内置自签 CA。
+
+如果一时还没看到，等几秒再 `docker logs caddy-server 2>&1 | tail -30` 一次。
 
 ## 3.3 用 curl 验证 HTTPS 已经自动通了
 
