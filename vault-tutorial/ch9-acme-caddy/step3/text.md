@@ -57,8 +57,12 @@ docker logs caddy-server 2>&1 | grep -E 'certificate obtained|serving initial co
 
 ## 3.3 用 curl 验证 HTTPS 已经自动通了
 
+curl 校验证书时需要从『服务端证书 → 中间 CA → 根 CA』完整地验签到一个它信任的根。Vault 通过 ACME 颁发的证书链里通常已经带了中间 CA，但为了让 curl 在任何情况下都能验通，**显式把『根 + 中间』两张 CA 拼成一个 bundle** 给它最稳妥：
+
 ```bash
-curl --cacert /root/pki/root_2024_ca.crt https://caddy.local/
+cat /root/pki/intermediate.cert.pem /root/pki/root_2024_ca.crt \
+  > /root/pki/ca_bundle.pem
+curl --cacert /root/pki/ca_bundle.pem https://caddy.local/
 ```
 
 预期输出：
@@ -69,7 +73,7 @@ hello world
 
 回想第 1 步那次 `Connection refused`——这是同一台机器、同一个 Caddy 镜像、同一个域名 `caddy.local`，**唯一的差异**是 Caddyfile 多了一行 `acme_ca` 与少了一句 `auto_https off`。整条『生成 CSR / 与 ACME 服务器对话 / 监听 :443』的链路完全自动化。
 
-> **`--cacert` 这个选项做了什么？** curl 默认会校验服务器证书是否由系统信任的根 CA 签发；本实验里证书的颁发者是『一个我们自己刚刚在 Vault 里建的根 CA』，curl 默认当然不信。`--cacert /root/pki/root_2024_ca.crt` 显式告诉 curl：『把这份根 CA 也临时加入信任』。生产环境里，应当把根 CA 一次性下发到所有公司设备的系统信任链里（例如 Linux 的 `/etc/pki/ca-trust/source/anchors/`、Windows 的『受信任的根证书颁发机构』），之后所有服务的证书无需再带 `--cacert`。
+> **`--cacert` 这个选项做了什么？** curl 默认会校验服务器证书是否由系统信任的根 CA 签发；本实验里证书的颁发者是『一个我们自己刚刚在 Vault 里建的中间 CA』，curl 默认当然不信。`--cacert /root/pki/ca_bundle.pem` 显式告诉 curl：『把这两张自建 CA 也临时加入信任』。生产环境里，应当把根 CA 一次性下发到所有公司设备的系统信任链里（例如 Linux 的 `/etc/pki/ca-trust/source/anchors/`、Windows 的『受信任的根证书颁发机构』），之后所有服务的证书无需再带 `--cacert`。
 
 ## 3.4 用 openssl 看清这张证书到底是谁签的
 
@@ -137,7 +141,7 @@ find /root/caddy_data/caddy/certificates -type f | sort
 ## ✅ 验收
 
 - [ ] `docker logs caddy-server` 中能看到 `certificate obtained successfully` 字样且 `identifier` 是 `caddy.local`
-- [ ] `curl --cacert /root/pki/root_2024_ca.crt https://caddy.local/` 输出 `hello world`
+- [ ] `curl --cacert /root/pki/ca_bundle.pem https://caddy.local/` 输出 `hello world`
 - [ ] `openssl s_client -connect caddy.local:443 -servername caddy.local` 拿到的证书 issuer = `learn.internal Intermediate Authority`、SAN 含 `DNS:caddy.local`、有效期约 30 天
 - [ ] `/root/caddy_data/caddy/certificates/...` 下能看到 `caddy.local.crt` 与 `caddy.local.key`
 
