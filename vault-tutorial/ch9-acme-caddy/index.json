@@ -19,6 +19,10 @@
       {
         "title": "重启 Caddy：让它从 Vault 自动签发证书并对外提供 HTTPS",
         "text": "step3/text.md"
+      },
+      {
+        "title": "证书轮转：到期自动续期 + 管理员手动吊销",
+        "text": "step4/text.md"
       }
     ],
     "finish": {

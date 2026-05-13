@@ -7,6 +7,7 @@
 | **Step 1** | Caddy 在 `auto_https off` 配置下只监听 :80；`curl http://caddy.local/` 通、`curl https://caddy.local/` 立即 `Connection refused`——建立了清晰的对照基线 |
 | **Step 2** | 用一键脚本搭好两级 PKI；用 3 条命令在 `pki_int/` 上启用 ACME（`secrets tune` 放头 + `config/acme enabled=true`）；`curl http://127.0.0.1:8200/v1/pki_int/acme/directory` 看到符合 RFC 8555 的 directory JSON |
 | **Step 3** | 仅改 Caddyfile（加一行 `acme_ca`），重启 Caddy，**无任何手工证书操作**；`curl --cacert ... https://caddy.local/` 拿到 hello world；`openssl x509` 看到证书 issuer 是 `learn.internal Intermediate Authority`、有效期 30 天、SAN 含 `caddy.local` |
+| **Step 4** | 把签发角色 `max_ttl` 临时调到 2 分钟、强制 Caddy 拿一张『短命证书』后等待约 90 秒，亲眼看到序列号与 `notBefore`/`notAfter` 都被 Caddy **自动**换了一组——这就是 ACME 的『静默续期』；接着用 `vault write pki_int/revoke serial_number=<sn>` 在 Vault 一侧手动吊销当前证书、在 CRL 中查到它、并让 Caddy 重走一次 ACME 申请，新证书序列号又变了一次，旧序列号永久留在 CRL 中 |
 
 ## ACME 心智速记
 
