@@ -84,13 +84,14 @@ ldapsearch -x -H ldap://127.0.0.1:389 \
 预期输出末尾几行：
 
 ```
-# alice, users, learn.example
-dn: cn=alice,ou=users,dc=learn,dc=example
 cn: alice
 
 # search result
 search: 2
 result: 0 Success
+
+# numResponses: 2
+# numEntries: 1
 ```
 
 `result: 0 Success` 是关键——它说明刚才那次 bind 通过了。这就是 simple bind 的完整语义：『拿对的 DN + 对的口令去连，LDAP 就接受你的所有后续请求』。
