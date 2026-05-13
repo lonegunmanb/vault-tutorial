@@ -1,6 +1,6 @@
 # 实验说明
 
-本实验配套 [9.4 节正文](https://lonegunmanb.github.io/vault-tutorial/ch9-ldap-rotation.html)：学员在正文里已经把『LDAP 是什么』『DN 与 bind 是什么』『Static Role 为什么不签发 Lease』『为什么写完 ldap/config 就要立刻 rotate-root』这几件事过了一遍。本实验把这些概念落到一台 Killercoda 主机上，**全程使用开源版 Vault（1.19.2，dev 模式）与开源 OpenLDAP（osixia/openldap:1.5.0 容器）**，不依赖任何商业组件、不依赖任何云资源。
+本实验配套 [9.5 节正文](https://lonegunmanb.github.io/vault-tutorial/ch9-ldap-rotation.html)：学员在正文里已经把『LDAP 是什么』『DN 与 bind 是什么』『Static Role 为什么不签发 Lease』『为什么写完 ldap/config 就要立刻 rotate-root』这几件事过了一遍。本实验把这些概念落到一台 Killercoda 主机上，**全程使用开源版 Vault（1.19.2，dev 模式）与开源 OpenLDAP（osixia/openldap:1.5.0 容器）**，不依赖任何商业组件、不依赖任何云资源。
 
 ## 已经为你准备好的环境
 

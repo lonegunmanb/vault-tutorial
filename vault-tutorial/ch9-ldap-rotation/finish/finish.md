@@ -33,7 +33,7 @@
 
 ## 把这套思路放回真实工程
 
-- **怎么不再用 root token？** 把 [4.1 AppRole](/ch4-app-role)（最常见的应用静态接入方式）或 [4.4 K8s 认证](/ch4-k8s)（在容器编排里）配出来，让 step4 里那段 bash 应用在启动时先去拿一个**只绑 `consumer-policy.hcl`** 的短寿 Token，再去读 `ldap/static-cred/learn`——这就是 9.4 节正文第 5 节给出的那两条最小策略的真实落地形态。
+- **怎么不再用 root token？** 把 [4.1 AppRole](/ch4-app-role)（最常见的应用静态接入方式）或 [4.4 K8s 认证](/ch4-k8s)（在容器编排里）配出来，让 step4 里那段 bash 应用在启动时先去拿一个**只绑 `consumer-policy.hcl`** 的短寿 Token，再去读 `ldap/static-cred/learn`——这就是 9.5 节正文第 5 节给出的那两条最小策略的真实落地形态。
 - **怎么把『应用每次启动都读 Vault』升级成『应用持续运行、Vault 自动同步』？** [7.2 Vault Agent](/ch7-agent) 的 template 渲染机制就是为这件事生的——把口令渲染到 `/etc/myapp/ldap.conf`，应用直接读那个文件即可；Agent 在后台与 Vault 保持心跳、轮转一发生立刻把新值刷进去。
 - **怎么让 LDAP 这一端的连接也走加密信道？** 把 `ldap/config` 的 `url` 改成 `ldaps://...:636`，或者保留 `ldap://...:389` 同时加上 `starttls=true`——具体见 [3.10 §2.1](/ch3-ldap)。生产里**永远不要**让 admin 凭据走明文链路。
 - **想让 LDAP 用户能反过来登 Vault？** 那是另一个方向——**LDAP 认证方法**，对应 [4.7 节](/ch4-ldap)；本节的 `ldap/` 是机密引擎，向 LDAP 那侧**写**口令；认证方法是从 LDAP 那侧**读**用户身份再发 Vault Token。两件事走的代码路径完全不一样，请按 [3.10 §1](/ch3-ldap) 的『单选题』决定接哪个。

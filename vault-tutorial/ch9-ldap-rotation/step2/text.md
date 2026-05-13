@@ -1,6 +1,6 @@
 # 第 2 步：启用 ldap/ 引擎并立刻 rotate-root
 
-本步把 Vault 接到 OpenLDAP 上：写连接配置、然后**马上**做一次 `rotate-root` —— 让 Vault 这把『日常运维钥匙』从此**只属于 Vault**。这是 9.4 节正文第 4 节反复强调的一个动作：写完 `ldap/config` 的下一条命令必须是 `rotate-root`，否则那段时间里所有见过 `bindpass` 的人都依然能直接绕开 Vault 操作 LDAP。
+本步把 Vault 接到 OpenLDAP 上：写连接配置、然后**马上**做一次 `rotate-root` —— 让 Vault 这把『日常运维钥匙』从此**只属于 Vault**。这是 9.5 节正文第 4 节反复强调的一个动作：写完 `ldap/config` 的下一条命令必须是 `rotate-root`，否则那段时间里所有见过 `bindpass` 的人都依然能直接绕开 Vault 操作 LDAP。
 
 ## 关于 binddn：为什么不直接给 Vault 用 admin
 

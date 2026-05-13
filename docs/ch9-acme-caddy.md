@@ -1,11 +1,11 @@
 ---
-order: 93
-title: 9.3 ACME 协议自动化 TLS 证书签发：让 Vault PKI 与 Caddy 自动协商并续期
+order: 94
+title: 9.4 ACME 协议自动化 TLS 证书签发：让 Vault PKI 与 Caddy 自动协商并续期
 group: 第 9 章：全栈架构防线升级与现代工程实战案例
 group_order: 90
 ---
 
-# 9.3 ACME 协议自动化 TLS 证书签发：让 Vault PKI 与 Caddy 自动协商并续期
+# 9.4 ACME 协议自动化 TLS 证书签发：让 Vault PKI 与 Caddy 自动协商并续期
 
 > **核心结论**：当一个组织内部的 TLS 证书数量从『几张』走到『几百张』时，沿用『手工生成 CSR、手工提交、手工下载、手工到期前续期』这套流程几乎必然会在某个早上以一次生产事故的方式收场。**ACME（Automatic Certificate Management Environment，自动证书管理环境）协议** 正是为了把这条流水线整体交给两个进程（一个 ACME 服务器、一个 ACME 客户端）按标准对话来跑而被设计出来的。本节先把 ACME 是什么、它解决了哪一类问题讲清楚，再把 Vault 1.14 起内置在 PKI 引擎里的 ACME 服务器能力与 [Caddy](https://caddyserver.com/) Web 服务器自带的 ACME 客户端拼到一起，让学员在终端里**亲眼看到** 一个『从未手工接触过任何证书』的 Web 服务器是怎么自动从 Vault 拿到一张可信证书并对外提供 HTTPS 服务的。
 
@@ -98,7 +98,7 @@ ACME 客户端拿到证书之后，会把证书的『签发时间 + 有效期』
 
 > 内部服务的开发者**不需要懂任何 PKI 知识**。他在自己的 Web 服务器（Caddy / Traefik / Nginx + cert-manager / 任何带 ACME 客户端的工具）配置文件里写一行『去这个 ACME directory 申请证书』、再写一行『证书要为这个域名申请』，剩下的全部自动化。
 
-这就是 9.3 节『**把 ACME 这条公网早已成熟的自动化流水线引到内部 PKI 上**』的全部价值。
+这就是 9.4 节『**把 ACME 这条公网早已成熟的自动化流水线引到内部 PKI 上**』的全部价值。
 
 ---
 

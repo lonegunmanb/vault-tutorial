@@ -153,7 +153,7 @@ find /root/caddy_data/caddy/certificates -type f | sort
 - 没有把 PEM 通过 `scp`、IM 截图、或工单系统传来传去；
 - 没有写任何『证书快过期了请运维续期』的告警与日历提醒。
 
-这就是 ACME 协议在内部 PKI 上带来的全部价值——把 9.3 节正文里那段『**人肉**』流程整体交给两个进程按标准对话来跑。
+这就是 ACME 协议在内部 PKI 上带来的全部价值——把 9.4 节正文里那段『**人肉**』流程整体交给两个进程按标准对话来跑。
 
 ---
 
@@ -164,4 +164,4 @@ find /root/caddy_data/caddy/certificates -type f | sort
 - [ ] `openssl s_client -connect caddy.local:443 -servername caddy.local` 拿到的证书 issuer = `learn.internal Intermediate Authority`、SAN（critical）含 `DNS:caddy.local`、有效期约 30 天
 - [ ] `/root/caddy_data/caddy/certificates/...` 下能看到 `caddy.local.crt` 与 `caddy.local.key`
 
-至此完成本实验全部三步：从『纯 HTTP 反例』到『PKI + ACME 一次性配齐』再到『Caddy 全自动从 Vault 拿到证书』，9.3 节正文中所有关键论断都已在终端里得到亲手验证。
+至此完成本实验全部三步：从『纯 HTTP 反例』到『PKI + ACME 一次性配齐』再到『Caddy 全自动从 Vault 拿到证书』，9.4 节正文中所有关键论断都已在终端里得到亲手验证。

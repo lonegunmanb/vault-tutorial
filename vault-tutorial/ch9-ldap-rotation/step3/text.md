@@ -19,7 +19,7 @@ vault write ldap/static-role/learn \
 Success! Data written to: ldap/static-role/learn
 ```
 
-> **9.4 节正文第 3 节强调过的细节**：`vault write ldap/static-role/learn` 这一条命令本身就会触发**一次首次轮转**——alice 在 LDAP 里那份 `1LearnedVault` 已经在这一瞬间被改掉了。这就是为什么生产里要用 `skip_import_rotation=true` 给老业务留迁移窗口；在本实验里 alice 没有任何在跑的应用依赖她的旧口令，直接覆盖即可。
+> **9.5 节正文第 3 节强调过的细节**：`vault write ldap/static-role/learn` 这一条命令本身就会触发**一次首次轮转**——alice 在 LDAP 里那份 `1LearnedVault` 已经在这一瞬间被改掉了。这就是为什么生产里要用 `skip_import_rotation=true` 给老业务留迁移窗口；在本实验里 alice 没有任何在跑的应用依赖她的旧口令，直接覆盖即可。
 
 ## 3.2 读出 Vault 当下持有的口令
 
@@ -92,7 +92,7 @@ ldapsearch -x -H ldap://127.0.0.1:389 \
 ldap_bind: Invalid credentials (49)
 ```
 
-> 这就证明了 9.4 节正文第 3 节的第 1 点——**创建 Static Role 的那一瞬间 alice 在 LDAP 里的 `userPassword` 已经被覆盖**。从这一刻起，要以 alice 的身份动 LDAP，唯一的途径就是去问 Vault。
+> 这就证明了 9.5 节正文第 3 节的第 1 点——**创建 Static Role 的那一瞬间 alice 在 LDAP 里的 `userPassword` 已经被覆盖**。从这一刻起，要以 alice 的身份动 LDAP，唯一的途径就是去问 Vault。
 
 ## 3.4 手动再轮一次，验证『前一份口令』也立即失效
 
@@ -125,7 +125,7 @@ ldap_bind: Invalid credentials (49)
 
 注意：虽然 `last_password` 在 Vault 内部仍有记录，但 LDAP 服务端并**不**接受它——`last_password` 只是 Vault 给『正在做灰度切换的应用』留的一个『万一脚本失败了我还能查一下上一次是什么』的字段，**不是一份生效中的备用凭据**。
 
-> 9.4 节正文第 3 节的第 3 点：**轮转后，前一次拿到的口令在 LDAP 这一端立即失效**。第 4 步将会基于这一性质，用一段最小 bash 脚本演示『应用每次启动都从 Vault 取最新口令』的消费路径。
+> 9.5 节正文第 3 节的第 3 点：**轮转后，前一次拿到的口令在 LDAP 这一端立即失效**。第 4 步将会基于这一性质，用一段最小 bash 脚本演示『应用每次启动都从 Vault 取最新口令』的消费路径。
 
 ---
 

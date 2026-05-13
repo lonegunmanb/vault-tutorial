@@ -1,6 +1,6 @@
 # 实验说明
 
-本实验配套 [9.3 节正文](https://lonegunmanb.github.io/vault-tutorial/ch9-acme-caddy.html)：学员此时已经在概念层理解了 **ACME 协议** 的四个角色（ACME 服务器 / 客户端 / 域名 / 挑战路径）与三步对话（下单 / 挑战 / 结单），也理解了为什么要让 Vault 的 PKI 引擎扮演内网的 ACME 服务器、让 Caddy 充当 ACME 客户端。本实验把这套思想落到一台 Killercoda 主机上：
+本实验配套 [9.4 节正文](https://lonegunmanb.github.io/vault-tutorial/ch9-acme-caddy.html)：学员此时已经在概念层理解了 **ACME 协议** 的四个角色（ACME 服务器 / 客户端 / 域名 / 挑战路径）与三步对话（下单 / 挑战 / 结单），也理解了为什么要让 Vault 的 PKI 引擎扮演内网的 ACME 服务器、让 Caddy 充当 ACME 客户端。本实验把这套思想落到一台 Killercoda 主机上：
 
 - **ACME 服务器**：Vault 1.19.2，dev 模式，监听 `127.0.0.1:8200`；下面会启用一套两级 PKI（根 CA `pki/` + 中间 CA `pki_int/`），并在中间 CA 上打开 ACME 开关；
 - **ACME 客户端**：Caddy 2.8 容器，`--network host` 直接共享主机网络栈，监听 `:80`（用于 HTTP-01 挑战）与 `:443`（对外提供 HTTPS）；
