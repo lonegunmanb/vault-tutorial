@@ -39,6 +39,7 @@ start_openldap() {
     -e LDAP_ORGANISATION="learn" \
     -e LDAP_DOMAIN="learn.example" \
     -e LDAP_ADMIN_PASSWORD="2LearnVault" \
+    -e LDAP_CONFIG_PASSWORD="2LearnVault" \
     --rm \
     osixia/openldap:1.5.0 > /dev/null
 
@@ -125,6 +126,37 @@ if [ "$(count_alice)" -lt 1 ]; then
   echo "ERROR: failed to seed alice. ldapadd log:"
   cat /tmp/ldapadd.log
 fi
+
+# 关键收尾：删掉 mdb 后端的 olcRootPW。
+# 背景：osixia/openldap 把 cn=admin,dc=learn,dc=example 设成了 mdb 后端的 rootdn，
+# 并把 LDAP_ADMIN_PASSWORD 写进了 cn=config 的 olcRootPW。slapd 对 rootdn 的 bind
+# 只查 olcRootPW，**完全不看** DIT 里同名条目的 userPassword。结果就是：Vault 的
+# rotate-root 通过 ldapmodify 改了 DIT 里 cn=admin 的 userPassword，自己也成功用
+# 新口令再 bind 了——但 olcRootPW 没动，旧口令 2LearnVault 仍然能 bind，rotate
+# 就形同虚设。
+#
+# 删掉 olcRootPW 之后，cn=admin 的 bind 唯一可走的路径就是 DIT 里那条同名条目的
+# userPassword（我们已经在上面 seed 过、初值同样是 2LearnVault）。bind 一旦认证
+# 通过，rootdn 的隐式 ACL 还在，所以 Vault 仍然有权改自己的 userPassword、也仍然
+# 有权管 alice。这一改动让 step2 里的 rotate-root 真正能让旧口令失效。
+strip_olc_rootpw() {
+  ldapmodify -x -H ldap://127.0.0.1:389 \
+    -D "cn=admin,cn=config" -w 2LearnVault <<'EOF'
+dn: olcDatabase={1}mdb,cn=config
+changetype: modify
+delete: olcRootPW
+EOF
+}
+
+for attempt in 1 2 3 4 5; do
+  if strip_olc_rootpw > /tmp/olcrootpw.log 2>&1; then
+    echo "Stripped olcRootPW on attempt $attempt."
+    break
+  fi
+  echo "strip_olc_rootpw attempt $attempt failed; retrying in 2s..."
+  cat /tmp/olcrootpw.log
+  sleep 2
+done
 
 stage "wait for vault install to finish"
 wait "$INSTALL_VAULT_PID"
