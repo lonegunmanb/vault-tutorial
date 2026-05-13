@@ -27,7 +27,7 @@ group_order: 90
   - **`cn`（common name，常用名）**：叶子节点上『这个对象叫什么』的标识，相当于文件系统里的『文件名』。本节里 `cn=alice` 就是用户 alice 自己；`cn=admin` 就是 LDAP 管理员账号。
   - 把这三段拼起来读 `cn=alice,ou=users,dc=learn,dc=example` 就是『在 learn.example 这棵树的 users 文件夹里，叫 alice 的那个对象』。
 - **`bind` 与口令**：客户端连上 LDAP 之后必须**绑定（bind）** 一个 DN 才能后续发请求。最常用的『simple bind』就是『DN + 口令』这一对凭据。绑定成功 ≈ 登录成功。
-- **`binddn` / `bindpass`（在 Vault 这一侧的术语）**：Vault 用来连 LDAP 的那一对凭据。它必须有权限去**修改**目标用户的口令。本节里用的就是 LDAP 管理员 `cn=admin,dc=learn,dc=example`。
+- **`binddn` / `bindpass`（在 Vault 这一侧的术语）**：Vault 用来连 LDAP 的那一对凭据。它必须有权限去**修改**目标用户的 `userPassword`。本节里我们**专门为 Vault 建一个最小权限的服务账号** `cn=vault,ou=services,dc=learn,dc=example`，初始口令 `2VaultBootstrap`，olcAccess 只授予它『写 `userPassword`』这一件事——**不**用 LDAP 的 rootdn `cn=admin`。理由见第 4 节。
 - **Static Role**：[3.10 §3](/ch3-ldap) 已经详细解释过——『LDAP 里**已经存在**这个账号、Vault 只负责按周期把它的口令轮成新随机串』。本节全程使用这一种模式。
 - **Static Role 不签发 Lease**：与 [2.3 节](/ch2-lease) 介绍的 AWS / Database 等动态凭据不同，Vault 读到的 LDAP 口令**不会自己过期**——只会在下一次轮转时**被覆盖**。应用如果一直不重新读，它手里那一份就一直能用，直到下一次轮转把它在 LDAP 这一端作废。
 
@@ -39,7 +39,7 @@ group_order: 90
 
 为了让本节贴近真实工程，剧本只设两个角色，与官方 [OpenLDAP 教程](https://developer.hashicorp.com/vault/tutorials/secrets-management/openldap) 保持一致：
 
-- **admin**（Vault 管理员）：本节里就是你自己，持有 Vault 的 root token；负责启用 `ldap/` 引擎、写连接配置、把 `binddn` 的口令也轮一遍、为 alice 创建一条 Static Role；
+- **admin**（Vault 管理员）：本节里就是你自己，持有 Vault 的 root token；负责启用 `ldap/` 引擎、写连接配置、把 Vault 服务账号自身的 bindpass 也轮一遍、为 alice 创建一条 Static Role；
 - **alice**（最终消费方）：目录里已经存在的一位真实用户；本节里我们不真的『扮演』她去登录什么图形界面，而是用 `ldapsearch` 的 simple bind 模拟『某一个外部应用拿到口令后向 LDAP 验证身份』这个动作。
 
 剧本五幕：
@@ -48,7 +48,7 @@ group_order: 90
 | --- | --- | --- | --- |
 | ① 启动 LDAP | admin | 启动一台 OpenLDAP 容器，预先创建用户 `alice` 并写入初始口令 `1LearnedVault` | `ldapsearch -D cn=alice... -w 1LearnedVault` 成功 |
 | ② 启用 + 配置引擎 | admin | `vault secrets enable ldap` + `vault write ldap/config ...` | `vault read ldap/config` 看到 url / binddn |
-| ③ 轮转 root 凭据 | admin | `vault write -f ldap/rotate-root` —— 让 Vault 自己持有一份**没人见过**的 admin 口令 | 再用旧 `2LearnVault` 去 bind 立即失败 |
+| ③ 轮转 root 凭据 | admin | `vault write -f ldap/rotate-root` —— 让 Vault 自己持有一份**没人见过**的服务账号口令 | 再用旧 `2VaultBootstrap` 去 bind `cn=vault` 立即失败 |
 | ④ 创建 Static Role | admin | 把 alice 这条 DN 注册到 `ldap/static-role/learn`，定为 24 小时一轮 | `vault read ldap/static-cred/learn` 拿到一份新随机口令；用旧 `1LearnedVault` bind 立即失败 |
 | ⑤ 应用消费 | alice 的『应用』 | 一段最小的 bash 脚本：每次启动都向 Vault 取最新口令，再用它 bind LDAP；中途手动触发一次 `vault write -f ldap/rotate-role/learn`，演示同一段脚本第二次执行时无缝取得新口令 | 两次脚本执行**输出的口令字符串不同**，但**两次都 bind 成功** |
 
@@ -68,19 +68,30 @@ group_order: 90
 
 ---
 
-## 4. 为什么要立刻 `rotate-root`
+## 4. 为什么要立刻 `rotate-root`，以及为什么 binddn 要用专用服务账号
+
+### 4.1 binddn：用专用服务账号，不要用 LDAP rootdn
+
+初学者最容易直接抄起 `cn=admin,dc=learn,dc=example`（OpenLDAP 容器里的那位『超级用户』）当 binddn——这在生产里是反模式，原因有两层：
+
+- **权力过大违反最小权限原则**：`cn=admin` 是 mdb 后端的 *rootdn*，享有这个数据库上**绕开 ACL 的隐式全权**；Vault 只需要『改 `userPassword`』这一项能力，把 rootdn 交给它等于把整张目录的写权限都让出去。
+- **`rotate-root` 在 rootdn 上根本轮不动**：slapd 对 rootdn 的 bind **只查 `cn=config` 里的 `olcRootPW`**，完全不看 DIT 里同名条目的 `userPassword`；而 Vault 的 `rotate-root` 是通过 `ldapmodify` 去改 DIT 里的 `userPassword`。结果就是 Vault 报 `Success!`，自己也能用新口令 bind，**但旧口令通过 rootdn 这条捷径永远有效**——rotate 形同虚设。
+
+所以本节的剧本是：init 时建一个 `cn=vault,ou=services,dc=learn,dc=example` 的普通条目，给它一条精确到 `userPassword` 的 olcAccess 写权限；Vault 用它做 binddn；rootdn `cn=admin` 留作运维侧的 break-glass，**永远不交给任何自动化系统**。
+
+### 4.2 rotate-root：写完 ldap/config 的下一条命令
 
 在第 ③ 幕里我们刚一写完 `ldap/config` 就立刻调 `vault write -f ldap/rotate-root`。这一条命令做的事是：
 
 1. Vault 用刚刚写进 `bindpass` 的那一份口令绑定 LDAP；
-2. 在 LDAP 这一端把 `binddn` 自己的 `userPassword` 改成一段新随机串；
+2. 在 LDAP 这一端把 `binddn`（也就是 `cn=vault`）**自己**的 `userPassword` 改成一段新随机串；
 3. Vault 在内部存储里同步记下这份新口令；
 4. **关键**：这份新口令**不能再被任何 API 读出来**——`vault read ldap/config` 也好、Vault 自己的存储后端也好，都不再以明文形式向外吐它。
 
 这一步的意义有两层：
 
-- **缩短『谁见过 binddn 口令』的清单**：在第 ② 幕，`2LearnVault` 这串字符同时存在于（i）你的命令行历史、（ii）OpenLDAP 容器的环境变量、（iii）Vault 内部存储。第 ③ 幕之后，前两份依然存在但**已经不再有效**——LDAP 端那一行 `userPassword` 被新随机串覆盖了。即使有人从 shell 历史或镜像里把 `2LearnVault` 翻出来，他也再也不能拿这一份去操作 LDAP。
-- **把 `binddn` 这把『万能钥匙』锁进 Vault**：从此 Vault 是这一对管理员凭据的**唯一持有者**。任何想以 admin 身份动 LDAP 的人，要么有 Vault 的 root token、要么有一个能动 `ldap/*` 的策略。这正是 Vault 把『谁能做什么』从『谁知道什么口令』转写成『谁有什么策略』的本意。
+- **缩短『谁见过 binddn 口令』的清单**：在第 ② 幕，`2VaultBootstrap` 这串字符同时存在于（i）你的命令行历史、（ii）init 脚本、（iii）Vault 内部存储。第 ③ 幕之后，前两份依然存在但**已经不再有效**——LDAP 端 `cn=vault` 的 `userPassword` 被新随机串覆盖了。即使有人从 shell 历史或镜像里把 `2VaultBootstrap` 翻出来，他也再也不能拿这一份去操作 LDAP。
+- **把 binddn 这把钥匙锁进 Vault**：从此 Vault 是这一对服务账号凭据的**唯一持有者**。任何想以 `cn=vault` 身份动 LDAP 的人，要么有 Vault 的 root token、要么有一个能动 `ldap/*` 的策略。这正是 Vault 把『谁能做什么』从『谁知道什么口令』转写成『谁有什么策略』的本意。
 
 > **这一步不能在生产里『以后再补』**。如果业务已经上线之后才补做 `rotate-root`，那段时间里所有见过 `bindpass` 的人都依然能直接绕开 Vault 操作 LDAP。最佳实践是『写完 `ldap/config` 的下一条命令就是 `rotate-root`』。
 
@@ -127,7 +138,7 @@ path "ldap/static-cred/learn" {
 本节配套的交互式动手实验把第 2 节的五幕剧本拆成四步：
 
 1. **Step 1**：启动 OpenLDAP 容器、预先创建用户 alice、用初始口令 `1LearnedVault` 验证『此时 alice 的口令是人工管理的』；
-2. **Step 2**：启用并配置 `ldap/` 引擎、立刻 `rotate-root`，验证旧的 `2LearnVault` 已经在 LDAP 端失效；
+2. **Step 2**：启用并配置 `ldap/` 引擎（binddn 用专用服务账号 `cn=vault`，不是 rootdn）、立刻 `rotate-root`，验证旧的 `2VaultBootstrap` 已经在 LDAP 端失效；
 3. **Step 3**：创建 `ldap/static-role/learn`、读 `ldap/static-cred/learn` 拿到 Vault 当下持有的口令，用它 bind 成功，再用旧的 `1LearnedVault` bind 失败；手动 `rotate-role` 一次，再次验证『前一份口令也失效了』；
 4. **Step 4**：写一段最小 bash 脚本，模拟一个『每次启动都从 Vault 取口令』的应用——前后两次运行之间手动 `rotate-role`，看到脚本的两次输出口令不同但**都 bind 成功**。
 

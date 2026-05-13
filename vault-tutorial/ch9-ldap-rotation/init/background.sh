@@ -64,12 +64,13 @@ start_openldap
 # 写入与官方 openldap tutorial 完全一致的种子数据：alice 位于 ou=users 下，
 # 初始口令 1LearnedVault；同时建一个 cn=dev 组方便学员后续探索。
 #
-# 还要额外补一个 cn=admin,dc=learn,dc=example 的真实条目：osixia/openldap 容器
-# 默认只把 admin 设为 slapd 的 rootdn（仅写在 cn=config 里，DIT 树里并没有这条
-# 条目），而 Vault 的 ldap/rotate-root 实现会先去 DIT 里 search 这个 binddn，
-# 找不到就返回 LDAP Result Code 32 "No Such Object"，导致 rotate-root 失败。
-# 这里补建该条目并把 userPassword 同步设为 2LearnVault，让 step2 的 rotate-root
-# 既能查到目标条目、又能用同一份口令成功 bind。
+# 另外补一个专门给 Vault 用的服务账号 cn=vault,ou=services：
+#   - 初始口令 2VaultBootstrap，只是为了让 step2 里首次 vault write ldap/config
+#     能 bind 上 LDAP；Vault 被要求的第二动作就是 rotate-root，之后这个初始值
+#     会被一段随机串覆盖、仅存于 Vault 内部。
+#   - 这个账号不是 rootdn，所以 slapd 给它的认证走 DIT 里的 userPassword，
+#     rotate-root 改什么就生效什么——这才是生产里的正确姿势。
+#   - cn=admin 这条 rootdn 则保留不动：它是运维侧的 break-glass，永远不交给 Vault。
 seed_ldap_entries() {
   ldapadd -c -x -H ldap://127.0.0.1:389 \
     -D "cn=admin,dc=learn,dc=example" -w 2LearnVault <<'EOF'
@@ -82,6 +83,11 @@ dn: ou=users,dc=learn,dc=example
 objectClass: organizationalUnit
 objectClass: top
 ou: users
+
+dn: ou=services,dc=learn,dc=example
+objectClass: organizationalUnit
+objectClass: top
+ou: services
 
 dn: cn=dev,ou=groups,dc=learn,dc=example
 objectClass: groupOfNames
@@ -96,12 +102,12 @@ cn: alice
 sn: Liddell
 userPassword: 1LearnedVault
 
-dn: cn=admin,dc=learn,dc=example
+dn: cn=vault,ou=services,dc=learn,dc=example
 objectClass: simpleSecurityObject
 objectClass: organizationalRole
-cn: admin
-description: LDAP administrator entry (created so Vault rotate-root can find it)
-userPassword: 2LearnVault
+cn: vault
+description: Dedicated service account for HashiCorp Vault ldap secrets engine
+userPassword: 2VaultBootstrap
 EOF
 }
 
@@ -127,34 +133,31 @@ if [ "$(count_alice)" -lt 1 ]; then
   cat /tmp/ldapadd.log
 fi
 
-# 关键收尾：删掉 mdb 后端的 olcRootPW。
-# 背景：osixia/openldap 把 cn=admin,dc=learn,dc=example 设成了 mdb 后端的 rootdn，
-# 并把 LDAP_ADMIN_PASSWORD 写进了 cn=config 的 olcRootPW。slapd 对 rootdn 的 bind
-# 只查 olcRootPW，**完全不看** DIT 里同名条目的 userPassword。结果就是：Vault 的
-# rotate-root 通过 ldapmodify 改了 DIT 里 cn=admin 的 userPassword，自己也成功用
-# 新口令再 bind 了——但 olcRootPW 没动，旧口令 2LearnVault 仍然能 bind，rotate
-# 就形同虚设。
-#
-# 删掉 olcRootPW 之后，cn=admin 的 bind 唯一可走的路径就是 DIT 里那条同名条目的
-# userPassword（我们已经在上面 seed 过、初值同样是 2LearnVault）。bind 一旦认证
-# 通过，rootdn 的隐式 ACL 还在，所以 Vault 仍然有权改自己的 userPassword、也仍然
-# 有权管 alice。这一改动让 step2 里的 rotate-root 真正能让旧口令失效。
-strip_olc_rootpw() {
+# 关键收尾：给 mdb 后端加一条 ACL，让 cn=vault 服务账号能写 userPassword。
+# 背景：OpenLDAP 默认只允许 by self write（所以 cn=vault 能改自己的 userPassword、
+# 也就是能 rotate-root），但不能改别人的 userPassword。要让它 step3 能代管 alice
+# 的口令，必须显式授权。我们重写整个 olcAccess：
+#   - {0}：attrs=userPassword：self 写、cn=vault 写、匿名走 auth，其他人看不到。
+#   - {1}：其他属性：self 写、任何已认证身份可读。
+# rootdn （cn=admin）不受 olcAccess 限制，运维侧的 break-glass 能力不受影响。
+add_vault_acl() {
   ldapmodify -x -H ldap://127.0.0.1:389 \
     -D "cn=admin,cn=config" -w 2LearnVault <<'EOF'
 dn: olcDatabase={1}mdb,cn=config
 changetype: modify
-delete: olcRootPW
+replace: olcAccess
+olcAccess: {0}to attrs=userPassword,shadowLastChange by self write by dn.exact="cn=vault,ou=services,dc=learn,dc=example" write by anonymous auth by * none
+olcAccess: {1}to * by self write by users read by * none
 EOF
 }
 
 for attempt in 1 2 3 4 5; do
-  if strip_olc_rootpw > /tmp/olcrootpw.log 2>&1; then
-    echo "Stripped olcRootPW on attempt $attempt."
+  if add_vault_acl > /tmp/vaultacl.log 2>&1; then
+    echo "Added vault ACL on attempt $attempt."
     break
   fi
-  echo "strip_olc_rootpw attempt $attempt failed; retrying in 2s..."
-  cat /tmp/olcrootpw.log
+  echo "add_vault_acl attempt $attempt failed; retrying in 2s..."
+  cat /tmp/vaultacl.log
   sleep 2
 done
 

@@ -5,7 +5,7 @@
 | 步骤 | 已验证 |
 | --- | --- |
 | **Step 1** | 在没有 Vault 的世界里，alice 的口令就是一段明文 `1LearnedVault`；任何知道这一串字符的人都能以 alice 身份 bind |
-| **Step 2** | `vault write ldap/config` + 立刻 `vault write -f ldap/rotate-root`：admin 的 `2LearnVault` 在 LDAP 端立即失效，只有 Vault 持有当下生效的 admin 口令 |
+| **Step 2** | `vault write ldap/config`（用专为 Vault 准备的最小权限服务账号 `cn=vault,ou=services,...`）+ 立刻 `vault write -f ldap/rotate-root`：`2VaultBootstrap` 在 LDAP 端立即失效，只有 Vault 持有当下生效的服务账号口令；rootdn `cn=admin` 留作运维 break-glass，不交给 Vault |
 | **Step 3** | `vault write ldap/static-role/learn ...` 这一条命令本身就会触发首次轮转——`1LearnedVault` 立即失效；手动 `rotate-role` 一次后，前一份 Vault 口令也立即失效 |
 | **Step 4** | 一段最小 bash 脚本『每次启动都向 Vault 取最新口令』；前后两次运行之间手动轮一次，两次的口令字符串不同但**两次都 bind 成功**——消费代码对轮转无感 |
 
