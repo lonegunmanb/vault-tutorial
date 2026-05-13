@@ -6,11 +6,12 @@
 - **ACME 客户端**：Caddy 2.8 容器，`--network host` 直接共享主机网络栈，监听 `:80`（用于 HTTP-01 挑战）与 `:443`（对外提供 HTTPS）；
 - **要保护的域名**：一个虚拟主机名 `caddy.local`，已经写入 `/etc/hosts` 解析到 `127.0.0.1`，让 Vault 与 curl 都能找到 Caddy。
 
-实验分三步：
+实验分四步：
 
 1. **第一步**：检查后台已经替你准备好的环境；以**纯 HTTP** 配置启动 Caddy；用 `curl` 验证 `http://caddy.local/` 能拿到 hello world、`https://caddy.local/` 失败——建立一个清晰的对照基线，然后停掉 Caddy 进入下一步。
 2. **第二步**：执行预置脚本 `/root/pki/enable_engines.sh`，把根 CA + 中间 CA 一次配齐；逐句解释脚本里每条命令；然后用三条额外命令在中间 CA 上打开 ACME（`secrets tune` 放开必需的 HTTP 头、`config/acme enabled=true`、`vault read pki_int/config/acme` 验证）。
 3. **第三步**：用一份指向 Vault ACME directory 的 Caddyfile 重启 Caddy；什么手工证书操作都不做，等几秒；用 `curl --cacert /root/pki/root_2024_ca.crt https://caddy.local/` 拿到 hello world；用 `openssl s_client` / `openssl x509` 看到证书的 Issuer 是 `learn.internal Intermediate Authority`、有效期只有 30 天——亲眼看到内部 PKI 的 ACME 流水线已经在静默运行。
+4. **第四步**：把『证书的整个生命周期』在终端里跑一遍——先把签发角色的 `max_ttl` 临时调到 2 分钟、强制 Caddy 拿一张『短命证书』、等待约 90 秒，亲眼看到 Caddy **自动续期**（序列号、有效期都换了一组）；再在 Vault 一侧用 `vault write pki_int/revoke` **手动吊销** 当前证书、确认它出现在 CRL 里、并让 Caddy **自动重新申请** 一张新证书。两种触发器走的都是同一套 ACME 协议管线，对运维而言只是一句命令的差别。
 
 为完全规避真实云成本，整个实验都在单台 Killercoda 主机上完成：
 
