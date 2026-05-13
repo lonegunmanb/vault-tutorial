@@ -132,3 +132,5 @@ path "ldap/static-cred/learn" {
 4. **Step 4**：写一段最小 bash 脚本，模拟一个『每次启动都从 Vault 取口令』的应用——前后两次运行之间手动 `rotate-role`，看到脚本的两次输出口令不同但**都 bind 成功**。
 
 > 实验全程在单台主机上完成；OpenLDAP 运行在 Docker 容器内、Vault 以 dev 模式作为宿主机进程运行；与 [3.10 节](/ch3-ldap) 的动手实验**复用同一套技术栈**，只是把 base DN 改成 `dc=learn,dc=example`、用户改成 alice，以便与官方教程一一对照。
+
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch9-ldap-rotation" title="实验：用 Vault 接管 OpenLDAP 用户口令的轮转生命周期" />
