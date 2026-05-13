@@ -62,6 +62,13 @@ start_openldap
 
 # 写入与官方 openldap tutorial 完全一致的种子数据：alice 位于 ou=users 下，
 # 初始口令 1LearnedVault；同时建一个 cn=dev 组方便学员后续探索。
+#
+# 还要额外补一个 cn=admin,dc=learn,dc=example 的真实条目：osixia/openldap 容器
+# 默认只把 admin 设为 slapd 的 rootdn（仅写在 cn=config 里，DIT 树里并没有这条
+# 条目），而 Vault 的 ldap/rotate-root 实现会先去 DIT 里 search 这个 binddn，
+# 找不到就返回 LDAP Result Code 32 "No Such Object"，导致 rotate-root 失败。
+# 这里补建该条目并把 userPassword 同步设为 2LearnVault，让 step2 的 rotate-root
+# 既能查到目标条目、又能用同一份口令成功 bind。
 seed_ldap_entries() {
   ldapadd -c -x -H ldap://127.0.0.1:389 \
     -D "cn=admin,dc=learn,dc=example" -w 2LearnVault <<'EOF'
@@ -87,6 +94,13 @@ objectClass: top
 cn: alice
 sn: Liddell
 userPassword: 1LearnedVault
+
+dn: cn=admin,dc=learn,dc=example
+objectClass: simpleSecurityObject
+objectClass: organizationalRole
+cn: admin
+description: LDAP administrator entry (created so Vault rotate-root can find it)
+userPassword: 2LearnVault
 EOF
 }
 
