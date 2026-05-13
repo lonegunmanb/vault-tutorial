@@ -1,0 +1,43 @@
+{
+  "title": "端到端：用 Vault 接管 OpenLDAP 用户口令的轮转生命周期",
+  "description": "在 OpenLDAP + Dev 模式 Vault (1.19.2) 上完整执行一遍『alice 的口令从人工管理 → Vault 接管 → 自动轮转』的剧本：rotate-root 让 binddn 的口令从此只属于 Vault，static-role/learn 让 alice 的口令成为短寿随机串，最小 bash 应用脚本演示『每次启动都从 Vault 取最新口令』的消费路径。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "启动 OpenLDAP 容器并验证 alice 的初始口令",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "启用 ldap/ 引擎并立刻 rotate-root",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "为 alice 创建 Static Role 并完整观察一次轮转",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "用最小 bash 应用脚本消费 Vault 当下持有的口令",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
