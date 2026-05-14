@@ -133,7 +133,8 @@ export default defineConfig({
              { text: '9.3 用 Vault Agent 缓存为高频读请求降压：动态租约复用与 token 续期托管', link: '/ch9-agent-cache' },
              { text: '9.4 ACME 协议自动化 TLS 证书签发：让 Vault PKI 与 Caddy 自动协商并续期', link: '/ch9-acme-caddy' },
              { text: '9.5 端到端案例：用 Vault 接管 OpenLDAP 用户口令的轮转生命周期', link: '/ch9-ldap-rotation' },
-             { text: '9.5 Vault 故障排查方法论：从可观测性数据反推根因', link: '/ch9-troubleshoot' }
+             { text: '9.5 Vault 故障排查方法论：从可观测性数据反推根因', link: '/ch9-troubleshoot' },
+             { text: '9.6 Vault 作为身份代理（Identity Broker）：把 AWS IAM 与 K8s ServiceAccount 联邦到 PostgreSQL 动态账号', link: '/ch9-identity-broker-postgres' }
            ]
          }
         ],

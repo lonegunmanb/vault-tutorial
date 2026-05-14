@@ -50,6 +50,7 @@
     { "path": "ch9-acme-caddy" },
     { "path": "ch9-ldap-rotation" },
     { "path": "ch9-agent-cache" },
-    { "path": "ch9-troubleshoot" }
+    { "path": "ch9-troubleshoot" },
+    { "path": "ch9-identity-broker-postgres" }
   ]
 }

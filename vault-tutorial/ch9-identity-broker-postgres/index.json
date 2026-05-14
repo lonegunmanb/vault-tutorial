@@ -1,0 +1,35 @@
+{
+  "title": "把 AWS IAM 与 K8s ServiceAccount 联邦到同一份 PostgreSQL 动态凭据",
+  "description": "在 Killercoda 预置的单节点 Kubernetes 主机上演练 9.6 节正文所讲的 Vault identity brokering 范式：(1) 用 LocalStack 模拟 AWS IAM/STS 服务，启用 Vault aws auth method、把 sts_endpoint 指向 LocalStack；接着启用 database 引擎并把 PostgreSQL 接入；用 IAM user 凭据登录 Vault 并申领 database/creds/readonly，用得到的临时账号 psql 直连 PostgreSQL 跑业务 SQL；revoke lease 后回 PG 验证账号已被 Vault 主动 DROP 干净。(2) 在同一份 database/config/postgres-broker 与同一条 database/roles/readonly 模板上叠加 kubernetes auth method，绑定一个 demo/app-k8s ServiceAccount，kubectl run 一个 Pod 进入登录、调用同一条 database/creds/readonly 拿到同构的临时账号，亲眼看到 'identity in, dynamic credential out' —— 换上游、不换下游 —— 是 Vault brokering 范式的真正抽象。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "第一步：AWS IAM (LocalStack) → Vault → PostgreSQL 动态凭据",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "第二步：K8s ServiceAccount → Vault → 同一份 PostgreSQL 动态凭据",
+        "text": "step2/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "kubernetes-kubeadm-1node"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
