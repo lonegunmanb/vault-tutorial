@@ -123,6 +123,18 @@ export default defineConfig({
              { text: '8.2 三种内置审计设备配置详解（File / Syslog / Socket）', link: '/ch8-audit-devices' },
              { text: '8.3 审计日志最佳实践（含 CVE-2025-6000 安全加固指导）', link: '/ch8-audit-best-practices' }
            ]
+         },
+         {
+           text: '第 9 章：全栈架构防线升级与现代工程实战案例',
+           collapsed: false,
+           items: [
+             { text: '9.1 上线前的安全加固清单与请求速率限流配额', link: '/ch9-production-hardening' },
+             { text: '9.2 加密即服务（EaaS）：让一个 Go Web 应用『不再保管密钥』', link: '/ch9-eaas-transit' },
+             { text: '9.3 用 Vault Agent 缓存为高频读请求降压：动态租约复用与 token 续期托管', link: '/ch9-agent-cache' },
+             { text: '9.4 ACME 协议自动化 TLS 证书签发：让 Vault PKI 与 Caddy 自动协商并续期', link: '/ch9-acme-caddy' },
+             { text: '9.5 端到端案例：用 Vault 接管 OpenLDAP 用户口令的轮转生命周期', link: '/ch9-ldap-rotation' },
+             { text: '9.5 Vault 故障排查方法论：从可观测性数据反推根因', link: '/ch9-troubleshoot' }
+           ]
          }
         ],
       },

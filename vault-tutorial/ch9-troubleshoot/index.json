@@ -1,0 +1,39 @@
+{
+  "title": "Vault 故障排查方法论：用三类典型故障演练'取证—推理—修复'闭环",
+  "description": "在单台 Killercoda 主机上故意制造三类典型 Vault 故障，并按 9.5 节正文所教的方法论亲手排查与修复：(1) 用故意漏掉 cluster_addr 的 raft 配置启动 Vault，从 journalctl 里读出 'Cluster address must be set when using raft storage'，补上配置后服务正常启动；(2) 启动一个明文 HTTP 的 dev 模式 Vault，故意不导出 VAULT_ADDR 直接 vault status，复现 'http: server gave HTTP response to HTTPS client'，再按 dev 输出的 hint 修复；(3) 启用 file 审计设备并挂载 KV 引擎，故意写一条漏掉 list capability 的策略，用对应 token 触发 permission denied，从审计日志中 grep 出 policy_results 的 allowed:false，对照策略原文确认根因后补上 list 重新登录再次 LIST 成功。",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "情景一：服务器启动失败 — 从 journalctl 里读出 cluster_addr 缺失",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "情景二：客户端协议不匹配 — 复现 HTTP/HTTPS scheme mismatch",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "情景三：策略权限不足 — 从审计日志反推 list capability 缺失",
+        "text": "step3/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
