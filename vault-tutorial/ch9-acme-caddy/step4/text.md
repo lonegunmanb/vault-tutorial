@@ -134,9 +134,9 @@ vault write pki_int/revoke serial_number="$SN_VAULT"
 **第 3 步**：直接读出 CRL，确认刚才吊销的序列号已经在里面：
 
 ```bash
-vault read -field=certificate pki_int/issuer/$(vault read -field=default pki_int/config/issuers)/crl/pem \
+vault read -field=crl pki_int/issuer/$(vault read -field=default pki_int/config/issuers)/crl \
   | openssl crl -noout -text | grep -A1 -i "revoked certificates" | head -5
-vault read -field=certificate pki_int/issuer/$(vault read -field=default pki_int/config/issuers)/crl/pem \
+vault read -field=crl pki_int/issuer/$(vault read -field=default pki_int/config/issuers)/crl \
   | openssl crl -noout -text | grep -i "serial number" | head -10
 ```
 
@@ -179,7 +179,7 @@ curl --cacert /root/pki/ca_bundle.pem https://caddy.local/
 **第 6 步**（可选验证）：旧序列号在 CRL 里**不会**因为续签了新证书就消失——它会一直留到自身 `notAfter` 之后才能被 CRL 回收：
 
 ```bash
-vault read -field=certificate pki_int/issuer/$(vault read -field=default pki_int/config/issuers)/crl/pem \
+vault read -field=crl pki_int/issuer/$(vault read -field=default pki_int/config/issuers)/crl \
   | openssl crl -noout -text | grep -i "serial number" | head -5
 ```
 
