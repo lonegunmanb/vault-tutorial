@@ -39,7 +39,38 @@ Cluster address must be set when using raft storage
 
 ## 1.4 修复并重启
 
-`/root/vault-fixed.hcl` 已经在原配置基础上补上了 `cluster_addr = "http://127.0.0.1:8201"`。先停掉当前的失败进程（虽然它已经死了，但要清理 raft 数据目录避免脏状态），再用"好"配置重启：
+`/root/vault-fixed.hcl` 已经在原配置基础上补上了 `cluster_addr = "http://127.0.0.1:8201"`。可以先快速对照一下修补后的关键片段（与"坏"配置的唯一差异就是多了 `cluster_addr` 这一行）：
+
+```hcl
+ui            = false
+disable_mlock = true
+cluster_name  = "vault-troubleshoot-classroom"
+log_level     = "info"
+pid_file      = "/tmp/vault.pid"
+
+api_addr      = "http://127.0.0.1:8200"
+cluster_addr  = "http://127.0.0.1:8201"   # ← 新增的这一行修复了根因
+
+storage "raft" {
+  path    = "/opt/vault/data"
+  node_id = "node-1"
+}
+
+listener "tcp" {
+  address     = "0.0.0.0:8200"
+  tls_disable = true
+}
+```
+
+如果想亲自确认一下 broken 与 fixed 两份配置的差异，可以执行：
+
+```bash
+diff /root/vault-broken.hcl /root/vault-fixed.hcl
+```
+
+预期只会看到 `cluster_addr = "http://127.0.0.1:8201"` 这一行被新增。
+
+接下来先停掉当前的失败进程（虽然它已经死了，但要清理 raft 数据目录避免脏状态），再用"好"配置重启：
 
 ```bash
 ./stop-vault.sh

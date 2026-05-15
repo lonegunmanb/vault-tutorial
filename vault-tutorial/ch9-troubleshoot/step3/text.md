@@ -119,9 +119,7 @@ path "project-newcup-secrets/+/*" {
 
 到这一步根因清晰浮现——capabilities 只有 `create / read / update`，**漏掉了 `list`**，所以 `LIST` 请求被 ACL 引擎判为不允许。
 
-## 3.7 修复策略并**重新登录**拿新 token
-
-补上 `list` capability：
+## 3.7 修复策略：补上 `list` capability
 
 ```bash
 cat > /root/project-newcup-developers.hcl <<'EOF'
@@ -133,15 +131,9 @@ EOF
 vault policy write project-newcup-developers /root/project-newcup-developers.hcl
 ```
 
-按 9.5 节情景四所讲，**策略修改不会自动应用到已经签发的 token**，必须重新派生一个新 token：
+## 3.8 验证：旧 token **立即生效**，再 LIST 即成功
 
-```bash
-NEW_DEV_TOKEN=$(vault token create -policy=project-newcup-developers -format=json \
-  | jq -r '.auth.client_token')
-echo "新 token: ${NEW_DEV_TOKEN}"
-```
-
-> 验证一下"旧 token 即使在策略更新后依然被拒"：用 `${DEV_TOKEN}` 再 LIST 一次，预期仍然得到 `permission denied`。这一现象本身就是"策略更新非追溯"的直接证据。
+Vault 的 ACL 评估是 **请求时按策略名实时查表**——也就是说，**修改一条已存在策略的内容会立即对所有挂着该策略的旧 token 生效**，不需要重新登录。直接拿原来那个 `${DEV_TOKEN}` 再发一次 LIST：
 
 ```bash
 curl --silent --request LIST \
@@ -150,41 +142,76 @@ curl --silent --request LIST \
   | jq
 ```
 
-仍然 `permission denied` —— 完全符合 9.5 节"策略修改不会自动应用到已经签发的 token"的判断。
-
-## 3.8 用新 token 再次 LIST，验证修复生效
-
-```bash
-curl --silent --request LIST \
-  --header "X-Vault-Token: ${NEW_DEV_TOKEN}" \
-  ${VAULT_ADDR}/v1/project-newcup-secrets/metadata/ \
-  | jq
-```
-
-预期输出：
+预期输出（与刚才被拒的是**同一个 token**！）：
 
 ```json
 {
   "request_id": "...",
-  "lease_id": "",
-  "renewable": false,
-  "lease_duration": 0,
   "data": {
     "keys": [
       "newcup-aggregator"
     ]
   },
-  ...
+  "mount_type": "kv"
 }
 ```
 
-LIST 成功返回机密名列表 `["newcup-aggregator"]`——整套排障闭环就此完成。
+LIST 成功返回 `["newcup-aggregator"]`——LIST 这条排障闭环就此完成。
 
-## 3.9 这一步的核心闭环
+> 这条性质对应 ch2-policies §6 的第三条不对称："policy 内容本身修改也是即时生效"。**生产里发现某条 policy 给多了的话，第一反应不应该是去找哪些 token 持有它然后 revoke，而是直接改那条 policy 的内容**——下一次请求就用新规则。
 
-学员把 9.5 节正文最难的情景四（"客户端拿到 permission denied、必须靠审计日志反推根因"）从头到尾走了一遍：
+## 3.9 对照实验：什么时候**必须**重新签发 token
+
+为了让"什么时候改策略立即生效、什么时候必须重新签发"这条边界刻在脑子里，下面用同一个 `${DEV_TOKEN}` 再做一次对照——这次给业务**新增一种能力**：允许 `delete`。按 ch2-policies §6 第一条不对称——*token 上挂载的策略列表是签发时冻结的*——所以**新建一条策略再附加给身份，旧 token 拿不到**，必须重新派一个 token 才行。
+
+先单独写一条只授予 `delete` 的新策略（**有意不去改原来那条 `project-newcup-developers`，让差异完全落在"附加策略"这一动作上**）：
+
+```bash
+cat > /root/project-newcup-deleter.hcl <<'EOF'
+path "project-newcup-secrets/+/*" {
+  capabilities = ["delete"]
+}
+EOF
+
+vault policy write project-newcup-deleter /root/project-newcup-deleter.hcl
+```
+
+先用旧 `${DEV_TOKEN}` 试一次 DELETE（它身上**只挂着** `project-newcup-developers`，没有 `project-newcup-deleter`）：
+
+```bash
+curl --silent --request DELETE \
+  --header "X-Vault-Token: ${DEV_TOKEN}" \
+  ${VAULT_ADDR}/v1/project-newcup-secrets/metadata/newcup-aggregator \
+  -o /tmp/del-old.json -w "HTTP %{http_code}\n"
+cat /tmp/del-old.json
+```
+
+预期：`HTTP 403` + `permission denied`。这就是关键证据——**即使 `project-newcup-deleter` 这条策略此刻在 Vault 里已经存在并写明了 delete 权限，旧 token 也拿不到它**，因为旧 token 上冻结的策略列表里**根本没有这个名字**。
+
+现在派一个**同时挂两条策略**的新 token，再试一次 DELETE：
+
+```bash
+NEW_DEV_TOKEN=$(vault token create \
+  -policy=project-newcup-developers \
+  -policy=project-newcup-deleter \
+  -format=json | jq -r '.auth.client_token')
+
+curl --silent --request DELETE \
+  --header "X-Vault-Token: ${NEW_DEV_TOKEN}" \
+  ${VAULT_ADDR}/v1/project-newcup-secrets/metadata/newcup-aggregator \
+  -w "HTTP %{http_code}\n"
+```
+
+预期：`HTTP 204`，机密被成功删除。新旧两个 token 行为差异的**唯一变量**就是"签发时挂的 policies 列表"——这就是 ch2-policies §6 第一条不对称的实证。
+
+> **生产里规避"必须重派 token"的办法**：把策略**挂在 entity / group 上**而不是直接挂在 token 上。ch2-identity-entity §5.1 明确指出 entity / group 上的策略**也是请求时实时求值的**——给 entity 加一条新策略，旧 token 下次请求就直接获得新权限，不必重派。直接 `-policy=` 写到 token 上的做法只在"短命 service token、不依赖身份层"的场景才合适。
+
+## 3.10 这一步的核心闭环
+
+学员把 9.5 节正文最难的情景四（"客户端拿到 permission denied、必须靠审计日志反推根因"）从头到尾走了一遍，并把"什么时候改策略立即生效、什么时候必须重新签发"这条 ACL 边界亲手验证了一次：
 
 1. 用受限 token 触发 `permission denied`（客户端侧只看到不可解释的拒绝）；
 2. 从审计日志中 grep 出 `policy_results.allowed: false` 与 `operation: list` 两个关键字段（运维侧才能拿到的信息）；
 3. 用 `vault policy read` 对照策略原文，确认 capability 缺失；
-4. 补上 capability 后，**亲眼验证旧 token 仍被拒、新 token 可用**——固化"策略修改非追溯"这一关键概念。
+4. 补上 `list` capability 后，**用同一个旧 token 直接 LIST 成功**——印证 ch2-policies §6 "policy 内容修改即时生效"；
+5. 再写一条全新的 `project-newcup-deleter` 策略——**旧 token DELETE 仍 403、新派的 token DELETE 成功**——印证 ch2-policies §6 "token 上挂载的策略列表在签发时冻结"。两个对照实验合起来把"修改 vs 附加"这条边界彻底钉死。

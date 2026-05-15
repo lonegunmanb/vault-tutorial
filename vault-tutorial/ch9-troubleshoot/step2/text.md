@@ -21,15 +21,24 @@ sleep 3
 head -40 /var/log/vault.log
 ```
 
-输出里会有形如下面这一行的**关键提示**：
+> 小贴士：当你在交互终端里直接前台运行 `vault server -dev` 时，启动末尾会额外打印一段醒目的 hint：
+>
+> ```text
+> You may need to set the following environment variables:
+>
+>     $ export VAULT_ADDR='http://127.0.0.1:8200'
+> ```
+>
+> 这就是 9.5 节情景二反复强调的"故障的解法常常已经被作者写在 hint 段里"。但本实验为了让 Vault 在后台跑，用了 `nohup ... > /var/log/vault.log 2>&1 &`，这段交互式 hint 在 Vault 1.19+ 不会进入文件日志——所以下面我们改用 **配置块** 里的两行更稳定的线索来定位问题。
+
+在 `head -40` 的输出里，重点找出这两行（你应该能直接看到）：
 
 ```text
-You may need to set the following environment variables:
-
-    $ export VAULT_ADDR='http://127.0.0.1:8200'
+             Api Address: http://0.0.0.0:8200
+              Listener 1: tcp (addr: "0.0.0.0:8200", ... tls: "disabled")
 ```
 
-这一行就是 9.5 节情景二里反复强调的"故障的解法常常已经被作者写在 hint 段里"。**先不要照做**——故意忽略它，下一步亲自体验"协议不匹配"是什么样子。
+这两行明确告诉你：**dev 服务器对外暴露的是明文 HTTP（`tls: "disabled"`，`api_addr` 也是 `http://`）**。**先记住这个事实，但不要急着 `export VAULT_ADDR`**——下一步我们故意忽略它，亲自体验"协议不匹配"是什么样子。
 
 ## 2.3 故意不导出 `VAULT_ADDR`，直接 `vault status`
 
