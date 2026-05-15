@@ -7,7 +7,7 @@ group_order: 90
 
 # 9.6 Vault 作为身份代理（Identity Broker）：把 AWS IAM 与 K8s ServiceAccount 联邦到 PostgreSQL 动态账号
 
-> **核心结论**：Vault 最容易被低估的能力，并不是"集中保管口令"，而是 **作为身份代理（identity broker）**——它先验证调用方在某个外部身份域（AWS / Kubernetes / OIDC / TLS 客户端证书等）里**到底是谁**，再以该身份为锚点、把对**另一个目标系统**（在本节里是 PostgreSQL）的访问 **现场签发**为一份短生命周期、随用随建、用完即销的动态凭据。本节用 PostgreSQL 作为统一的"目标域"，演示**两种不同来源的工作负载身份**如何走完同一条 brokering 流水线：（1）一台拿着 AWS IAM 凭据的"外部主机"调用方；（2）一只跑在 Kubernetes 集群里、靠 ServiceAccount 自证身份的 Pod。学员将在 Killercoda 提供的单节点 Kubernetes 环境里把这条 zero-trust 流水线**完整跑两遍**，亲眼看到"换认证方、不换数据库授权配置"是 Vault identity brokering 范式的精髓。本节面向已经分别学过第 4.3、4.4、3.14 章基础内容的学员，但不要求信息安全方面的专业背景。
+> **核心结论**：Vault 最容易被低估的能力，并不是"集中保管口令"，而是 **作为身份代理（identity broker）**——它先验证调用方在某个外部身份域（AWS / Kubernetes / OIDC / TLS 客户端证书等）里**到底是谁**，再以该身份为锚点、把对**另一个目标系统**（在本节里是 PostgreSQL）的访问 **现场签发**为一份短生命周期、随用随建、用完即销的动态凭据。本节用 PostgreSQL 作为统一的"目标域"，演示**两种不同来源的工作负载身份**如何走完同一条 brokering 流水线：（1）一台拿着 AWS IAM 凭据的"外部主机"调用方；（2）一个跑在 Kubernetes 集群里、靠 ServiceAccount 自证身份的 Pod。学员将在 Killercoda 提供的单节点 Kubernetes 环境里把这条 zero-trust 流水线**完整跑两遍**，亲眼看到"换认证方、不换数据库授权配置"是 Vault identity brokering 范式的精髓。本节面向已经分别学过第 4.3、4.4、3.14 章基础内容的学员，但不要求信息安全方面的专业背景。
 
 参考：
 - 主参考：[Vault as an identity broker for zero trust security — HashiCorp Validated Patterns](https://developer.hashicorp.com/validated-patterns/vault/vault-trusted-identity-brokering)
@@ -34,7 +34,7 @@ Vault 的**真正定位**应当是**身份代理（identity broker）**——它
 
 ### 2.1 Phase 1 — 身份验证与 token 签发（Authentication）
 
-调用方（一台 EC2 实例、一只 K8s Pod、一个 OIDC 用户……）首先用**它在外部身份域里的原生凭据**向 Vault 的某个 auth method 发起登录。Vault 不会盲信调用方自己说的话——它会**主动向外部身份提供商发起 out-of-band 调用**做最终判定：例如调用 Kubernetes API 的 TokenReview 端点验证 ServiceAccount JWT、调用 AWS STS 的 GetCallerIdentity 验签 IAM 签名请求。验证通过后，Vault 才**为该外部身份签发一枚短生命周期 Vault token**，并把外部身份的关键属性（ServiceAccount 名、IAM ARN 等）作为 metadata 永久绑定在这枚 token 上。**这一阶段不授权任何业务资源访问，只回答"你是谁"**。
+调用方（一台 EC2 实例、一个 K8s Pod、一个 OIDC 用户……）首先用**它在外部身份域里的原生凭据**向 Vault 的某个 auth method 发起登录。Vault 不会盲信调用方自己说的话——它会**主动向外部身份提供商发起 out-of-band 调用**做最终判定：例如调用 Kubernetes API 的 TokenReview 端点验证 ServiceAccount JWT、调用 AWS STS 的 GetCallerIdentity 验签 IAM 签名请求。验证通过后，Vault 才**为该外部身份签发一枚短生命周期 Vault token**，并把外部身份的关键属性（ServiceAccount 名、IAM ARN 等）作为 metadata 永久绑定在这枚 token 上。**这一阶段不授权任何业务资源访问，只回答"你是谁"**。
 
 ### 2.2 Phase 2 — 身份到权限的映射（Authorization）
 
@@ -98,7 +98,7 @@ ACL 通过后，Vault 才**真正去敲 PostgreSQL 的门**——它用 `databas
 4. 在 Vault 上启用 `database` engine、用 `database/config/postgres-broker` 配置一对**仅用于 Vault 自身**的 admin 凭据（实验里是 `vaultadmin`），并 `rotate-root` 把这对凭据从 PG 端切换为 Vault 内部独占；
 5. 在 Vault 上创建 `database/roles/readonly`：模板是"`CREATE ROLE {{name}} ... GRANT SELECT ON demo.* TO {{name}}` + 到期 `DROP ROLE`"，TTL 默认 2 分钟；
 6. 用 IAM user 的 access key 走 `vault login -method=aws role=app-aws`——CLI 内置 iam 登录支持，会自动用本地凭据签 `sts:GetCallerIdentity` 请求并把签名提交给 Vault，Vault 转发给 LocalStack STS 验签后才签出 Vault token；
-7. 拿这枚 Vault token 调 `database/creds/readonly`，得到 `username=v-aws-readonly-xxxx` / `password=…` / `lease_id`；
+7. 拿这枚 Vault token 调 `database/creds/readonly`，得到 `username=v-aws-app--readonly-xxxx` / `password=…` / `lease_id`；
 8. 用这对凭据 `psql` 直连 PostgreSQL，执行 `SELECT * FROM demo.kv` 拿到业务数据；
 9. `vault lease revoke <lease_id>`，回到 PG 端 `\du` 验证临时账号已被 Vault 主动 DROP 干净。
 
@@ -120,7 +120,7 @@ ACL 通过后，Vault 才**真正去敲 PostgreSQL 的门**——它用 `databas
 教学上的关键证据有两条：
 
 - **`database/config/postgres-broker` 与 `database/roles/readonly` 在两个场景之间一个字符没改**——这说明 Vault 已经把"身份"与"凭据"彻底解耦：上游可以是任何 auth method，下游的凭据生成逻辑只需要写一遍。
-- **PostgreSQL 端 `\du` 看到的临时账号前缀，会在两个场景里分别带上 auth method 名（`v-aws-readonly-...` 与 `v-kubernetes-readonly-...`）**——这是 Vault 自动写入的 metadata，便于审计时反向追溯"这个临时账号是从哪条认证路径派生出来的"。
+- **PostgreSQL 端 `\du` 看到的临时账号前缀，会在两个场景里分别带上 auth method + role 名（`v-aws-app--readonly-...` 与 `v-kubernetes-app--readonly-...`）**——这是 Vault 自动写入的 metadata，便于审计时反向追溯“这个临时账号是从哪条认证路径派生出来的”。
 
 ---
 

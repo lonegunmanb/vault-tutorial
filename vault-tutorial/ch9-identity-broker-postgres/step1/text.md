@@ -186,9 +186,12 @@ echo "临时账号: $PG_USER"
 echo "Lease ID: $LEASE_ID"
 ```
 
-`PG_USER` 形如 `v-iam-readonly-xxxxxxxx-...`——前缀里的 `iam` 正是上游
-auth method 名，这是 Vault 自动写入的审计信息，便于反向追溯凭据是从
-哪条认证路径派生出来的。
+`PG_USER` 形如 `v-aws-app--readonly-xxxxxxxx-...`——前缀里的
+`aws-app-` 是 Vault 拼接的「认证方法 (`aws`) + 认证时的
+role/display name 前缀 (`app-`)」，这是 Vault 自动写入的审计
+信息，便于反向追溯凭据是从哪条认证路径派生出来的。第
+二步换成 K8s 认证后，同一条 role 签出的临时账号前缀会变成
+`v-kubernetes-...`。
 
 旁路确认 PG 端真的多了这个账号：
 
@@ -210,7 +213,15 @@ PGPASSWORD="$PG_PASS" psql -h 127.0.0.1 -U "$PG_USER" -d postgres \
 
 ## 1.9 Revoke lease，验证 Vault 主动 DROP 临时账号
 
+> 1.6 那枚 aws 登录得到的 Vault token **只挂了 `db-readonly` policy**，
+> 没有 `sys/leases/revoke/*` 权限——直接 revoke 会返回 `403 permission
+> denied`。所以这里先把 token 切回 root 再 revoke（生产里则应在 policy
+> 里显式授予 `sys/leases/revoke/database/creds/readonly/*` 的 `update`
+> 能力，让调用方能自助归还自己申领的凭据）。
+
 ```bash
+export VAULT_TOKEN=root
+
 vault lease revoke "$LEASE_ID"
 sleep 2
 
@@ -227,14 +238,13 @@ PGPASSWORD="$PG_PASS" psql -h 127.0.0.1 -U "$PG_USER" -d postgres \
 > revoke 时**主动**回到目标域执行 `revocation_statements`。临时账号的
 > 整个生命周期都被 Vault 接管。
 
-## 1.10 把 token 切回 root 给第二步用
+## 1.10 确认 token 已切回 root，给第二步用
 
 ```bash
-export VAULT_TOKEN=root
-vault token lookup | head -3
+vault token lookup -format=json | jq '.data.policies'
 ```
 
-`policies` 应回到 `[root]`。
+应输出 `["root"]`。
 
 ---
 
@@ -242,7 +252,7 @@ vault token lookup | head -3
 
 - [ ] `vault login -method=aws role=app-aws` 成功，token 上挂 `db-readonly` policy
 - [ ] `vault read database/creds/readonly` 成功，返回 `username`/`password`/`lease_id`
-- [ ] PG 端 `pg_roles` 里能看到 `v-iam-readonly-...` 这个临时账号
+- [ ] PG 端 `pg_roles` 里能看到 `v-aws-app--readonly-...` 这个临时账号
 - [ ] 用临时账号能 `SELECT * FROM demo.kv` 拿到业务数据
 - [ ] `vault lease revoke` 后 PG 端账号消失、用临时凭据登录失败
 

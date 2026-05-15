@@ -86,9 +86,10 @@ vault read auth/kubernetes/role/app-k8s
 ## 2.3 在 Pod 里签 ServiceAccount JWT 并登录 Vault
 
 为了让流水线完全在"应用 Pod 视角"中跑通，跑一个 Pod 进去操作。Pod 用
-`serviceAccountName: app-k8s` 启动，进 Pod 后我们在 Pod 内安装 vault
-CLI、用 `kubectl create token` 签 JWT、然后 `vault write
-auth/kubernetes/login` 换 Vault token。
+`serviceAccountName: app-k8s` 启动；进 Pod 之前先在主机端用 `kubectl
+create token --audience=vault-broker` 给该 SA 签一枚短期 JWT，再把
+JWT 拷进 Pod，Pod 内只需要 `vault write auth/kubernetes/login` 把
+JWT 换成 Vault token。
 
 > Killercoda 单节点集群里 Vault 跑在主机网络的 `127.0.0.1:8200`，Pod
 > 默认 podCIDR 与主机 net namespace 隔离，因此实验里把 Pod 用
@@ -100,54 +101,67 @@ auth/kubernetes/login` 换 Vault token。
 启动 Pod（`tail -f /dev/null` 让 Pod 一直留着）：
 
 ```bash
-kubectl run app-k8s-pod \
+kubectl run app-k8s-pod -n demo \
   --image=ubuntu:22.04 \
-  --serviceaccount=app-k8s -n demo \
   --restart=Never \
-  --overrides='{"spec":{"hostNetwork":true,"dnsPolicy":"ClusterFirstWithHostNet"}}' \
+  --override-type=strategic \
+  --overrides='{"spec":{"serviceAccountName":"app-k8s","hostNetwork":true,"dnsPolicy":"ClusterFirstWithHostNet"}}' \
   --command -- sleep infinity
 
 # 等 Pod Ready
 kubectl wait --for=condition=Ready pod/app-k8s-pod -n demo --timeout=120s
 ```
 
-把 vault 二进制 + KUBECONFIG + CA 拷到 Pod，避免再装一次：
+> 新版 `kubectl run` 已经移除了 `--serviceaccount` 这个独立 flag，统一
+> 通过 `--overrides` 把 `serviceAccountName` 写进 PodSpec。
+
+
+把 vault 二进制拷到 Pod（Pod 内只需要 `vault` CLI，kubectl
+留在主机端负责签 JWT）：
 
 ```bash
 kubectl cp -n demo "$(which vault)" app-k8s-pod:/usr/local/bin/vault
-kubectl cp -n demo "$KUBECONFIG" app-k8s-pod:/root/.kube-config
-kubectl cp -n demo "$K8S_CA_CERT" app-k8s-pod:/tmp/k8s-ca.crt
 kubectl exec -n demo app-k8s-pod -- chmod +x /usr/local/bin/vault
 ```
 
-> `kubectl cp` 走的是 K8s API + kubelet 的 file copy 路径，不依赖 Pod
-> 内有 `tar` 之外的工具；ubuntu:22.04 默认带 `tar`。
+> `kubectl cp` 走的是 K8s API + kubelet 的 file copy 路径，依赖 Pod
+> 内有 `tar`；ubuntu:22.04 默认带 `tar`。
 
-进 Pod，用 ServiceAccount 自身的 projected token 走 K8s API 给自己签
-一枚 audience 为 `vault-broker` 的短期 JWT。
+进 Pod 之前，在主机端用 ServiceAccount 自身的 TokenRequest API 给
+`demo/app-k8s` 签一枚 audience 为 `vault-broker` 的短期 JWT，再
+拷进 Pod：Pod 内只负责拿这枚 JWT 去 `vault write
+auth/kubernetes/login`。
 
 > Pod 内默认挂在 `/var/run/secrets/kubernetes.io/serviceaccount/token`
 > 的那枚 token 由 kubelet 注入，audience 是 K8s API server 自身，**不
 > 是** `vault-broker`，会被我们 role 上的 audience 约束拒掉；所以这里
-> 用 `kubectl create token --audience=vault-broker` 现签一枚正确受众的
-> token——这是 K8s 1.22+ TokenRequest API 的标准用法，Vault 4.4 章实
-> 验中也一致采用这种方式。
+> 在主机端用 `kubectl create token --audience=vault-broker` 现签一枚正确
+> 受众的 token——这是 K8s 1.22+ TokenRequest API 的标准用法，Vault
+> 4.4 章实验中也一致采用这种方式。Pod 镜像是裸 ubuntu:22.04，里
+> 面没有 `kubectl`，所以 JWT 签发必须留在主机端。
 
 ```bash
-kubectl exec -n demo app-k8s-pod -- bash -c '
-set -e
-export KUBECONFIG=/root/.kube-config
-export VAULT_ADDR=http://127.0.0.1:8200
-
-# 用自己的 SA 给自己签一枚 audience=vault-broker 的短期 JWT
-APP_JWT=$(kubectl create token app-k8s -n demo --audience=vault-broker --duration=10m)
+# 在主机端签 JWT 并写入 Pod 的 /tmp/app-jwt
+APP_JWT=$(kubectl create token app-k8s -n demo \
+  --audience=vault-broker --duration=10m)
 echo "APP_JWT length: ${#APP_JWT}"
 
+kubectl exec -n demo app-k8s-pod -- \
+  bash -c "cat > /tmp/app-jwt" <<<"$APP_JWT"
+
+# 进 Pod、用 vault CLI 拿 JWT 换 Vault token
+kubectl exec -n demo app-k8s-pod -- bash -c '
+set -e
+export VAULT_ADDR=http://127.0.0.1:8200
+APP_JWT=$(cat /tmp/app-jwt)
+
 # Phase 1：把 JWT 提交给 Vault，换 Vault token
-LOGIN_JSON=$(vault write -format=json auth/kubernetes/login role=app-k8s jwt="$APP_JWT")
+LOGIN_JSON=$(vault write -format=json auth/kubernetes/login \
+  role=app-k8s jwt="$APP_JWT")
 echo "$LOGIN_JSON" | grep -E "policies|service_account" | head -10
 
-VAULT_TOKEN=$(echo "$LOGIN_JSON" | grep -oE "\"client_token\":[^,]*" | head -1 | cut -d\" -f4)
+VAULT_TOKEN=$(echo "$LOGIN_JSON" \
+  | grep -oE "\"client_token\":[^,]*" | head -1 | cut -d\" -f4)
 echo "VAULT_TOKEN=${VAULT_TOKEN:0:20}..."
 echo "$VAULT_TOKEN" > /tmp/vault-token
 '
@@ -234,11 +248,14 @@ PGPASSWORD=rootpassword psql -h 127.0.0.1 -U root -d postgres -tAc \
 
 ```bash
 # 反演 1：用 K8s API server 默认 audience 签的 token
-kubectl exec -n demo app-k8s-pod -- bash -c '
-export KUBECONFIG=/root/.kube-config
-export VAULT_ADDR=http://127.0.0.1:8200
 WRONG_JWT=$(kubectl create token app-k8s -n demo --duration=10m)
-vault write auth/kubernetes/login role=app-k8s jwt="$WRONG_JWT" 2>&1 | head -5
+kubectl exec -n demo app-k8s-pod -- \
+  bash -c "cat > /tmp/wrong-jwt" <<<"$WRONG_JWT"
+
+kubectl exec -n demo app-k8s-pod -- bash -c '
+export VAULT_ADDR=http://127.0.0.1:8200
+vault write auth/kubernetes/login role=app-k8s \
+  jwt="$(cat /tmp/wrong-jwt)" 2>&1 | head -5
 '
 # 应看到 audience 不匹配的错误（invalid audience / aud claim 等）
 ```
@@ -246,12 +263,15 @@ vault write auth/kubernetes/login role=app-k8s jwt="$WRONG_JWT" 2>&1 | head -5
 ```bash
 # 反演 2：用一个完全不在 role bound_service_account_names 里的 SA
 kubectl create serviceaccount intruder -n demo
+INTRUDER_JWT=$(kubectl create token intruder -n demo \
+  --audience=vault-broker --duration=10m)
+kubectl exec -n demo app-k8s-pod -- \
+  bash -c "cat > /tmp/intruder-jwt" <<<"$INTRUDER_JWT"
 
 kubectl exec -n demo app-k8s-pod -- bash -c '
-export KUBECONFIG=/root/.kube-config
 export VAULT_ADDR=http://127.0.0.1:8200
-INTRUDER_JWT=$(kubectl create token intruder -n demo --audience=vault-broker --duration=10m)
-vault write auth/kubernetes/login role=app-k8s jwt="$INTRUDER_JWT" 2>&1 | head -5
+vault write auth/kubernetes/login role=app-k8s \
+  jwt="$(cat /tmp/intruder-jwt)" 2>&1 | head -5
 '
 # 应看到类似 "service account name not authorized" 的拒绝
 ```
