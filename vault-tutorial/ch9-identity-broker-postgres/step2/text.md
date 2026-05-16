@@ -146,7 +146,10 @@ APP_JWT=$(kubectl create token app-k8s -n demo \
   --audience=vault-broker --duration=10m)
 echo "APP_JWT length: ${#APP_JWT}"
 
-kubectl exec -n demo app-k8s-pod -- \
+# 注意 -i：必须给 kubectl exec 打开 stdin 转发，<<< 的内容才会进入容器；
+# 没有 -i 时容器侧 cat 读不到任何字节，/tmp/app-jwt 会变成空文件，
+# 后面 vault write 就会以 "missing jwt" 报 400 错。
+kubectl exec -i -n demo app-k8s-pod -- \
   bash -c "cat > /tmp/app-jwt" <<<"$APP_JWT"
 
 # 进 Pod、用 vault CLI 拿 JWT 换 Vault token
@@ -158,7 +161,9 @@ APP_JWT=$(cat /tmp/app-jwt)
 # Phase 1：把 JWT 提交给 Vault，换 Vault token
 LOGIN_JSON=$(vault write -format=json auth/kubernetes/login \
   role=app-k8s jwt="$APP_JWT")
-echo "$LOGIN_JSON" | grep -E "policies|service_account" | head -10
+
+# policies / metadata 的值在 JSON 数组的下一行里，所以用 -A 把后面几行带出来
+echo "$LOGIN_JSON" | grep -E -A 4 "\"policies\"|\"token_policies\"|\"metadata\""
 
 VAULT_TOKEN=$(echo "$LOGIN_JSON" \
   | grep -oE "\"client_token\":[^,]*" | head -1 | cut -d\" -f4)
@@ -249,15 +254,17 @@ PGPASSWORD=rootpassword psql -h 127.0.0.1 -U root -d postgres -tAc \
 ```bash
 # 反演 1：用 K8s API server 默认 audience 签的 token
 WRONG_JWT=$(kubectl create token app-k8s -n demo --duration=10m)
-kubectl exec -n demo app-k8s-pod -- \
+kubectl exec -i -n demo app-k8s-pod -- \
   bash -c "cat > /tmp/wrong-jwt" <<<"$WRONG_JWT"
 
 kubectl exec -n demo app-k8s-pod -- bash -c '
 export VAULT_ADDR=http://127.0.0.1:8200
 vault write auth/kubernetes/login role=app-k8s \
-  jwt="$(cat /tmp/wrong-jwt)" 2>&1 | head -5
+  jwt="$(cat /tmp/wrong-jwt)" 2>&1 | head -10
 '
-# 应看到 audience 不匹配的错误（invalid audience / aud claim 等）
+# 应看到 Code: 403 + 最后一行 `* permission denied`。Vault 出于安全考虑
+# 不会泄露 audience 不匹配这个具体原因，所有 Phase 1 拒绝都统一报
+# permission denied——但 403 本身就已经证明这枚 JWT 没换到 Vault token。
 ```
 
 ```bash
@@ -265,15 +272,16 @@ vault write auth/kubernetes/login role=app-k8s \
 kubectl create serviceaccount intruder -n demo
 INTRUDER_JWT=$(kubectl create token intruder -n demo \
   --audience=vault-broker --duration=10m)
-kubectl exec -n demo app-k8s-pod -- \
+kubectl exec -i -n demo app-k8s-pod -- \
   bash -c "cat > /tmp/intruder-jwt" <<<"$INTRUDER_JWT"
 
 kubectl exec -n demo app-k8s-pod -- bash -c '
 export VAULT_ADDR=http://127.0.0.1:8200
 vault write auth/kubernetes/login role=app-k8s \
-  jwt="$(cat /tmp/intruder-jwt)" 2>&1 | head -5
+  jwt="$(cat /tmp/intruder-jwt)" 2>&1 | head -10
 '
-# 应看到类似 "service account name not authorized" 的拒绝
+# 同样应看到 Code: 403 + `* permission denied`——Vault 不会告诉你具体是
+# bound_service_account_names 把你拦下的，但 403 本身就是 role 拒绝的证据。
 ```
 
 > 这两条反演直接证实：Vault 在 Phase 1 的判定**不只看 JWT 是否有效**，
