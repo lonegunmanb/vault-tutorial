@@ -346,14 +346,15 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
 * 9.3 利用 Vault Agent 的缓存机制降低对 Vault 集群的压力，提升性能
 * 9.5 Vault 故障排查方法论：从可观测性数据反推根因
 * 9.6 Vault 作为身份代理（Identity Broker）：把 AWS IAM 与 K8s ServiceAccount 联邦到同一份 PostgreSQL 动态凭据
+* 9.7 Terraform 与 Vault Provider：用动态 AWS 凭据运行基础设施变更（LocalStack 版）
 * 9.3 从静态密码到动态凭据：以 Database / SSH / AWS 机密引擎改造长效凭据使用方式  
 * 9.4 **【核心新增】** 零接触式的公共信任体系闭环：深度整合 Vault PKI 机密引擎与 ACME 自动化协议（集成 Traefik 或 Cert-Manager 演示 TLS 证书静默全自动签发与轮转）  
 * 9.5 OIDC 认证方法与组治理案例：接入本地 Keycloak / Dex，跑通 Authorization Code Flow、CLI callback、groups claim 与 Vault Group 映射  
 * 9.6 端到端 SSO 应用集成案例：用一个最小 Web 应用接入 Vault OIDC Provider，验证登录跳转、ID Token、UserInfo 与 assignment 拒绝路径  
-* 9.7 现代 Vault Agent 遗留核心应用实践  
-  * 9.7.1 Auto-auth 自动化网络鉴权与 Token 生命守护逻辑  
-  * 9.7.2 Consul-Template 高级模板渲染引擎与动态文件注入  
-  * 9.7.3 进程监督器（Process Supervisor）底层环境变量包裹模式
+* 9.8 现代 Vault Agent 遗留核心应用实践  
+  * 9.8.1 Auto-auth 自动化网络鉴权与 Token 生命守护逻辑  
+  * 9.8.2 Consul-Template 高级模板渲染引擎与动态文件注入  
+  * 9.8.3 进程监督器（Process Supervisor）底层环境变量包裹模式
 
 ## **第 10 章：技术趋势展望与全课程总结归纳**
 

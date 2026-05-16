@@ -1,0 +1,43 @@
+{
+  "title": "Terraform + Vault Provider：用动态 AWS 凭据运行基础设施变更",
+  "description": "Recreate HashiCorp's Inject secrets into Terraform using the Vault provider tutorial with LocalStack instead of a real AWS account. Use a Vault Admin Terraform workspace to configure the AWS secrets engine and a role with a 120-second TTL, then use an Operator workspace to retrieve dynamic AWS IAM credentials through the Vault provider and create a LocalStack EC2 instance. Finally restrict the Vault role by removing ec2:* and verify that the next Terraform plan fails with an authorization error.",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "第一步：Vault Admin 工作区配置 AWS secrets engine",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "第二步：Terraform Operator 领取动态 AWS 凭据创建实例",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "第三步：销毁实例并观察动态 IAM 凭据回收",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "第四步：收紧 Vault role 权限并验证 plan 失败",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}
