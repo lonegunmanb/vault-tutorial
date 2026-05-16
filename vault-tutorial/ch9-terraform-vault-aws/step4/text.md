@@ -41,6 +41,13 @@ vault read "$(terraform output -raw backend)/roles/$(terraform output -raw role)
 ```bash
 cd /root/terraform-vault-aws-localstack/operator-workspace
 
+export VAULT_ADDR=http://127.0.0.1:8200
+export VAULT_TOKEN=root
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_DEFAULT_REGION=us-east-1
+export AWS_PAGER=""
+
 terraform plan -no-color 2>&1 | tee /tmp/terraform-plan-denied.log
 ```
 
@@ -64,6 +71,14 @@ Operator 工作区在第 3 步已经 destroy 过，这里清理 Admin 工作区�
 
 ```bash
 cd /root/terraform-vault-aws-localstack/vault-admin-workspace
+
+export VAULT_ADDR=http://127.0.0.1:8200
+export VAULT_TOKEN=root
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_DEFAULT_REGION=us-east-1
+export AWS_PAGER=""
+
 terraform destroy -auto-approve
 ```
 

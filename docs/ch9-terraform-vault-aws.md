@@ -119,19 +119,60 @@ AWS EC2
 
 ---
 
-## 4. 为什么 120 秒 TTL 既好用又危险
+## 4. 两个 TTL 场景：先让它失败，再只改 Vault 接入让它续起来
 
-官方教程把 AWS secrets engine 的 `default_lease_ttl_seconds` 设为 `120`。这意味着 `vault_aws_access_credentials` 领到的 AWS key 默认只活 120 秒。短 TTL 带来的安全收益很清楚：即便这对 key 在 Terraform run 中被泄漏，攻击者可利用的时间窗口也很短。
+官方教程把 AWS secrets engine 的 `default_lease_ttl_seconds` 设为 `120`。这只是一个**演示默认值**：足够短，方便你在教程里很快看到 Vault 到期回收动态 IAM user；也足够危险，方便你意识到「短 TTL」会和 Terraform 的运行时间发生冲突。它不代表生产环境里所有 Terraform apply 都应该共用 120 秒。
 
-但它也带来一个工程约束：**Terraform 的确认等待时间与 apply 执行时间必须短于凭据 TTL**。官方教程特别提醒，如果你在 `terraform apply` 的确认提示前停留超过 120 秒，或者一个大型 apply 运行超过 TTL，AWS provider 后续调用就会因为凭据过期而失败。
+本课程实验会把这个问题拆成两幕，而且两幕使用**同一份 Terraform 代码**：第一幕直连 Vault，固定 120 秒 TTL，短 apply 成功、长 apply 失败；第二幕 Terraform 文件一行不改，只把 Vault 接入方式换成 Vault Proxy，让 Proxy 托管动态 lease 的续期，同一条长 apply 成功。
 
-这不是 Vault 的 bug，而是动态凭据模型的正常边界。生产里要根据真实情况调 TTL：
+### 4.1 第一幕：直连 Vault，短 apply 成功、长 apply 失败
 
-- 小型变更可以用很短的 TTL，把泄漏窗口压到最低；
-- 大型基础设施变更需要更长 TTL，或者把 Terraform 配置拆成更小的阶段；
-- CI/CD 中常用非交互 `-auto-approve`，避免「人停在确认提示上，凭据已经开始倒计时」这一类事故。
+先把最基本的边界说清楚：`vault_aws_access_credentials` 读取 AWS secrets engine 时会拿到一份带 lease 的动态 AWS 凭据；但 **Terraform Vault provider 自己不会替这份 lease 做续期**。官方 provider 文档也明确提醒：当你把这个 data source 的输出交给 AWS provider 使用时，这组凭据无法由 Terraform 自动续租，因此 lease 必须长到足以覆盖这次 Terraform 运行。也就是说，如果你只按官方教程的最小形态直连 Vault：
 
-本课程实验为了稳定复现，会使用 `terraform apply -auto-approve`。这与官方教程让你手动输入 `yes` 的行为不同，但背后的凭据生成、使用、过期机制完全一致。
+```text
+Terraform Vault provider ──▶ Vault ──▶ AWS dynamic credentials ──▶ Terraform AWS provider
+```
+
+那么 Terraform 的确认等待时间、`plan` / `apply` 执行时间、网络重试时间，都必须落在这份 lease 的有效窗口内。否则 AWS provider 后续调用就会因为凭据已被 Vault 回收而失败。`-auto-approve` 只能减少「人停在确认提示上」的等待时间，不能解决大型 apply 本身跑很久的问题。
+
+实验里会用一个 `apply_delay` 变量模拟 apply 中间的长耗时操作。`apply_delay=0s` 时，Terraform 很快创建 LocalStack EC2 instance，120 秒 TTL 足够用；`apply_delay=150s` 时，Terraform 在拿到 Vault 动态 AWS key 之后故意等待 150 秒，再去调用 EC2 API。这时 Vault 已经回收了动态 IAM user，AWS provider 手里的 access key 变成了失效凭据，长 apply 就会挂掉。
+
+### 4.2 第二幕：Terraform 代码不改，只改 Vault 接入配置，由 Proxy 续租
+
+第二幕的关键是：**不改 Terraform 文件**。仍然是同一个 `data "vault_aws_access_credentials" "creds"`，仍然是同一个 AWS provider 配置，仍然跑 `apply_delay=150s` 的长 apply。唯一变化是 Terraform 不再直连 Vault Server，而是把 `VAULT_ADDR` 指向本机 Vault Proxy listener。
+
+Vault Proxy 通过 Auto-auth 先拿到一枚它自己管理的 Vault token；Terraform 运行时用这枚 token 通过 Proxy 请求 AWS 动态凭据。由于这次 leased secret 创建请求经过 Proxy，并且使用的是 Proxy 已经管理的 token，Proxy 会缓存这份动态 AWS 凭据响应，并在后台通过 Vault renewer 替它续期。
+
+这条生产形态可以理解成：
+
+```text
+Terraform Vault provider ──▶ Vault Proxy ──▶ Vault ──▶ AWS dynamic credentials
+                                │
+                                └── 后台续期 token 与 dynamic secret lease
+```
+
+对于本教程使用的 `iam_user` 类型动态凭据，续期的含义是「Vault 延后删除这名动态 IAM user / access key」。Terraform AWS provider 手里的 access key 字符串不变，但它背后的 IAM user 不会在原始 120 秒到点时被 Vault 删除，所以 150 秒后的 EC2 API 调用仍然能成功。
+
+这就是本节实验真正要你看到的对比：
+
+| 场景 | Terraform 代码 | Vault 接入方式 | 150 秒长 apply 结果 |
+| --- | --- | --- | --- |
+| 固定 120 秒 TTL | 不变 | Terraform provider 直连 Vault Server | 失败：动态 IAM user 到期被回收 |
+| Proxy 托管续期 | 不变 | Terraform provider 连接 Vault Proxy listener | 成功：Proxy 在后台续期 lease |
+
+### 4.3 生产取舍：续租不是把 TTL 问题抹掉
+
+生产里通常有三层做法，而不是把所有工作负载都塞进同一个 TTL。
+
+**第一层：按 Terraform 运行类型拆 role / backend 的 TTL。** 小型、频繁、低风险的变更可以用更短的默认 TTL；大型网络、集群、数据库迁移这类长 apply 应该使用更长的 `default_lease_ttl_seconds` 与 `max_lease_ttl_seconds`，或者拆成单独的 Vault role / 单独的 Terraform workspace。经验上不要凭感觉拍脑袋，而是看 CI 历史里 `plan` + `apply` 的 P95 / P99 时长，再加上合理的云 API 重试缓冲。
+
+**第二层：把大 apply 拆小。** 如果一次 Terraform run 需要几十分钟甚至更久，单纯把 TTL 拉长会扩大泄漏窗口。更好的做法通常是把基础网络、共享安全组、数据层、应用层拆成多个 state / workspace，让每次 apply 的 blast radius 与凭据有效期都更可控。
+
+**第三层：让 Vault Agent 或 Vault Proxy 托管动态租约续期。** 本节实验选择 Vault Proxy，因为这是现代 Vault 工具链里更明确的 API proxy 角色；Vault Agent 在动态 token / lease 缓存续期上也具备同类能力，但 Agent 的旧 API proxy 职责已经不再是推荐主线。使用哪一个，取决于你在第 5.6、7.2、7.3 节里学到的接入形态选型。
+
+它的边界也必须讲清楚：续期不能突破 Vault role / mount 的 max TTL；Agent / Proxy 进程退出后续期会停止；如果有人绕过 Agent / Proxy 直接 revoke lease，它们可能只剩一条陈旧缓存；而且并不是所有 AWS credential type 都适合被这样续期。比如基于 AWS STS 的 `assumed_role` / `federation_token` 本身有 AWS 侧的到期时间，不能像 `iam_user` 那样简单地「延后删除 IAM user」。所以，Agent / Proxy 续期是生产里很有价值的方案，但它不是把 TTL 问题抹掉，而是把「Terraform provider 不续期」这件事交给一个明确的本地守护进程来托管。
+
+本课程实验仍然保留官方教程的 120 秒 TTL，并使用 `terraform apply -auto-approve`，目的不是推荐生产也这么配，而是让初学者在几分钟内看到两件事：固定 TTL 确实会让长 apply 失败；同一份 Terraform 代码在接入 Vault Proxy 后，又能因为动态 lease 续期而跑通。
 
 ---
 
@@ -180,7 +221,7 @@ AWS EC2
 2. **让 Vault AWS secrets engine 成为短期 AWS 凭据的发行方**；
 3. **Admin 工作区配置「凭据工厂」**：IAM root credential、Vault AWS backend、Vault role；
 4. **Operator 工作区只读取动态凭据**：`terraform_remote_state` 找到 role，`vault_aws_access_credentials` 领取 key；
-5. **TTL 从领取那一刻开始计时**：apply 太慢或确认太久都会让凭据过期；
+5. **TTL 要按运行形态设计**：直连 Vault 时 Terraform provider 不续租；长 apply 要么拆小 / 调长 TTL，要么让 Agent / Proxy 托管动态 lease 续期；
 6. **权限收紧集中在 Vault role**：移除 `ec2:*` 后，下一次动态凭据立即失去 EC2 能力；
 7. **state 仍然敏感**：动态凭据不是忽略 Terraform state 安全的理由。
 
@@ -193,8 +234,8 @@ AWS EC2
 本节配套了一个 Killercoda 实验：学员将在单台 Ubuntu 主机上启动 dev 模式 Vault 与 LocalStack，使用两个 Terraform 工作区复现官方教程。
 
 1. **Vault Admin 工作区**：用 Terraform 在 LocalStack 上创建 Vault 专用 IAM user，把它的 access key 写入 Vault AWS secrets engine，并创建一条能签发 `iam:*` / `ec2:*` 动态凭据的 role；
-2. **Terraform Operator 工作区**：用 `vault_aws_access_credentials` 从 Vault 领取 120 秒 TTL 的 AWS key，再用这对 key 在 LocalStack EC2 中创建一个 instance 对象；
-3. **销毁与租约观察**：运行 `terraform destroy`，并通过 `awslocal iam list-users` 与 Vault lease 路径观察动态 IAM user 的生命周期；
+2. **演示一：固定 120 秒 TTL**：同一份 Operator Terraform 代码，`apply_delay=0s` 的短 apply 成功，`apply_delay=150s` 的长 apply 失败；
+3. **演示二：Proxy 自动续期**：Terraform 文件一行不改，只启动 Vault Proxy 并把 Terraform 的 Vault 请求改走 Proxy listener，同一条 `apply_delay=150s` 长 apply 成功；
 4. **权限收紧**：Admin 移除 role 中的 `ec2:*`，Operator 再次 `terraform plan`，看到 EC2 权限不足导致失败。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch9-terraform-vault-aws" title="实验：用 Vault 动态 AWS 凭据运行 Terraform（LocalStack 版）" />

@@ -234,6 +234,10 @@ terraform {
       source  = "hashicorp/vault"
       version = "3.17.0"
     }
+    external = {
+      source  = "hashicorp/external"
+      version = "2.3.3"
+    }
   }
 
   backend "local" {
@@ -272,6 +276,12 @@ variable "localstack_endpoint" {
   description = "LocalStack edge endpoint used by Terraform."
   default     = "http://127.0.0.1:4566"
 }
+
+variable "apply_delay" {
+  type        = string
+  description = "Artificial delay after Vault credentials are read, used to demonstrate lease expiration."
+  default     = "0s"
+}
 EOF
 
   cat > "$LAB_DIR/operator-workspace/main.tf" <<'EOF'
@@ -288,6 +298,12 @@ data "terraform_remote_state" "admin" {
 data "vault_aws_access_credentials" "creds" {
   backend = data.terraform_remote_state.admin.outputs.backend
   role    = data.terraform_remote_state.admin.outputs.role
+}
+
+data "external" "after_vault_credentials_delay" {
+  program = ["bash", "${path.module}/delay.sh", var.apply_delay]
+
+  depends_on = [data.vault_aws_access_credentials.creds]
 }
 
 provider "aws" {
@@ -308,6 +324,8 @@ provider "aws" {
 
 data "aws_availability_zones" "available" {
   state = "available"
+
+  depends_on = [data.external.after_vault_credentials_delay]
 }
 
 resource "aws_instance" "main" {
@@ -326,6 +344,16 @@ output "instance_id" {
   value = aws_instance.main.id
 }
 EOF
+
+  cat > "$LAB_DIR/operator-workspace/delay.sh" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+duration="${1:-0s}"
+sleep "$duration"
+printf '{"slept":"%s"}\n' "$duration"
+EOF
+  chmod +x "$LAB_DIR/operator-workspace/delay.sh"
 }
 
 create_lab_files

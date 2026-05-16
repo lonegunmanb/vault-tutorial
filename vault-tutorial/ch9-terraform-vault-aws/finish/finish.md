@@ -4,8 +4,8 @@
 
 - Vault Admin 工作区创建了 Vault AWS secrets engine 与 `iam_user` 类型 role；
 - Terraform Operator 工作区没有直接持有长期 AWS key，而是通过 `vault_aws_access_credentials` 现场领取短期 AWS 凭据；
-- AWS provider 使用这对动态凭据创建并销毁了 LocalStack EC2 instance；
-- 120 秒 TTL 到期后，Vault 自动回收了动态 IAM user；
+- 固定 120 秒 TTL 下，短 apply 成功、长 apply 因动态 IAM user 到期被回收而失败；
+- Terraform 文件一行不改，只把 Vault 接入改成 Vault Proxy 后，同一条长 apply 成功；
 - Admin 移除 role 中的 `ec2:*` 后，Operator 的下一次 `terraform plan` 因 EC2 权限不足失败。
 
 ## 关键回顾
@@ -15,7 +15,8 @@
 | `vault_aws_secret_backend` | Admin 把 AWS secrets engine 声明成 Terraform 管理的 Vault 资源 |
 | `vault_aws_secret_backend_role` | Admin 集中定义 Operator 动态 AWS 凭据的权限边界 |
 | `vault_aws_access_credentials` | Operator 在运行中向 Vault 领取短期 AWS key |
-| `default_lease_ttl_seconds = 120` | 短 TTL 降低泄漏窗口，但要求 plan/apply 足够快 |
+| `default_lease_ttl_seconds = 120` | 直连 Vault 时长 apply 会失败，因为 Terraform provider 不续租 |
+| Vault Proxy `cache {}` | Terraform 代码不变时，可由 Proxy 托管动态 token / lease 续期 |
 | 移除 `ec2:*` 后 plan 失败 | 权限收紧集中在 Vault role，下一次凭据签发立即生效 |
 
 ## 清理检查
@@ -26,6 +27,7 @@
 vault secrets list | grep dynamic-aws-creds || true
 awslocal iam list-users --query 'Users[].UserName' --output table
 awslocal ec2 describe-instances --output table || true
+pkill -f 'vault proxy -config=/root/terraform-vault-proxy.hcl' 2>/dev/null || true
 ```
 
 只要没有 `dynamic-aws-creds-vault-path/` 挂载、没有 `vault-...` 动态 IAM user，就说明实验核心资源已清理完毕。

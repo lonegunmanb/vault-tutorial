@@ -15,8 +15,8 @@
 你将依次完成四步：
 
 1. 在 **Vault Admin 工作区**运行 Terraform，创建 Vault 专用 IAM user、挂载 Vault AWS secrets engine，并配置一条 `iam_user` 类型 role；
-2. 在 **Terraform Operator 工作区**运行 Terraform，通过 Vault provider 领取动态 AWS 凭据，再用这些凭据创建 LocalStack EC2 instance；
-3. 销毁 instance，并观察动态 IAM user 在 120 秒 TTL 到期后被 Vault 回收；
+2. 在 **Terraform Operator 工作区**先直连 Vault：`apply_delay=0s` 的短 apply 成功，`apply_delay=150s` 的长 apply 因 120 秒 TTL 到期失败；
+3. Terraform 文件一行不改，只启动 **Vault Proxy** 并把 Terraform 的 Vault 请求改走 Proxy listener，让同一条 `apply_delay=150s` 长 apply 成功；
 4. 回到 Admin 工作区移除 role 的 `ec2:*` 权限，再到 Operator 工作区运行 `terraform plan`，验证权限不足导致失败。
 
 > 本实验不会连接真实 AWS，也不会产生云费用。所有 AWS API 都打到本机 LocalStack。

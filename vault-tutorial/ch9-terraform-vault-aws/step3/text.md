@@ -1,11 +1,15 @@
-# 第三步：销毁实例并观察动态 IAM 凭据回收
+# 第三步：Terraform 代码不改，改走 Vault Proxy 后长 apply 成功
 
-官方教程在创建 EC2 实例后，会让 Operator 运行 `terraform destroy`。这一点也很有教学价值：destroy 不是「沿用上一次 apply 的长期 key」，而是再次通过 Vault data source 领取一对短期 AWS 凭据，再用它删除资源。
+第二步已经证明：同一份 Terraform 代码在直连 Vault Server 时，`apply_delay=150s` 会因为 120 秒 lease 到期而失败。现在我们保持 Terraform 文件一行不改，只改 Vault 侧接入方式：启动一个 Vault Proxy，用 AppRole auto-auth 拿到受控 token，并让 Terraform Vault provider 通过 Proxy listener 请求动态 AWS 凭据。
 
-## 3.1 销毁 LocalStack EC2 instance
+关键目标：同一条命令 `terraform apply -auto-approve -var='apply_delay=150s'`，这次成功。
+
+## 3.1 在 Vault 里创建给 Proxy 使用的最小权限身份
+
+Proxy 不能直接用 root token。先为它写一条最小 policy：只允许读 Admin 工作区创建的 AWS dynamic credentials 路径。
 
 ```bash
-cd /root/terraform-vault-aws-localstack/operator-workspace
+cd /root/terraform-vault-aws-localstack/vault-admin-workspace
 
 export VAULT_ADDR=http://127.0.0.1:8200
 export VAULT_TOKEN=root
@@ -14,56 +18,141 @@ export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_PAGER=""
 
-terraform destroy -auto-approve
+ADMIN_BACKEND=$(terraform output -raw backend)
+ADMIN_ROLE=$(terraform output -raw role)
+
+cat > /root/terraform-operator-vault-policy.hcl <<EOF
+path "${ADMIN_BACKEND}/creds/${ADMIN_ROLE}" {
+  capabilities = ["read"]
+}
+EOF
+
+vault policy write terraform-operator-dynamic-aws /root/terraform-operator-vault-policy.hcl
+vault policy read terraform-operator-dynamic-aws
 ```
 
-销毁完成后确认 instance 已不再处于 running 列表：
+启用 AppRole，并创建一条给 Proxy auto-auth 使用的 role：
 
 ```bash
+vault auth enable approle 2>/dev/null || true
+
+vault write auth/approle/role/terraform-proxy \
+  token_policies=terraform-operator-dynamic-aws \
+  token_ttl=5m \
+  token_max_ttl=20m \
+  secret_id_ttl=10m
+
+vault read -field=role_id auth/approle/role/terraform-proxy/role-id > /root/terraform-proxy-role-id
+vault write -f -field=secret_id auth/approle/role/terraform-proxy/secret-id > /root/terraform-proxy-secret-id
+chmod 600 /root/terraform-proxy-role-id /root/terraform-proxy-secret-id
+```
+
+> `token_ttl=2m` 是故意贴近动态 AWS 凭据的 120 秒 TTL。Proxy 不只会续动态 secret lease，也会续它自己 auto-auth 拿到的 token。
+
+## 3.2 启动带 cache 的 Vault Proxy
+
+写一份 Proxy 配置。它做三件事：用 AppRole 自动登录 Vault；开启 cache；在 `127.0.0.1:8100` 监听 Terraform 的 Vault API 请求。
+
+```bash
+cat > /root/terraform-vault-proxy.hcl <<'EOF'
+vault {
+  address = "http://127.0.0.1:8200"
+}
+
+auto_auth {
+  method "approle" {
+    mount_path = "auth/approle"
+    config = {
+      role_id_file_path                   = "/root/terraform-proxy-role-id"
+      secret_id_file_path                 = "/root/terraform-proxy-secret-id"
+      remove_secret_id_file_after_reading = false
+    }
+  }
+
+  sink "file" {
+    config = {
+      path = "/root/terraform-proxy-token"
+    }
+  }
+}
+
+cache {}
+
+listener "tcp" {
+  address     = "127.0.0.1:8100"
+  tls_disable = true
+}
+EOF
+
+pkill -f 'vault proxy -config=/root/terraform-vault-proxy.hcl' 2>/dev/null || true
+rm -f /root/terraform-proxy-token /root/terraform-vault-proxy.log
+
+nohup vault proxy -config=/root/terraform-vault-proxy.hcl > /root/terraform-vault-proxy.log 2>&1 &
+
+for i in $(seq 1 30); do
+  if [ -s /root/terraform-proxy-token ] && curl -s http://127.0.0.1:8100/v1/sys/health >/dev/null 2>&1; then
+    echo "Vault Proxy ready"
+    break
+  fi
+  sleep 1
+done
+
+tail -20 /root/terraform-vault-proxy.log
+```
+
+如果日志里没有报错，且 `/root/terraform-proxy-token` 已经存在，说明 Proxy 已经用 AppRole 登录成功。
+
+## 3.3 同一份 Terraform 代码，长 apply 现在成功
+
+现在进入 Operator 工作区。注意我们不改任何 `.tf` 文件，只把 Terraform Vault provider 的连接目标从 Vault Server 改成 Proxy listener，并把 token 换成 Proxy auto-auth 管理的那枚 token。
+
+```bash
+cd /root/terraform-vault-aws-localstack/operator-workspace
+
+export VAULT_ADDR=http://127.0.0.1:8100
+export VAULT_TOKEN="$(cat /root/terraform-proxy-token)"
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+export AWS_DEFAULT_REGION=us-east-1
+export AWS_PAGER=""
+
+terraform apply -auto-approve -var='apply_delay=150s'
+terraform output
+```
+
+这次应当成功。背后发生的是：Terraform 仍然通过 `vault_aws_access_credentials` 读取同一条 Vault AWS role；但这次请求经过 Proxy，Proxy 发现它是「由自己管理的 token 创建出来的 leased secret」，于是把响应纳入缓存并在后台续期。150 秒后，AWS provider 再调用 EC2 API 时，那名动态 IAM user 仍然存在。
+
+旁证一下：
+
+```bash
+awslocal iam list-users \
+  --query 'Users[?starts_with(UserName, `vault-`)].UserName' \
+  --output table
+
 awslocal ec2 describe-instances \
   --query 'Reservations[].Instances[].{InstanceId:InstanceId,State:State.Name,Name:Tags[?Key==`Name`]|[0].Value}' \
   --output table
 ```
 
-LocalStack 可能仍返回 terminated 记录，这是 EC2 API 的正常语义；重点是 Terraform state 中已经没有 `aws_instance.main`：
+应看到 `vault-...` 动态 IAM user 与 `dynamic-aws-creds-operator-instance`。
+
+## 3.4 清理本步创建的 instance
+
+清理时可以继续走 Proxy，也可以切回直连 Vault。这里为了少等 150 秒，使用 `apply_delay=0s`：
 
 ```bash
+terraform destroy -auto-approve -var='apply_delay=0s'
 terraform state list || true
 ```
-
-## 3.2 观察 destroy 也创建了短期 IAM user
-
-```bash
-awslocal iam list-users \
-  --query 'Users[?starts_with(UserName, `vault-`)].UserName' \
-  --output table
-```
-
-你可能会看到一个或多个 `vault-...` 用户：apply 曾创建过一组动态凭据，destroy 又创建过一组动态凭据。它们都只活 120 秒。
-
-## 3.3 等待 TTL 到期，确认 Vault 回收动态 IAM user
-
-官方教程建议回到 Vault server 日志里看 `expiration: revoked lease`。本实验更直观：直接等 130 秒，再问 LocalStack 还有没有 `vault-` 开头的 IAM user。
-
-```bash
-echo "等待 130 秒，让 120 秒 lease 自然到期..."
-sleep 130
-
-awslocal iam list-users \
-  --query 'Users[?starts_with(UserName, `vault-`)].UserName' \
-  --output table
-```
-
-应当不再看到 `vault-...` 动态用户。Vault 已经根据 lease 生命周期调用 IAM 删除了它们。
-
-> 这就是动态凭据和静态凭据最根本的差别：静态 key 泄漏后必须靠人记得去删；动态 key 从诞生那一刻起就带着 lease，过期会被系统回收。
 
 ---
 
 ## ✅ 验收
 
-- [ ] `terraform destroy -auto-approve` 成功
-- [ ] Operator 工作区 state 中不再有 `aws_instance.main`
-- [ ] 120 秒 TTL 到期后，LocalStack 中 `vault-...` 动态 IAM user 消失
+- [ ] Terraform 文件没有改动
+- [ ] `VAULT_ADDR` 改为 `http://127.0.0.1:8100`
+- [ ] `terraform apply -auto-approve -var='apply_delay=150s'` 成功
+- [ ] LocalStack 中能看到动态 IAM user 与 EC2 instance
+- [ ] `terraform destroy -auto-approve -var='apply_delay=0s'` 后 state 为空
 
-下一步回到 Admin 工作区，把 role 里的 `ec2:*` 移除，验证 Operator 下一次 plan 会失败。
+下一步回到 Admin 工作区，把 role 里的 `ec2:*` 移除，验证权限收紧仍然集中在 Vault role 上。
