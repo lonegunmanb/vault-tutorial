@@ -9,7 +9,7 @@
 Proxy 不能直接用 root token。先为它写一条最小 policy：只允许读 Admin 工作区创建的 AWS dynamic credentials 路径。
 
 ```bash
-cd /root/terraform-vault-aws-localstack/vault-admin-workspace
+cd /root/terraform-vault-aws-ministack/vault-admin-workspace
 
 export VAULT_ADDR=http://127.0.0.1:8200
 export VAULT_TOKEN=root
@@ -17,6 +17,7 @@ export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_PAGER=""
+export AWS_MAX_ATTEMPTS=1
 
 ADMIN_BACKEND=$(terraform output -raw backend)
 ADMIN_ROLE=$(terraform output -raw role)
@@ -107,7 +108,7 @@ tail -20 /root/terraform-vault-proxy.log
 现在进入 Operator 工作区。注意我们不改任何 `.tf` 文件，只把 Terraform Vault provider 的连接目标从 Vault Server 改成 Proxy listener，并把 token 换成 Proxy auto-auth 管理的那枚 token。
 
 ```bash
-cd /root/terraform-vault-aws-localstack/operator-workspace
+cd /root/terraform-vault-aws-ministack/operator-workspace
 
 export VAULT_ADDR=http://127.0.0.1:8100
 export VAULT_TOKEN="$(cat /root/terraform-proxy-token)"
@@ -115,6 +116,7 @@ export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_PAGER=""
+export AWS_MAX_ATTEMPTS=1
 
 terraform apply -auto-approve -var='apply_delay=150s'
 terraform output
@@ -152,7 +154,7 @@ terraform state list || true
 - [ ] Terraform 文件没有改动
 - [ ] `VAULT_ADDR` 改为 `http://127.0.0.1:8100`
 - [ ] `terraform apply -auto-approve -var='apply_delay=150s'` 成功
-- [ ] LocalStack 中能看到动态 IAM user 与 EC2 instance
+- [ ] MiniStack 中能看到动态 IAM user 与 EC2 instance
 - [ ] `terraform destroy -auto-approve -var='apply_delay=0s'` 后 state 为空
 
 下一步回到 Admin 工作区，把 role 里的 `ec2:*` 移除，验证权限收紧仍然集中在 Vault role 上。

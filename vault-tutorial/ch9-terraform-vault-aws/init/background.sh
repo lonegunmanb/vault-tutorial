@@ -9,8 +9,9 @@ fi
 source /root/setup-common.sh
 
 TERRAFORM_VERSION="${TERRAFORM_VERSION:-1.8.5}"
-LAB_DIR="/root/terraform-vault-aws-localstack"
-LOCALSTACK_ENDPOINT="http://127.0.0.1:4566"
+LAB_DIR="/root/terraform-vault-aws-ministack"
+MINISTACK_ENDPOINT="http://127.0.0.1:4566"
+MINISTACK_IMAGE="${MINISTACK_IMAGE:-ghcr.io/lonegunmanb/ministack:full}"
 
 # Install apt packages serially before any background install function runs.
 apt-get update -qq && apt-get install -y -qq jq curl unzip ca-certificates > /dev/null 2>&1
@@ -42,29 +43,29 @@ install_awscli &
 INSTALL_AWS_PID=$!
 install_terraform &
 INSTALL_TERRAFORM_PID=$!
-docker pull localstack/localstack:3 > /dev/null 2>&1 &
-PULL_LOCALSTACK_PID=$!
+docker pull "$MINISTACK_IMAGE" > /dev/null 2>&1 &
+PULL_MINISTACK_PID=$!
 
 wait "$INSTALL_VAULT_PID"
 wait "$INSTALL_AWS_PID" 2>/dev/null
 wait "$INSTALL_TERRAFORM_PID" 2>/dev/null
-wait "$PULL_LOCALSTACK_PID" 2>/dev/null
+wait "$PULL_MINISTACK_PID" 2>/dev/null
 
 start_vault_dev
 
-docker rm -f localstack > /dev/null 2>&1 || true
-docker run -d --name localstack \
+docker rm -f ministack > /dev/null 2>&1 || true
+docker run -d --name ministack \
   -p 4566:4566 \
   -e SERVICES=iam,sts,ec2 \
   -e ENFORCE_IAM=1 \
   -e DEBUG=0 \
-  localstack/localstack:3 > /dev/null
+  "$MINISTACK_IMAGE" > /dev/null
 
-echo "Waiting for LocalStack IAM/STS/EC2 ready..."
+echo "Waiting for MiniStack IAM/STS/EC2 ready..."
 for i in $(seq 1 90); do
-  if curl -s ${LOCALSTACK_ENDPOINT}/_localstack/health 2>/dev/null \
+  if curl -s ${MINISTACK_ENDPOINT}/_localstack/health 2>/dev/null \
        | jq -e '.services.iam == "available" and .services.sts == "available" and .services.ec2 == "available"' > /dev/null 2>&1; then
-    echo "LocalStack ready."
+    echo "MiniStack ready."
     break
   fi
   sleep 1
@@ -75,6 +76,7 @@ export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_PAGER=""
+export AWS_MAX_ATTEMPTS=1
 EOF
 chmod +x /etc/profile.d/aws.sh
 grep -q "AWS_ACCESS_KEY_ID=" /root/.bashrc 2>/dev/null || cat /etc/profile.d/aws.sh >> /root/.bashrc
@@ -115,9 +117,9 @@ variable "region" {
   default     = "us-east-1"
 }
 
-variable "localstack_endpoint" {
+variable "ministack_endpoint" {
   type        = string
-  description = "LocalStack edge endpoint used by Terraform and Vault."
+  description = "MiniStack edge endpoint used by Terraform and Vault."
   default     = "http://127.0.0.1:4566"
 }
 
@@ -144,11 +146,12 @@ provider "aws" {
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_requesting_account_id  = true
+  max_retries                 = 1
 
   endpoints {
-    ec2 = var.localstack_endpoint
-    iam = var.localstack_endpoint
-    sts = var.localstack_endpoint
+    ec2 = var.ministack_endpoint
+    iam = var.ministack_endpoint
+    sts = var.ministack_endpoint
   }
 }
 
@@ -184,8 +187,8 @@ resource "vault_aws_secret_backend" "aws" {
   access_key = aws_iam_access_key.secrets_engine_credentials.id
   secret_key = aws_iam_access_key.secrets_engine_credentials.secret
 
-  iam_endpoint = var.localstack_endpoint
-  sts_endpoint = var.localstack_endpoint
+  iam_endpoint = var.ministack_endpoint
+  sts_endpoint = var.ministack_endpoint
 
   default_lease_ttl_seconds = 120
   max_lease_ttl_seconds     = 300
@@ -271,9 +274,9 @@ variable "ttl" {
   default     = "1"
 }
 
-variable "localstack_endpoint" {
+variable "ministack_endpoint" {
   type        = string
-  description = "LocalStack edge endpoint used by Terraform."
+  description = "MiniStack edge endpoint used by Terraform."
   default     = "http://127.0.0.1:4566"
 }
 
@@ -316,11 +319,12 @@ provider "aws" {
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_requesting_account_id  = true
+  max_retries                 = 1
 
   endpoints {
-    ec2 = var.localstack_endpoint
-    iam = var.localstack_endpoint
-    sts = var.localstack_endpoint
+    ec2 = var.ministack_endpoint
+    iam = var.ministack_endpoint
+    sts = var.ministack_endpoint
   }
 }
 

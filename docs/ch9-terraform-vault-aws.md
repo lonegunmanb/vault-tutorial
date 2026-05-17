@@ -7,7 +7,7 @@ group_order: 90
 
 # 9.7 Terraform 与 Vault Provider：用动态 AWS 凭据运行基础设施变更
 
-> **核心结论**：Terraform 不应该长期持有一对写在本机环境变量里的 AWS access key。官方教程 [Inject secrets into Terraform using the Vault provider](https://developer.hashicorp.com/terraform/tutorials/secrets/secrets-vault) 演示的正是这条改造路径：先由 **Vault Admin** 用 Terraform 配好 Vault 的 AWS 机密引擎与一条受控 role，再由 **Terraform Operator** 在每次 `plan` / `apply` 时通过 Vault provider 现场领取一对短生命周期 AWS 凭据，并把这对临时凭据交给 AWS provider 使用。本节把官方教程重新组织成适合初学者理解的版本，并在动手实验中用 LocalStack 模拟 AWS，让你不需要真实 AWS 账号也能看到动态 IAM user 被创建、被用于创建 EC2 实例对象、再在租约到期后被 Vault 回收。
+> **核心结论**：Terraform 不应该长期持有一对写在本机环境变量里的 AWS access key。官方教程 [Inject secrets into Terraform using the Vault provider](https://developer.hashicorp.com/terraform/tutorials/secrets/secrets-vault) 演示的正是这条改造路径：先由 **Vault Admin** 用 Terraform 配好 Vault 的 AWS 机密引擎与一条受控 role，再由 **Terraform Operator** 在每次 `plan` / `apply` 时通过 Vault provider 现场领取一对短生命周期 AWS 凭据，并把这对临时凭据交给 AWS provider 使用。本节把官方教程重新组织成适合初学者理解的版本，并在动手实验中用 MiniStack 模拟 AWS，让你不需要真实 AWS 账号也能看到动态 IAM user 被创建、被用于创建 EC2 实例对象、再在租约到期后被 Vault 回收。
 
 参考：
 - 主参考：[Inject secrets into Terraform using the Vault provider — HashiCorp Tutorials](https://developer.hashicorp.com/terraform/tutorials/secrets/secrets-vault)
@@ -125,7 +125,7 @@ AWS EC2
 
 本课程实验会把这个问题拆成两幕，而且两幕使用**同一份 Terraform 代码**：第一幕直连 Vault，固定 120 秒 TTL，短 apply 成功、长 apply 失败；第二幕 Terraform 文件一行不改，只把 Vault 接入方式换成 Vault Proxy，让 Proxy 托管动态 lease 的续期，同一条长 apply 成功。
 
-有一个 LocalStack 适配点要提前说明：官方教程的 Operator 工作区使用 `vault_aws_access_credentials` data source；本实验读取的是同一个 `backend/creds/role` 路径，但用通用的 `vault_generic_secret` data source。原因是当前 Vault provider 的 `vault_aws_access_credentials` 会额外向真实 AWS IAM 做凭据有效性校验，却没有 LocalStack IAM endpoint 参数；`vault_generic_secret` 不做这一步校验，仍然能拿到 Vault AWS secrets engine 签发的 `access_key`、`secret_key`、`lease_id`、`lease_duration` 与 `lease_renewable`。
+有一个本地模拟 AWS 的适配点要提前说明：官方教程的 Operator 工作区使用 `vault_aws_access_credentials` data source；本实验读取的是同一个 `backend/creds/role` 路径，但用通用的 `vault_generic_secret` data source。原因是当前 Vault provider 的 `vault_aws_access_credentials` 会额外向真实 AWS IAM 做凭据有效性校验，却没有本地 IAM endpoint 参数；`vault_generic_secret` 不做这一步校验，仍然能拿到 Vault AWS secrets engine 签发的 `access_key`、`secret_key`、`lease_id`、`lease_duration` 与 `lease_renewable`。
 
 ### 4.1 第一幕：直连 Vault，短 apply 成功、长 apply 失败
 
@@ -137,7 +137,9 @@ Terraform Vault provider ──▶ Vault ──▶ AWS dynamic credentials ─�
 
 那么 Terraform 的确认等待时间、`plan` / `apply` 执行时间、网络重试时间，都必须落在这份 lease 的有效窗口内。否则 AWS provider 后续调用就会因为凭据已被 Vault 回收而失败。`-auto-approve` 只能减少「人停在确认提示上」的等待时间，不能解决大型 apply 本身跑很久的问题。
 
-实验里会用一个 `apply_delay` 变量和 `time_sleep` 资源模拟 apply 中间的长耗时操作。`apply_delay=0s` 时，Terraform 很快创建 LocalStack EC2 instance，120 秒 TTL 足够用；`apply_delay=150s` 时，Terraform 在拿到 Vault 动态 AWS key 之后故意等待 150 秒，再去调用 EC2 API。这时 Vault 已经回收了动态 IAM user，AWS provider 手里的 access key 变成了失效凭据，长 apply 就会挂掉。
+实验里会用一个 `apply_delay` 变量和 `time_sleep` 资源模拟 apply 中间的长耗时操作。`apply_delay=0s` 时，Terraform 很快创建 MiniStack EC2 instance，120 秒 TTL 足够用；`apply_delay=150s` 时，Terraform 在拿到 Vault 动态 AWS key 之后故意等待 150 秒，再去调用 EC2 API。这时 Vault 已经回收了动态 IAM user，AWS provider 手里的 access key 变成了失效凭据，长 apply 就会挂掉。
+
+为了让这个失败在交互式实验里及时出现，Operator 工作区还把 Terraform AWS provider 的 `max_retries` 设为 `1`，并在 shell 环境里设置 `AWS_MAX_ATTEMPTS=1`。这是课堂节奏调整：AWS provider 默认会对 AWS API 调用做较多重试，过期 key 被 MiniStack 拒绝后如果继续沿用默认值，学员可能会在 `DescribeAvailabilityZones` 上多等很久。
 
 ### 4.2 第二幕：Terraform 代码不改，只改 Vault 接入配置，由 Proxy 续租
 
@@ -178,22 +180,23 @@ Terraform Vault provider ──▶ Vault Proxy ──▶ Vault ──▶ AWS dyn
 
 ---
 
-## 5. LocalStack 版实验与官方教程的差异
+## 5. MiniStack 版实验与官方教程的差异
 
-官方教程使用真实 AWS 账号，并要求你在 AWS Console 里观察 IAM user 与 EC2 instance。本课程坚持零真实云成本，所以用 LocalStack 模拟 AWS IAM / STS / EC2。为了让实验既能本地跑通，又不偏离官方教程的主线，需要做几处替换。
+官方教程使用真实 AWS 账号，并要求你在 AWS Console 里观察 IAM user 与 EC2 instance。本课程坚持零真实云成本，所以用 MiniStack 模拟 AWS IAM / STS / EC2。为了让实验既能本地跑通，又不偏离官方教程的主线，需要做几处替换。
 
 | 官方教程 | 本课程实验 |
 | --- | --- |
-| 真实 AWS IAM / STS / EC2 | LocalStack `127.0.0.1:4566` 模拟 IAM / STS / EC2 |
+| 真实 AWS IAM / STS / EC2 | MiniStack `127.0.0.1:4566` 模拟 IAM / STS / EC2 |
 | AWS Console 里看动态 IAM user | `awslocal iam list-users` 查看动态 IAM user |
 | AWS Console 里看 EC2 实例 | `awslocal ec2 describe-instances` 查看本地模拟的 instance 对象 |
-| `data.aws_ami.ubuntu` 查询 Canonical 公共 AMI | LocalStack 没有真实公共 AMI 目录，实验使用固定的模拟 AMI ID，并用 `data.aws_availability_zones` 保留 plan 阶段的 EC2 API 检查 |
+| `data.aws_ami.ubuntu` 查询 Canonical 公共 AMI | MiniStack 没有真实公共 AMI 目录，实验使用固定的模拟 AMI ID，并用 `data.aws_availability_zones` 保留 plan 阶段的 EC2 API 检查 |
 | 手动 `terraform apply` 后输入 `yes` | 实验用 `-auto-approve`，避免 120 秒 TTL 被人工等待耗尽 |
+| AWS provider 默认重试 | 实验设置 `max_retries = 1` / `AWS_MAX_ATTEMPTS=1`，避免预期失败拖太久 |
 | 真实 AWS 计费风险 | 无真实 AWS 账号，无云费用 |
 
 除此之外，核心结构保持一致：仍然是两个 Terraform 工作区，仍然由 Admin 工作区创建 Vault AWS secrets engine 与 role，仍然由 Operator 工作区读取同一条 Vault AWS `creds` 路径领取动态 AWS key，仍然用移除 `ec2:*` 来验证权限收紧。
 
-实验里还会以 `ENFORCE_IAM=1` 启动 LocalStack。这样当 Admin 移除 `ec2:*` 后，Operator 再次运行 plan 时会看到与真实 AWS 类似的未授权错误，而不是被本地模拟器「宽松放行」。
+实验里会以 `ENFORCE_IAM=1` 启动 MiniStack，并使用镜像 `ghcr.io/lonegunmanb/ministack:full`。这样当 Admin 移除 `ec2:*` 后，Operator 再次运行 plan 时会看到与真实 AWS 类似的未授权错误；当 Vault 回收动态 IAM user 后，旧 access key 再调用 EC2 也会收到 `InvalidClientTokenId`，而不是被本地模拟器「宽松放行」。
 
 ---
 
@@ -233,11 +236,11 @@ Terraform Vault provider ──▶ Vault Proxy ──▶ Vault ──▶ AWS dyn
 
 ## 8. 动手实验
 
-本节配套了一个 Killercoda 实验：学员将在单台 Ubuntu 主机上启动 dev 模式 Vault 与 LocalStack，使用两个 Terraform 工作区复现官方教程。
+本节配套了一个 Killercoda 实验：学员将在单台 Ubuntu 主机上启动 dev 模式 Vault 与 MiniStack，使用两个 Terraform 工作区复现官方教程。
 
-1. **Vault Admin 工作区**：用 Terraform 在 LocalStack 上创建 Vault 专用 IAM user，把它的 access key 写入 Vault AWS secrets engine，并创建一条能签发 `iam:*` / `ec2:*` 动态凭据的 role；
+1. **Vault Admin 工作区**：用 Terraform 在 MiniStack 上创建 Vault 专用 IAM user，把它的 access key 写入 Vault AWS secrets engine，并创建一条能签发 `iam:*` / `ec2:*` 动态凭据的 role；
 2. **演示一：固定 120 秒 TTL**：同一份 Operator Terraform 代码，`apply_delay=0s` 的短 apply 成功，`apply_delay=150s` 的长 apply 失败；
 3. **演示二：Proxy 自动续期**：Terraform 文件一行不改，只启动 Vault Proxy 并把 Terraform 的 Vault 请求改走 Proxy listener，同一条 `apply_delay=150s` 长 apply 成功；
 4. **权限收紧**：Admin 移除 role 中的 `ec2:*`，Operator 再次 `terraform plan`，看到 EC2 权限不足导致失败。
 
-<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch9-terraform-vault-aws" title="实验：用 Vault 动态 AWS 凭据运行 Terraform（LocalStack 版）" />
+<KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch9-terraform-vault-aws" title="实验：用 Vault 动态 AWS 凭据运行 Terraform（MiniStack 版）" />

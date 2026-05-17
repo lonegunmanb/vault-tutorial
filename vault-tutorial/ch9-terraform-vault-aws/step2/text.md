@@ -7,7 +7,7 @@
 进入 Operator 工作区：
 
 ```bash
-cd /root/terraform-vault-aws-localstack/operator-workspace
+cd /root/terraform-vault-aws-ministack/operator-workspace
 
 export VAULT_ADDR=http://127.0.0.1:8200
 export VAULT_TOKEN=root
@@ -15,6 +15,7 @@ export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_PAGER=""
+export AWS_MAX_ATTEMPTS=1
 ```
 
 ## 2.1 看懂 Operator 工作区的凭据流向
@@ -44,14 +45,17 @@ resource "time_sleep" "after_vault_credentials" {
 provider "aws" {
   access_key = data.vault_generic_secret.creds.data["access_key"]
   secret_key = data.vault_generic_secret.creds.data["secret_key"]
+  max_retries = 1
 }
 ```
 
 这就是官方教程的核心：AWS provider 用的不是本机长期 key，而是 Vault data source 现场返回的动态 key。
 
-> 官方教程使用专门的 `vault_aws_access_credentials` data source。它在真实 AWS 中很合适，但当前 Vault provider 版本会在返回前用 AWS SDK 调真实 IAM 做一次凭据有效性校验，且这个校验没有 LocalStack endpoint 参数。因此本实验用通用的 `vault_generic_secret` 读取同一个 `${backend}/creds/${role}` 路径；Vault AWS secrets engine 签发动态 IAM user、返回 lease、到期回收的行为完全相同，只是跳过了这个真实 AWS 校验。
+> 官方教程使用专门的 `vault_aws_access_credentials` data source。它在真实 AWS 中很合适，但当前 Vault provider 版本会在返回前用 AWS SDK 调真实 IAM 做一次凭据有效性校验，且这个校验没有本地模拟 AWS endpoint 参数。因此本实验用通用的 `vault_generic_secret` 读取同一个 `${backend}/creds/${role}` 路径；Vault AWS secrets engine 签发动态 IAM user、返回 lease、到期回收的行为完全相同，只是跳过了这个真实 AWS 校验。
 
-> 官方教程用 `data "aws_ami" "ubuntu"` 查询真实 AWS 的 Ubuntu AMI。本实验运行在 LocalStack 上，没有真实公共 AMI 目录，所以使用一个 LocalStack 可接受的模拟 AMI ID；同时保留 `data "aws_availability_zones" "available"`，让 `terraform plan` 阶段仍然会调用 EC2 API。这样第 4 步移除 `ec2:*` 后，权限拒绝会发生在 plan 阶段，而不是拖到 apply 阶段，失败点仍与官方教程一致。
+> 官方教程用 `data "aws_ami" "ubuntu"` 查询真实 AWS 的 Ubuntu AMI。本实验运行在 MiniStack 上，没有真实公共 AMI 目录，所以使用一个 MiniStack 可接受的模拟 AMI ID；同时保留 `data "aws_availability_zones" "available"`，让 `terraform plan` 阶段仍然会调用 EC2 API。这样第 4 步移除 `ec2:*` 后，权限拒绝会发生在 plan 阶段，而不是拖到 apply 阶段，失败点仍与官方教程一致。
+
+> `max_retries = 1` 是本实验的课堂节奏调整。Terraform AWS provider 默认最多重试 25 次，过期动态 key 被拒绝时可能会在 EC2 API 上等很久；这里把重试压低，让 `InvalidClientTokenId` 或 `AccessDenied` 更快浮现。
 
 ## 2.2 初始化 Operator 工作区
 
@@ -92,7 +96,7 @@ vault list "sys/leases/lookup/${ADMIN_BACKEND}/creds/${ADMIN_ROLE}" || true
 
 1. `terraform output` 输出一个 `instance_id`，形如 `instance_id = "i-..."`；
 2. `== Dynamic IAM users ==` 下面有一个以 `vault-` 开头的用户，这是 Vault 为本次 Terraform run 创建的短期 IAM user；
-3. `== EC2 instances ==` 下面能看到 `dynamic-aws-creds-operator-instance`，官方教程是在 AWS Console 的 EC2 页面看这一项，本实验用 CLI 看 LocalStack 的模拟对象；
+3. `== EC2 instances ==` 下面能看到 `dynamic-aws-creds-operator-instance`，官方教程是在 AWS Console 的 EC2 页面看这一项，本实验用 CLI 看 MiniStack 的模拟对象；
 4. `== Vault leases ==` 下面如果 lease 尚未过期，会列出一个 lease 后缀，对应的完整 lease ID 形如：
 
 ```text
@@ -101,7 +105,7 @@ dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role/<lease-suffix>
 
 这份 lease 到期后，Vault 会回到 IAM 端删除对应的动态 IAM user。
 
-这一刻发生了三件事：Terraform 读取 Admin 工作区 state，拿到 Vault backend 与 role 名；`vault_generic_secret` 读取 `dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role`；Vault 在 LocalStack IAM 里创建一名动态 IAM user，AWS provider 用这名用户的 access key 创建 EC2 instance。
+这一刻发生了三件事：Terraform 读取 Admin 工作区 state，拿到 Vault backend 与 role 名；`vault_generic_secret` 读取 `dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role`；Vault 在 MiniStack IAM 里创建一名动态 IAM user，AWS provider 用这名用户的 access key 创建 EC2 instance。
 
 ## 2.4 清理短 apply 创建的 instance
 
@@ -112,7 +116,7 @@ terraform destroy -auto-approve -var='apply_delay=0s'
 terraform state list || true
 ```
 
-LocalStack 可能仍返回 terminated instance 记录，这是 EC2 API 的正常语义；重点是 Terraform state 中已经没有 `aws_instance.main`。
+MiniStack 可能仍返回 terminated instance 记录，这是 EC2 API 的正常语义；重点是 Terraform state 中已经没有 `aws_instance.main`。
 
 ## 2.5 长 apply：同一份 Terraform 代码，`apply_delay=150s` 失败
 

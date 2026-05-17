@@ -5,7 +5,7 @@
 本实验已经生成了 `vault-admin-workspace`，先进入目录：
 
 ```bash
-cd /root/terraform-vault-aws-localstack/vault-admin-workspace
+cd /root/terraform-vault-aws-ministack/vault-admin-workspace
 
 export VAULT_ADDR=http://127.0.0.1:8200
 export VAULT_TOKEN=root
@@ -13,6 +13,7 @@ export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_PAGER=""
+export AWS_MAX_ATTEMPTS=1
 ```
 
 ## 1.1 看懂 Admin 工作区的四类资源
@@ -72,7 +73,7 @@ vault read "$(terraform output -raw backend)/roles/$(terraform output -raw role)
 
 `secret_key` 不会从 Vault 回显，这符合 Vault 对敏感字段的处理方式。
 
-## 1.4 在 LocalStack 侧确认 Vault 专用 IAM user 已创建
+## 1.4 在 MiniStack 侧确认 Vault 专用 IAM user 已创建
 
 ```bash
 awslocal iam list-users --query 'Users[].UserName' --output table
