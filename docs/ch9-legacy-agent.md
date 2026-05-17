@@ -36,31 +36,23 @@ HashiCorp 工具链里能担当这个"本地组件"的，其实是**两个不同
 
 ## 2. 我们演示两种工具：Consul-Template 与 Vault Agent Process Supervisor
 
-先把两个工具各自是什么摆清楚：
+**Consul-Template** 是 HashiCorp 维护的独立 CLI，用 "Consul Template" 模板语言把 Vault / Consul / Nomad 的数据渲染成本地文件，并能在每次模板变化时执行一条命令。
 
-第一个是 **Consul-Template**：HashiCorp 维护的一个**独立命令行工具**。它最早是为 Consul KV 而生，后来扩展到 Vault 与 Nomad，用一套通用的"Consul Template"模板语言把外部数据源渲染成本地文本文件，并可以在每次模板变化时执行一条命令。在 Vault 场景下，它就是"拿一枚 token、周期性地去 Vault 取机密、把模板结果写到磁盘文件上"的那个轻量 CLI。
+**Vault Agent**（7.2 节）内嵌同一套模板引擎：`template` 块把机密写成文件（与 CT 几乎对等），`env_template + exec` 块进入 **Process Supervisor Mode**——等 env template 渲染完再 fork 子进程，按 `restart_on_secret_changes` 在凭据轮转时整体重启。Consul-Template 也有对位的 **Exec Mode**（顶层 `exec` 块，能 `command` + `reload_signal` + `kill_signal` 地托管子进程），所以"托管子进程"两边都有。**Vault Agent 真正独占的**是 `env_template`（把模板渲染结果直接注入子进程环境变量，CT 的 `exec.env.custom` 只能塞静态 `"KEY=VAL"`）与内置 `auto_auth`（CT 必须从外部喂 token）的同壳组合。
 
-第二个是 **Vault Agent**——也就是第 7.2 节那个 Agent。Agent 本身就**完整内嵌了同一套 Consul Template 引擎**：你既可以用 `template` 块让它把机密渲染成磁盘文件（行为与 Consul-Template 几乎对等），也可以用 `env_template` + `exec` 块进入它的 **Process Supervisor Mode**——Agent 启动时先等所有 `env_template` 至少渲染一次，再 fork 出 `exec.command` 指定的子进程，并按 `restart_on_secret_changes` 在凭据轮转时给子进程发信号、整体重启。Consul-Template 这一侧也有一个对位的 **Exec Mode**（顶层 `exec` 块，能 `command` + `reload_signal` + `kill_signal` 地 fork 并监督子进程），所以"托管子进程"本身两边都有；真正只在 Vault Agent 这一侧的是 `env_template`（把模板渲染结果作为子进程环境变量注入）与内置 `auto_auth` 的同壳组合。
+本节故意把两个工具分别演示成两种典型形态——Consul-Template 当"塞进现成 systemd / Docker entrypoint 的轻量文件渲染器"，Vault Agent 当"env 注入 + auto-auth + 子进程托管"的同壳形态：
 
-**所以"渲染成文件"并不是 Consul-Template 的专属，"托管子进程"也不是 Vault Agent 的专属。** 那本节为什么还要把两个都讲一遍？因为它们各自的"长相"恰好能凸显两个完全不同的运维模式：
-
-- **Consul-Template** 是一个**不和 Vault Agent 共生**的独立二进制——可以直接塞进任何一个早就在跑的 systemd 单元、Docker entrypoint、旧 init 脚本里，最常见的用法就是"文件渲染器"。这种"我只是个轻量 CLI"的形态很适合那些**不想引入完整 Agent**、只想换掉那一行配置里的密码字段的场景。
-- **Vault Agent 的 Process Supervisor Mode** 在"模板渲染 + 子进程托管"这两件事上和 Consul-Template 的 **Exec Mode** 大面积重叠——CT 顶层 `exec` 块也能 `command` + `reload_signal` + `kill_signal` / `kill_timeout` 地 fork 并监督子进程。Vault Agent 在这条路上**真正不可替代**的是两件事捆在同一个二进制里：**`env_template` 把模板渲染结果直接注入子进程的环境变量**（CT 的 `exec.env.custom` 只接受静态 `"KEY=VAL"` 列表，没法把 <code v-pre>{{ with secret "database/creds/readonly" }}</code> 的渲染结果挂成子进程 env），以及**内置 `auto_auth`** 让 token 的拿取和续期不再需要外部喂进来。
-
-本节是**故意**用两个工具去分别演示这两种形态，而不是因为某个工具不能干另一个工具的事。下表把这层"我们为什么这么挑"的设计意图明确出来：
-
-| 维度 | 路径 A：Consul-Template 渲染文件（本节演示） | 路径 B：Vault Agent Process Supervisor 注入环境变量（本节演示） |
+| 维度 | 路径 A：Consul-Template 渲染文件 | 路径 B：Vault Agent Process Supervisor 注入环境变量 |
 | --- | --- | --- |
-| 工具角色 | 独立 CLI，最常见的用法是模板渲染 | Vault Agent 的内置模式 |
-| 这个工具是否还能干另一种 | ✅ CT 也有 Exec Mode（顶层 `exec` 块）能 fork 并监督子进程，但 `exec.env.custom` 只接受**静态** env，没法把模板渲染结果作为子进程环境变量注入 | ✅ Vault Agent 也能用 `template` 块写文件（见 7.2 节），但与 `env_template + exec` 在同一份配置里**互斥**（见 §5.1） |
-| 本节挑它演示这一面的原因 | 展示"只要个文件渲染器、不引入 Agent"的极简形态 | 展示 Agent 独有的"`env_template` + `auto_auth` 同壳" |
-| Vault token 由谁管 | Consul-Template 自己（`renew_token = true`，需要外部先喂一枚 token 进来） | Vault Agent 的 Auto-auth（内置拿取与续期） |
-| 凭据变化时应用怎么感知 | 应用要么定时重读文件、要么由 `template.exec` 触发 reload；走 CT Exec Mode 时还可由 `reload_signal` 直接信号化子进程 | Agent 按 `restart_on_secret_changes` 整体重启子进程 |
-| 与传统 init 系统的关系 | 子进程崩溃不会被自动拉起，仍需 systemd / 容器编排兜底 | 同上；官方原文是 "Vault Agent will exit when the child process exits on its own with the same exit code"——不会替你重启崩溃的子进程 |
+| 工具角色 | 独立 CLI | Vault Agent 的内置模式 |
+| 还能干另一种吗 | ✅ 有 Exec Mode 能托管子进程，但 `exec.env.custom` 只接受**静态** env | ✅ 也能用 `template` 块写文件（7.2 节），但与 `env_template + exec` 在同一份配置里**互斥**（见 §5.1） |
+| Vault token 由谁管 | CT 自己（`renew_token = true`，需要外部先喂一枚 token） | Vault Agent Auto-auth（内置拿取与续期） |
+| 凭据变化时怎么感知 | 应用定时重读文件 / `template.exec` 触发 reload / Exec Mode 下用 `reload_signal` 信号化子进程 | Agent 按 `restart_on_secret_changes` 整体重启子进程 |
+| 与 init system 的关系 | 子进程崩溃不会被自动拉起，仍需 systemd / 容器编排兜底 | 同上；官方原文 "Vault Agent will exit when the child process exits on its own with the same exit code" |
 
-换句话说：你完全可以**只用 Vault Agent 这一个产品**走完所有路径——文件渲染走 `template`、环境变量注入走 `env_template + exec`。但要注意这两条路在 Agent 这一侧**不能写在同一份配置里**（process supervisor 模式与文件型 `template` 条目互斥，详见 §5.1），意味着你得起**两个 Agent 进程 / 两份配置**。本节把第一条路交给 Consul-Template，纯粹是为了把"独立 CLI 的极简形态"和"Agent 的进程托管形态"两种生产里都常见的部署形状一次性给你看到。
+只用 Vault Agent 一个产品也能走完两条路（文件 = `template`，env = `env_template + exec`），但二者**不能写在同一份配置里**（互斥，见 §5.1），所以仍需起两份配置 / 两个进程。把第一条路交给 Consul-Template，纯粹是为了把"独立 CLI 的极简形态"和"Agent 的进程托管形态"两种部署形状都演示一遍。
 
-> 提醒：如果是已经在 Kubernetes 中运行的工作负载，官方文档在 process supervisor 这一页明确建议先评估 **Vault Secrets Operator** 与 **Vault Agent Sidecar Injector** 两条 Kubernetes 原生路径。本节的两个工具主要面向裸机 / VM / 普通容器以及"还来不及上 K8s"的旧应用形态。
+> 提醒：K8s 工作负载请优先评估 **Vault Secrets Operator** 与 **Vault Agent Sidecar Injector**（官方建议）；本节面向裸机 / VM / 普通容器。
 
 ---
 
