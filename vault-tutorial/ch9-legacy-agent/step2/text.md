@@ -38,14 +38,14 @@ nohup consul-template \
   -config=/root/legacy-lab/ct_config.hcl \
   -template="/root/legacy-lab/config.toml.tplt:/etc/legacy-app/config.toml" \
   -vault-renew-token=true \
-  -log-level=info \
+  -log-level=trace \
   > /var/log/consul-template.log 2>&1 &
 echo $! > /var/run/consul-template.pid
 sleep 3
 tail -n 15 /var/log/consul-template.log
 ```{{exec}}
 
-`-vault-renew-token=true` 在命令行再显式声明一次 token 续期；`-template` 的格式是 `源:目标`。Consul-Template 启动时 `VAULT_ADDR` / `VAULT_TOKEN` 直接从环境继承（root token，dev 模式下足够）。
+`-vault-renew-token=true` 在命令行再显式声明一次 token 续期；`-template` 的格式是 `源:目标`。Consul-Template 启动时 `VAULT_ADDR` / `VAULT_TOKEN` 直接从环境继承（root token，dev 模式下足够）。`-log-level=trace` 是故意拉到最高级别：CT v0.39.1 下机密 renewer 的「成功续期」事件只在 TRACE 里记（INFO 看不到 renew，只看得到初始渲染与 WARN / ERR），本节演示需要看得到它。
 
 ## 2.4 阶段一：观察"续期"——同一个用户名，被反复续命
 
@@ -66,13 +66,15 @@ docker exec -i learn-postgres psql -U root -d postgres -c "SELECT usename, valun
 
 预期：两次快照的 `username` **完全一样**，但 `valuntil` 已经往后推了。这就是 Consul-Template 的 secret renewer 在帮你做的事——同一条 lease 被静默续期，应用甚至感知不到。
 
-可以再去 Consul-Template 的日志里印证：
+可以再去 Consul-Template 的日志里印证（这些是 TRACE 级别的记录，只有 `-log-level=trace` 才看得到）：
 
 ```bash
-grep -E 'renewed secret|renewer' /var/log/consul-template.log | tail -n 10
+grep -E 'successfully renewed|starting renewer' /var/log/consul-template.log \
+  | grep -v vault.token \
+  | tail -n 10
 ```{{exec}}
 
-会看到一条条 `renewed secret(... database/creds/readonly)` 记录。
+会看到一条 `vault.read(database/creds/readonly): starting renewer`，后面跟着一串 `vault.read(database/creds/readonly): successfully renewed`——每一条就是一次在 lease 三分之一点上发起的续期。`grep -v vault.token` 用来过滤掉 dev root token 那一串「不可续期」的噪声。
 
 ## 2.5 阶段二：观察"重取"——max_ttl 到点后 CT 申请新凭据
 
@@ -90,10 +92,12 @@ docker exec -i learn-postgres psql -U root -d postgres -c "SELECT usename, valun
 预期：`username` **变了**，是一个全新的 `v-token-readonly-…` 串；`pg_user` 里短暂可能同时出现新旧两个用户（旧的接下来会被 Vault `DROP ROLE` 掉）。再看 CT 日志：
 
 ```bash
-grep -E 'received new secret|received empty' /var/log/consul-template.log | tail -n 10
+grep -E 'renewer done|\(runner\) rendered.*config\.toml' /var/log/consul-template.log \
+  | grep -v vault.token \
+  | tail -n 10
 ```{{exec}}
 
-会看到一条 `received new secret(... database/creds/readonly)`——这就是 CT "续不动了、改去重取"的那一刻。
+会看到两条重要信号：一条 `vault.read(database/creds/readonly): renewer done (maybe the lease expired)`——这是 CT「续不动了」的那一刻（max_ttl 到点，Vault 拒绝再续）；紧跟着一条 `(runner) rendered "/etc/legacy-app/config.toml"`——这是 CT 拿到新凭据后重写配置文件的那一刻。
 
 ## 2.6 看 `legacy-app` 的日志
 
