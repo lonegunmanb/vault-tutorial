@@ -52,6 +52,7 @@
     { "path": "ch9-agent-cache" },
     { "path": "ch9-troubleshoot" },
     { "path": "ch9-identity-broker-postgres" },
-    { "path": "ch9-terraform-vault-aws" }
+    { "path": "ch9-terraform-vault-aws" },
+    { "path": "ch9-legacy-agent" }
   ]
 }
