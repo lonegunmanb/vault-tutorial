@@ -1,4 +1,4 @@
-# 第四步：收紧 Vault role 权限并验证 plan 失败
+# 第四步：收紧 Vault role 权限并验证 apply 失败
 
 官方教程最后一幕是权限治理：Vault Admin 决定不再允许 Terraform Operator 管 EC2，于是只修改 Vault role 的 policy，下一次 Operator 运行 Terraform 就会失败。
 
@@ -37,7 +37,7 @@ vault read "$(terraform output -raw backend)/roles/$(terraform output -raw role)
 
 确认 `policy_document` 中已经没有 `ec2:*`。
 
-## 4.2 Operator 再次 plan，应因 EC2 权限不足失败
+## 4.2 Operator 再次 apply，应因 EC2 权限不足失败
 
 ```bash
 cd /root/terraform-vault-aws-ministack/operator-workspace
@@ -50,8 +50,10 @@ export AWS_DEFAULT_REGION=us-east-1
 export AWS_PAGER=""
 export AWS_MAX_ATTEMPTS=1
 
-terraform plan -no-color 2>&1 | tee /tmp/terraform-plan-denied.log
+terraform apply -auto-approve -var='apply_delay=0s' -no-color 2>&1 | tee /tmp/terraform-apply-denied.log
 ```
+
+> 这里不能用 `terraform plan`。Operator 工作区的 `data.aws_availability_zones.available` 通过 `depends_on = [time_sleep.after_vault_credentials]` 依赖了一个待创建的资源，Terraform 会把这条 data source 推迟到 apply 阶段才求值（plan 输出里会明确看到 `will be read during applyーdepends on a resource or a module with changes pending`）。也就是说 plan 阶段压根不调 EC2，看不到权限拒绝。`apply` 才会真正拿动态凭据打 EC2，被 MiniStack（以及真实 AWS）拒绝。加 `-var='apply_delay=0s'` 只是为了不白白等 `time_sleep` 。
 
 期望看到类似错误：
 
@@ -62,7 +64,7 @@ AccessDenied: User is not authorized to perform: ec2:DescribeAvailabilityZones
 用 grep 抓关键字：
 
 ```bash
-grep -Ei 'UnauthorizedOperation|AccessDenied|not authorized|not authorised' /tmp/terraform-plan-denied.log
+grep -Ei 'UnauthorizedOperation|AccessDenied|not authorized|not authorised' /tmp/terraform-apply-denied.log
 ```
 
 这里的失败链路非常重要：Operator 仍然能向 Vault 要到一对动态 IAM key，因为 role 还允许 `iam:*`；但这对新 key 已经没有 `ec2:*`，所以 AWS provider 调 EC2 API 时被 MiniStack 拒绝。真实 AWS 中也是同一类结果。
@@ -98,7 +100,7 @@ vault secrets list | grep dynamic-aws-creds || true
 ## ✅ 验收
 
 - [ ] Admin 工作区成功把 role policy 改为只包含 `iam:*`
-- [ ] Operator 工作区 `terraform plan` 返回授权失败
+- [ ] Operator 工作区 `terraform apply` 返回授权失败
 - [ ] Admin 工作区 `terraform destroy` 成功清理 Vault backend 与 MiniStack IAM user
 
 你已经复现了官方教程的完整闭环：配置 Vault AWS secrets engine、用 Vault provider 注入动态 AWS 凭据、用短期凭据运行 Terraform、再通过收紧 Vault role 让后续 Terraform 运行失去 EC2 权限。

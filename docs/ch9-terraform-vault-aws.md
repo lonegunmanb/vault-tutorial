@@ -73,7 +73,7 @@ group_order: 90
 
 ### 2.3 第三幕：Admin 收紧 role，Operator 立刻失去 EC2 权限
 
-官方教程的最后一段非常关键：Vault Admin 回到 `vault-admin-workspace`，把 role 的 `policy_document` 里 `ec2:*` 移除，只保留 `iam:*`。然后 Terraform Operator 再运行 `terraform plan`，会因为没有 EC2 权限而失败。
+官方教程的最后一段非常关键：Vault Admin 回到 `vault-admin-workspace`，把 role 的 `policy_document` 里 `ec2:*` 移除，只保留 `iam:*`。然后 Terraform Operator 再运行 `terraform apply`，会因为没有 EC2 权限而失败。
 
 这说明权限边界已经回到了 Vault role 这一处集中配置：
 
@@ -243,6 +243,6 @@ Terraform Vault provider ──▶ Vault Proxy ──▶ Vault ──▶ AWS dyn
 1. **Vault Admin 工作区**：用 Terraform 在 MiniStack 上创建 Vault 专用 IAM user，把它的 access key 写入 Vault AWS secrets engine，并创建一条能签发 `iam:*` / `ec2:*` 动态凭据的 role；
 2. **演示一：固定 120 秒 TTL**：同一份 Operator Terraform 代码，`apply_delay=0s` 的短 apply 成功，`apply_delay=150s` 的长 apply 失败；
 3. **演示二：Proxy 自动续期**：Terraform 文件一行不改，只启动 Vault Proxy 并把 Terraform 的 Vault 请求改走 Proxy listener，同一条 `apply_delay=150s` 长 apply 成功；
-4. **权限收紧**：Admin 移除 role 中的 `ec2:*`，Operator 再次 `terraform plan`，看到 EC2 权限不足导致失败。
+4. **权限收紧**：Admin 移除 role 中的 `ec2:*`，Operator 再次 `terraform apply`，看到 EC2 权限不足导致失败。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch9-terraform-vault-aws" title="实验：用 Vault 动态 AWS 凭据运行 Terraform（MiniStack 版）" />

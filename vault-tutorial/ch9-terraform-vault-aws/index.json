@@ -1,6 +1,6 @@
 {
   "title": "Terraform + Vault Provider：用动态 AWS 凭据运行基础设施变更",
-  "description": "Recreate HashiCorp's Inject secrets into Terraform using the Vault provider tutorial with MiniStack instead of a real AWS account. Use a Vault Admin Terraform workspace to configure the AWS secrets engine and a role with a 120-second TTL. Then run two Operator demos with unchanged Terraform code: first show a short apply succeeding and a delayed long apply failing with fixed TTL, then route the same Terraform Vault requests through Vault Proxy so dynamic lease renewal lets the same long apply succeed. Finally restrict the Vault role by removing ec2:* and verify that the next Terraform plan fails with an authorization error.",
+  "description": "Recreate HashiCorp's Inject secrets into Terraform using the Vault provider tutorial with MiniStack instead of a real AWS account. Use a Vault Admin Terraform workspace to configure the AWS secrets engine and a role with a 120-second TTL. Then run two Operator demos with unchanged Terraform code: first show a short apply succeeding and a delayed long apply failing with fixed TTL, then route the same Terraform Vault requests through Vault Proxy so dynamic lease renewal lets the same long apply succeed. Finally restrict the Vault role by removing ec2:* and verify that the next Terraform apply fails with an authorization error.",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -21,7 +21,7 @@
         "text": "step3/text.md"
       },
       {
-        "title": "第四步：收紧 Vault role 权限并验证 plan 失败",
+        "title": "第四步：收紧 Vault role 权限并验证 apply 失败",
         "text": "step4/text.md"
       }
     ],
