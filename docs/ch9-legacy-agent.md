@@ -45,7 +45,7 @@ HashiCorp 工具链里能担当这个"本地组件"的，其实是**两个不同
 **所以"渲染成文件"并不是 Consul-Template 的专属，"托管子进程"也不是 Vault Agent 的专属。** 那本节为什么还要把两个都讲一遍？因为它们各自的"长相"恰好能凸显两个完全不同的运维模式：
 
 - **Consul-Template** 是一个**不和 Vault Agent 共生**的独立二进制——可以直接塞进任何一个早就在跑的 systemd 单元、Docker entrypoint、旧 init 脚本里，最常见的用法就是"文件渲染器"。这种"我只是个轻量 CLI"的形态很适合那些**不想引入完整 Agent**、只想换掉那一行配置里的密码字段的场景。
-- **Vault Agent 的 Process Supervisor Mode** 在"模板渲染 + 子进程托管"这两件事上和 Consul-Template 的 **Exec Mode** 大面积重叠——CT 顶层 `exec` 块也能 `command` + `reload_signal` + `kill_signal` / `kill_timeout` 地 fork 并监督子进程。Vault Agent 在这条路上**真正不可替代**的是两件事捆在同一个二进制里：**`env_template` 把模板渲染结果直接注入子进程的环境变量**（CT 的 `exec.env.custom` 只接受静态 `"KEY=VAL"` 列表，没法把 `{{ with secret "database/creds/readonly" }}` 的渲染结果挂成子进程 env），以及**内置 `auto_auth`** 让 token 的拿取和续期不再需要外部喂进来。
+- **Vault Agent 的 Process Supervisor Mode** 在"模板渲染 + 子进程托管"这两件事上和 Consul-Template 的 **Exec Mode** 大面积重叠——CT 顶层 `exec` 块也能 `command` + `reload_signal` + `kill_signal` / `kill_timeout` 地 fork 并监督子进程。Vault Agent 在这条路上**真正不可替代**的是两件事捆在同一个二进制里：**`env_template` 把模板渲染结果直接注入子进程的环境变量**（CT 的 `exec.env.custom` 只接受静态 `"KEY=VAL"` 列表，没法把 <code v-pre>{{ with secret "database/creds/readonly" }}</code> 的渲染结果挂成子进程 env），以及**内置 `auto_auth`** 让 token 的拿取和续期不再需要外部喂进来。
 
 本节是**故意**用两个工具去分别演示这两种形态，而不是因为某个工具不能干另一个工具的事。下表把这层"我们为什么这么挑"的设计意图明确出来：
 
@@ -116,7 +116,7 @@ password = "{{ .Data.password }}"
 {{ end }}
 ```
 
-`{{ with secret "database/creds/readonly" }} ... {{ end }}` 这一段是 Consul-Template 模板语法。`secret` 函数对应 Vault 的 `database/creds/<role>` 端点，每次调用都会让 Vault 在 PostgreSQL 上新建一个动态用户并返回一份带 `lease_id` 的响应；模板用 `.Data.username` 与 `.Data.password` 两个字段去填配置文件。
+<code v-pre>{{ with secret "database/creds/readonly" }} ... {{ end }}</code> 这一段是 Consul-Template 模板语法。`secret` 函数对应 Vault 的 `database/creds/<role>` 端点，每次调用都会让 Vault 在 PostgreSQL 上新建一个动态用户并返回一份带 `lease_id` 的响应；模板用 `.Data.username` 与 `.Data.password` 两个字段去填配置文件。
 
 ### 4.2 Consul-Template 自己的配置：把自动续期写在脸上
 
@@ -275,7 +275,7 @@ Agent 启动后会做四件事：
 
 **Vault Agent Process Supervisor Mode 真正不可替代的地方**：把 **`env_template`（模板渲染结果直接注入子进程环境变量）** 与**内置 `auto_auth`** 绑在同一个二进制里——
 
-- **`env_template` 才是这条路独有的能力**：Consul-Template 的 Exec Mode 虽然也能 fork 并按 `reload_signal` / `kill_signal` 托管子进程，但 `exec.env.custom` 只接受**静态** `"KEY=VAL"` 列表，没法把 `{{ with secret "database/creds/readonly" }}` 的渲染结果直接挂成子进程 env，要凑出来必须先渲染到磁盘文件再包一层 shell；
+- **`env_template` 才是这条路独有的能力**：Consul-Template 的 Exec Mode 虽然也能 fork 并按 `reload_signal` / `kill_signal` 托管子进程，但 `exec.env.custom` 只接受**静态** `"KEY=VAL"` 列表，没法把 <code v-pre>{{ with secret "database/creds/readonly" }}</code> 的渲染结果直接挂成子进程 env，要凑出来必须先渲染到磁盘文件再包一层 shell；
 - Agent 自己 fork 出来的子进程，凭据轮转时它能精确地按 `restart_stop_signal` → 30 秒退出窗口 → `SIGKILL` 这套语义把子进程换掉（CT Exec Mode 的 `kill_signal` + `kill_timeout` 语义近似，但默认值与触发时机不同）；
 - `template_config.exit_on_retry_failure = true` + "子进程退出 Agent 也退出" 这一对开关组合，让"凭据拿不到时不要继续假装一切正常"成为可强制保证的运行时约束；
 - auto-auth + 模板渲染 + 子进程托管在同一份配置文件里描述，运维只用维护一个 Vault Agent 进程而不再额外有 Consul-Template（CT 这一侧没有 auto-auth，token 必须靠外部渠道喂进来）。
