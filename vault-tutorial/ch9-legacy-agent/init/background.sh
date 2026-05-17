@@ -119,101 +119,69 @@ vault write -force -field=secret_id auth/approle/role/legacy-agent/secret-id > /
 chmod 600 /root/agent-role-id /root/agent-secret-id
 
 # ─────────────────────────────────────────────────────────
-# Build the "legacy" Go binary. It reads creds from env or
-# /etc/legacy-app/config.toml and prints `SELECT current_user`
-# every 10 seconds. Uses only stdlib + os/exec (psql),
-# so it builds with the pre-installed Go 1.18 on Killercoda.
+# Install the "legacy" app as a self-contained bash script.
+# It reads creds from env or /etc/legacy-app/config.toml and
+# prints `SELECT current_user || ' @ ' || now()` every 10s.
+# A bash script (vs a Go binary) keeps the lab independent of
+# the Killercoda image's Go toolchain version — the narrative
+# only needs an executable with a fixed two-source interface.
 # ─────────────────────────────────────────────────────────
 mkdir -p "$LAB_DIR" /etc/legacy-app /var/log/legacy-app
 
-cat > "$LAB_DIR/legacy-app.go" <<'EOF'
-package main
+cat > /usr/local/bin/legacy-app <<'EOF'
+#!/bin/bash
+# Simulated legacy application:
+#   - Reads DB_USER / DB_PASSWORD env vars first;
+#   - Falls back to /etc/legacy-app/config.toml otherwise;
+#   - Every 10s, asks Postgres `SELECT current_user || ' @ ' || now()`
+#     and prints the result with the credential source tag.
+# It has no awareness of Vault — that's the whole point of the demo.
 
-import (
-	"bufio"
-	"fmt"
-	"os"
-	"os/exec"
-	"strings"
-	"time"
-)
+set -u
 
-func readToml(path string) (user, pass string) {
-	f, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if i := strings.Index(line, "="); i > 0 {
-			k := strings.TrimSpace(line[:i])
-			v := strings.Trim(strings.TrimSpace(line[i+1:]), "\"")
-			switch k {
-			case "username":
-				user = v
-			case "password":
-				pass = v
-			}
-		}
-	}
-	return
+read_toml() {
+  local path=$1 key=$2
+  [ -r "$path" ] || return 0
+  sed -n "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$path" | head -1
 }
 
-func loadCreds() (string, string, string) {
-	if u, p := os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"); u != "" && p != "" {
-		return u, p, "env"
-	}
-	u, p := readToml("/etc/legacy-app/config.toml")
-	return u, p, "file"
-}
+echo "[legacy-app] starting"
 
-func query(user, pass string) (string, error) {
-	cmd := exec.Command("psql",
-		"-h", "127.0.0.1", "-p", "5432",
-		"-U", user, "-d", "postgres",
-		"-tA", "-c", "SELECT current_user || ' @ ' || now();")
-	cmd.Env = append(os.Environ(), "PGPASSWORD="+pass)
-	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
-}
+while true; do
+  if [ -n "${DB_USER:-}" ] && [ -n "${DB_PASSWORD:-}" ]; then
+    user=$DB_USER; pass=$DB_PASSWORD; src=env
+  else
+    user=$(read_toml /etc/legacy-app/config.toml username)
+    pass=$(read_toml /etc/legacy-app/config.toml password)
+    src=file
+  fi
 
-func main() {
-	fmt.Fprintln(os.Stdout, "[legacy-app] starting")
-	for {
-		user, pass, src := loadCreds()
-		ts := time.Now().Format("15:04:05")
-		if user == "" || pass == "" {
-			fmt.Fprintf(os.Stdout, "[legacy-app] %s waiting for credentials (source=%s)\n", ts, src)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		short := user
-		if len(short) > 24 {
-			short = short[:24] + "..."
-		}
-		out, err := query(user, pass)
-		if err != nil {
-			fmt.Fprintf(os.Stdout, "[legacy-app] %s FAIL  source=%s user=%s err=%v %s\n", ts, src, short, err, out)
-		} else {
-			fmt.Fprintf(os.Stdout, "[legacy-app] %s OK    source=%s %s\n", ts, src, out)
-		}
-		time.Sleep(10 * time.Second)
-	}
-}
+  ts=$(date +%H:%M:%S)
+
+  if [ -z "${user:-}" ] || [ -z "${pass:-}" ]; then
+    echo "[legacy-app] $ts waiting for credentials (source=$src)"
+    sleep 2
+    continue
+  fi
+
+  short=$user
+  if [ ${#short} -gt 24 ]; then
+    short="${short:0:24}..."
+  fi
+
+  if out=$(PGPASSWORD="$pass" psql -h 127.0.0.1 -p 5432 -U "$user" -d postgres \
+            -tA -c "SELECT current_user || ' @ ' || now();" 2>&1); then
+    line=$(echo "$out" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e '/^$/d' | head -1)
+    echo "[legacy-app] $ts OK    source=$src $line"
+  else
+    err=$(echo "$out" | tr -d '\r\n')
+    echo "[legacy-app] $ts FAIL  source=$src user=$short err=$err"
+  fi
+
+  sleep 10
+done
 EOF
-
-# Build with the preinstalled go (1.18 on the killercoda ubuntu image).
-# No external imports, so no module download required.
-(
-  cd "$LAB_DIR"
-  GOFLAGS="-mod=mod" go build -o /usr/local/bin/legacy-app legacy-app.go > /tmp/legacy-build.log 2>&1
-) || {
-  echo "WARNING: legacy-app build failed; tailing log:"
-  cat /tmp/legacy-build.log
-}
-chmod +x /usr/local/bin/legacy-app 2>/dev/null
+chmod +x /usr/local/bin/legacy-app
 
 # ─────────────────────────────────────────────────────────
 # Pre-stage Consul-Template files (config + template):

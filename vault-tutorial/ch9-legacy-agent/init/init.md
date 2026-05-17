@@ -7,7 +7,7 @@
 - dev 模式 Vault：`VAULT_ADDR=http://127.0.0.1:8200`，root token 为 `root`；
 - PostgreSQL 容器：`localhost:5432`，superuser `root` / `rootpassword`，预创建一个 `ro` 只读角色；
 - Vault `database` 机密引擎已配置好 PostgreSQL 连接，并启用一个 `default_ttl = 30s` 的 role `readonly`（动态用户从 `ro` 继承读权限）；
-- 一个故意写成"无法改造"的 Go 二进制 `/usr/local/bin/legacy-app`：
+- 一个故意写成"无法改造"的可执行文件 `/usr/local/bin/legacy-app`：
   - 优先从环境变量 `DB_USER` / `DB_PASSWORD` 读取凭据；
   - 没有环境变量时回退去读 `/etc/legacy-app/config.toml`；
   - 每 10 秒用 `psql` 连一次 Postgres，打印 `current_user` 与 `now()`；

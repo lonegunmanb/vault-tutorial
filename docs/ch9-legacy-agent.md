@@ -66,9 +66,9 @@ PostgreSQL 实例用 docker 起一个 `root / rootpassword` 的 superuser，然�
 - 同一个本地组件（Consul-Template 或 Vault Agent）会替你把行将到期的动态凭据**先续期、续不动了再换成新的**；
 - 应用读到的"机密"在这次轮转中确实变了，但应用的二进制完全没有被改动。
 
-本节会把同一份 TOML 文件交给一个**故意写成"无法改造"**的 Go 二进制去消费，然后在第二幕用 Process Supervisor 把同一份机密改成环境变量交给另一个版本的同一个二进制。
+本节会把同一份 TOML 文件交给一个**故意写成"无法改造"**的二进制去消费，然后在第二幕用 Process Supervisor 把同一份机密改成环境变量交给另一个版本的同一个二进制。
 
-模拟"遗留应用"的 Go 程序非常窄：它启动时读 `/etc/legacy-app/config.toml`（或同名的环境变量 `DB_USER` / `DB_PASSWORD`），用拿到的用户名密码连 Postgres，每隔几秒打印一次"当前以 \<username\> 连接，跑 `SELECT current_user, now()` 的结果是 …"。它不知道 Vault 存在，也不知道凭据来自哪里——这正是"无法改造的旧应用"在被改造前后能保持的稳定行为。
+模拟"遗留应用"的程序非常窄：它启动时读 `/etc/legacy-app/config.toml`（或同名的环境变量 `DB_USER` / `DB_PASSWORD`），用拿到的用户名密码连 Postgres，每隔几秒打印一次"当前以 \<username\> 连接，跑 `SELECT current_user, now()` 的结果是 …"。它不知道 Vault 存在，也不知道凭据来自哪里——这正是"无法改造的旧应用"在被改造前后能保持的稳定行为。
 
 ---
 
@@ -153,7 +153,7 @@ consul-template \
 
 这两个阶段都不需要你额外动手——它们就是"自动续期"在两端时间尺度上的自然延伸。
 
-> 这里有一个需要诚实交待的边界：`/etc/legacy-app/config.toml` 在哪个时刻被旧应用真正读到，取决于旧应用自己什么时候去读。如果应用只在启动时读一次配置（很多旧 Go 程序都是这样），那么 Consul-Template 把文件写新一遍并不会立刻让应用换上新凭据——除非你借助 `template.exec` 在每次渲染后给应用发一个 reload 信号，或者用 9.7 节那种"上游连接拒绝时即时重连"的 Process Supervisor 重启策略来兜底。本节实验里特意让旧应用每隔 10 秒重读一次文件，避免这个边界把演示叙事打断；生产里通常应该明确选一种刷新机制并写进运行手册。
+> 这里有一个需要诚实交待的边界：`/etc/legacy-app/config.toml` 在哪个时刻被旧应用真正读到，取决于旧应用自己什么时候去读。如果应用只在启动时读一次配置（很多旧程序都是这样），那么 Consul-Template 把文件写新一遍并不会立刻让应用换上新凭据——除非你借助 `template.exec` 在每次渲染后给应用发一个 reload 信号，或者用 9.7 节那种"上游连接拒绝时即时重连"的 Process Supervisor 重启策略来兜底。本节实验里特意让旧应用每隔 10 秒重读一次文件，避免这个边界把演示叙事打断；生产里通常应该明确选一种刷新机制并写进运行手册。
 
 ---
 
@@ -300,9 +300,9 @@ Agent 启动后会做四件事：
 
 ## 8. 动手实验
 
-本节配套了一个 Killercoda 实验：学员将在单台 Killercoda 主机上启动 dev 模式 Vault、PostgreSQL 容器，以及一个**故意写成"无法改造"**的 Go 程序（既能从 `/etc/legacy-app/config.toml` 读用户名密码，也能从环境变量 `DB_USER` / `DB_PASSWORD` 读，并每隔 10 秒做一次 `SELECT current_user, now()` 打印到 stdout）。然后依次完成两幕：
+本节配套了一个 Killercoda 实验：学员将在单台 Killercoda 主机上启动 dev 模式 Vault、PostgreSQL 容器，以及一个**故意写成"无法改造"**的程序（既能从 `/etc/legacy-app/config.toml` 读用户名密码，也能从环境变量 `DB_USER` / `DB_PASSWORD` 读，并每隔 10 秒做一次 `SELECT current_user, now()` 打印到 stdout）。然后依次完成两幕：
 
 1. **第一幕：Consul-Template 渲染配置文件**：用一份显式开启 `renew_token` 的 `ct_config.hcl` + 简单 TOML 模板，让 Consul-Template 把 PostgreSQL 动态用户（`default_ttl=30s, max_ttl=2m`）写进 `/etc/legacy-app/config.toml`；先观察 CT 在 lease 半程时自动**续期**同一个用户，再观察 `max_ttl` 到点后 CT **重新申请**一个新用户、`pg_user` 里旧用户被 Vault 销毁；
-2. **第二幕：Vault Agent Process Supervisor 注入环境变量**：复用同一份 Vault 配置与同一个 Go 二进制，写一份 `vault-agent.hcl`（含 `auto_auth` + 两个 `env_template` + 一个 `exec`），用 AppRole 完成 auto-auth；观察 Agent 在凭据接近到期时按 `restart_on_secret_changes = "always"` 整体重启子进程，旧应用打印的 `current_user` 在不动一行代码的前提下自动换名。
+2. **第二幕：Vault Agent Process Supervisor 注入环境变量**：复用同一份 Vault 配置与同一个二进制，写一份 `vault-agent.hcl`（含 `auto_auth` + 两个 `env_template` + 一个 `exec`），用 AppRole 完成 auto-auth；观察 Agent 在凭据接近到期时按 `restart_on_secret_changes = "always"` 整体重启子进程，旧应用打印的 `current_user` 在不动一行代码的前提下自动换名。
 
 <KillercodaEmbed src="https://killercoda.com/vault-tutorial/course/vault-tutorial/ch9-legacy-agent" title="实验：用 Consul-Template 与 Vault Agent Process Supervisor 让旧 Go 应用消费动态 Postgres 凭据" />
