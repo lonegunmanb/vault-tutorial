@@ -126,11 +126,11 @@ terraform output
 
 ```bash
 awslocal iam list-users \
-  --query 'Users[?starts_with(UserName, `vault-`)].UserName' \
+  --query "Users[?starts_with(UserName, 'vault-')].UserName" \
   --output table
 
 awslocal ec2 describe-instances \
-  --query 'Reservations[].Instances[].{InstanceId:InstanceId,State:State.Name,Name:Tags[?Key==`Name`]|[0].Value}' \
+  --query "Reservations[].Instances[].{InstanceId:InstanceId,State:State.Name,Name:Tags[?Key=='Name']|[0].Value}" \
   --output table
 ```
 

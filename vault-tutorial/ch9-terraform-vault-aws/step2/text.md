@@ -61,57 +61,39 @@ terraform init
 
 这一步会下载 `aws`、`vault` 与 `time` 三个 provider。`time_sleep` 资源只用来模拟「Terraform 已经拿到 Vault 动态 AWS 凭据，但真正调用 EC2 API 之前中间耗时很久」。它的 `triggers` 里包含 `lease_id`，所以每次 Vault 签发新 lease 时都会重新等待一次。
 
-## 2.3 短 apply：`apply_delay=0s` 成功
+## 2.3 短 apply：成功后立刻观察凭据和实例
+
+下面这一整段请一次性运行。动态 IAM user 默认只有 120 秒 TTL，如果把 `terraform apply`、`terraform output` 和 `awslocal` 观察拆开执行，中途停下来读文档或离开一会儿，回来时那名动态用户可能已经被 Vault 回收了。
 
 ```bash
 terraform apply -auto-approve -var='apply_delay=0s'
 terraform output
-```
 
-应输出一个 `instance_id`，形如：
-
-```text
-instance_id = "i-..."
-```
-
-这一刻发生了三件事：
-
-1. Terraform 读取 Admin 工作区 state，拿到 Vault backend 与 role 名；
-2. `vault_generic_secret` 读取 `dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role`；
-3. Vault 在 LocalStack IAM 里创建一名动态 IAM user，AWS provider 用这名用户的 access key 创建 EC2 instance。
-
-## 2.4 在 LocalStack 里观察动态 IAM user 与 EC2 instance
-
-先看 IAM user：
-
-```bash
+echo
+echo "== Dynamic IAM users =="
 awslocal iam list-users \
-  --query 'Users[?starts_with(UserName, `vault-`)].UserName' \
+  --query "Users[?starts_with(UserName, 'vault-')].UserName" \
   --output table
-```
 
-应看到一个以 `vault-` 开头的用户。这就是 Vault 为本次 Terraform run 创建的短期 IAM user。
-
-再看 EC2 instance：
-
-```bash
+echo
+echo "== EC2 instances =="
 awslocal ec2 describe-instances \
-  --query 'Reservations[].Instances[].{InstanceId:InstanceId,State:State.Name,Name:Tags[?Key==`Name`]|[0].Value}' \
+  --query "Reservations[].Instances[].{InstanceId:InstanceId,State:State.Name,Name:Tags[?Key=='Name']|[0].Value}" \
   --output table
-```
 
-应看到 `dynamic-aws-creds-operator-instance`。官方教程是在 AWS Console 的 EC2 页面看这一项，本实验用 CLI 看 LocalStack 的模拟对象。
-
-## 2.5 在 Vault 里观察 lease
-
-```bash
+echo
+echo "== Vault leases =="
 ADMIN_BACKEND=$(terraform -chdir=../vault-admin-workspace output -raw backend)
 ADMIN_ROLE=$(terraform -chdir=../vault-admin-workspace output -raw role)
-
 vault list "sys/leases/lookup/${ADMIN_BACKEND}/creds/${ADMIN_ROLE}" || true
 ```
 
-如果 lease 尚未过期，这里会列出一个 lease 后缀。它对应的完整 lease ID 形如：
+结果里应看到四类信息：
+
+1. `terraform output` 输出一个 `instance_id`，形如 `instance_id = "i-..."`；
+2. `== Dynamic IAM users ==` 下面有一个以 `vault-` 开头的用户，这是 Vault 为本次 Terraform run 创建的短期 IAM user；
+3. `== EC2 instances ==` 下面能看到 `dynamic-aws-creds-operator-instance`，官方教程是在 AWS Console 的 EC2 页面看这一项，本实验用 CLI 看 LocalStack 的模拟对象；
+4. `== Vault leases ==` 下面如果 lease 尚未过期，会列出一个 lease 后缀，对应的完整 lease ID 形如：
 
 ```text
 dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role/<lease-suffix>
@@ -119,7 +101,9 @@ dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role/<lease-suffix>
 
 这份 lease 到期后，Vault 会回到 IAM 端删除对应的动态 IAM user。
 
-## 2.6 清理短 apply 创建的 instance
+这一刻发生了三件事：Terraform 读取 Admin 工作区 state，拿到 Vault backend 与 role 名；`vault_generic_secret` 读取 `dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role`；Vault 在 LocalStack IAM 里创建一名动态 IAM user，AWS provider 用这名用户的 access key 创建 EC2 instance。
+
+## 2.4 清理短 apply 创建的 instance
 
 为了让后面的长 apply 从干净状态开始，先销毁刚才创建的 instance。这里仍然使用短延时，避免 destroy 自己也等 150 秒：
 
@@ -130,7 +114,7 @@ terraform state list || true
 
 LocalStack 可能仍返回 terminated instance 记录，这是 EC2 API 的正常语义；重点是 Terraform state 中已经没有 `aws_instance.main`。
 
-## 2.7 长 apply：同一份 Terraform 代码，`apply_delay=150s` 失败
+## 2.5 长 apply：同一份 Terraform 代码，`apply_delay=150s` 失败
 
 现在不改任何 `.tf` 文件，只把变量改成 `apply_delay=150s`：Terraform 会先通过 Vault data source 读取一对 120 秒 TTL 的动态 AWS key，然后 `time_sleep` 等 150 秒，再让 AWS provider 调 EC2 API。
 
@@ -148,7 +132,7 @@ grep -Ei 'UnauthorizedOperation|AccessDenied|InvalidClientTokenId|not authorized
 
 ```bash
 awslocal iam list-users \
-  --query 'Users[?starts_with(UserName, `vault-`)].UserName' \
+  --query "Users[?starts_with(UserName, 'vault-')].UserName" \
   --output table
 ```
 
