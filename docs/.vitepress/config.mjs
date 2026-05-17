@@ -135,7 +135,8 @@ export default defineConfig({
              { text: '9.5 端到端案例：用 Vault 接管 OpenLDAP 用户口令的轮转生命周期', link: '/ch9-ldap-rotation' },
              { text: '9.5 Vault 故障排查方法论：从可观测性数据反推根因', link: '/ch9-troubleshoot' },
              { text: '9.6 Vault 作为身份代理（Identity Broker）：把 AWS IAM 与 K8s ServiceAccount 联邦到 PostgreSQL 动态账号', link: '/ch9-identity-broker-postgres' },
-             { text: '9.7 Terraform 与 Vault Provider：用动态 AWS 凭据运行基础设施变更', link: '/ch9-terraform-vault-aws' }
+             { text: '9.7 Terraform 与 Vault Provider：用动态 AWS 凭据运行基础设施变更', link: '/ch9-terraform-vault-aws' },
+             { text: '9.8 让无法改造的遗留应用接入 Vault：Consul-Template 与 Process Supervisor 双轨实践', link: '/ch9-legacy-agent' }
            ]
          }
         ],
