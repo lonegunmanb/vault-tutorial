@@ -196,7 +196,7 @@ Terraform Vault provider ──▶ Vault Proxy ──▶ Vault ──▶ AWS dyn
 
 除此之外，核心结构保持一致：仍然是两个 Terraform 工作区，仍然由 Admin 工作区创建 Vault AWS secrets engine 与 role，仍然由 Operator 工作区读取同一条 Vault AWS `creds` 路径领取动态 AWS key，仍然用移除 `ec2:*` 来验证权限收紧。
 
-实验里会以 `ENFORCE_IAM=1` 启动 MiniStack，并使用镜像 `ghcr.io/lonegunmanb/ministack:full`。这样当 Admin 移除 `ec2:*` 后，Operator 再次运行 plan 时会看到与真实 AWS 类似的未授权错误；当 Vault 回收动态 IAM user 后，旧 access key 再调用 EC2 也会收到 `InvalidClientTokenId`，而不是被本地模拟器「宽松放行」。
+实验里会以 `ENFORCE_IAM=1` 启动 MiniStack，并使用镜像 `ghcr.io/lonegunmanb/ministack:sha-41865eb-full`（按提交 SHA 固定，保证教程可复现）。这样当 Admin 移除 `ec2:*` 后，Operator 再次运行 plan 时会看到与真实 AWS 类似的未授权错误；当 Vault 回收动态 IAM user 后，旧 access key 再调用 EC2 也会收到 `InvalidClientTokenId`，而不是被本地模拟器「宽松放行」。
 
 ---
 

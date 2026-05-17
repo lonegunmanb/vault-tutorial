@@ -11,7 +11,10 @@ source /root/setup-common.sh
 TERRAFORM_VERSION="${TERRAFORM_VERSION:-1.8.5}"
 LAB_DIR="/root/terraform-vault-aws-ministack"
 MINISTACK_ENDPOINT="http://127.0.0.1:4566"
-MINISTACK_IMAGE="${MINISTACK_IMAGE:-ghcr.io/lonegunmanb/ministack:full}"
+# Pin to a specific commit-sha tag so the lab stays reproducible. The floating
+# `:full` tag currently points to the same digest; bump this when ministack
+# publishes a newer fix that the tutorial needs.
+MINISTACK_IMAGE="${MINISTACK_IMAGE:-ghcr.io/lonegunmanb/ministack:sha-41865eb-full}"
 
 # Install apt packages serially before any background install function runs.
 apt-get update -qq && apt-get install -y -qq jq curl unzip ca-certificates > /dev/null 2>&1
