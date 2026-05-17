@@ -147,7 +147,7 @@ Terraform Vault provider ──▶ Vault ──▶ AWS dynamic credentials ─�
 
 Vault Proxy 通过 Auto-auth 先拿到一枚它自己管理的 Vault token；Terraform 运行时用这枚 token 通过 Proxy 请求 AWS 动态凭据。由于这次 leased secret 创建请求经过 Proxy，并且使用的是 Proxy 已经管理的 token，Proxy 会缓存这份动态 AWS 凭据响应，并在后台通过 Vault renewer 替它续期。
 
-这里有一处必须显式打开的开关：实验运行 `terraform apply` 前会设置 `VAULT_SKIP_CHILD_TOKEN=true`。Terraform Vault provider 默认会先调一次 `auth/token/create` 给自己派生一枚短命子 token，再用子 token 去读 secrets。一方面这要求调用者持有 `auth/token/create` 权限，而 Operator 用的最小 AppRole policy 只允许读那条 AWS `creds` 路径，所以默认行为会被 Vault 直接拒绝；另一方面，即便放开 token-create 权限，子 token 拉到的 AWS lease 也会挂在子 token 名下，逃出 Proxy auto-auth 管理的父 token 的续期范围，长 apply 仍会失败。`VAULT_SKIP_CHILD_TOKEN=true` 让 Terraform 直接复用 Proxy auto-auth sink 中的那枚 token，Proxy 才能真正接管这次拉到的 AWS lease 的续期。
+这里有一处必须显式打开的开关：实验运行 `terraform apply` 前会设置 `TERRAFORM_VAULT_SKIP_CHILD_TOKEN=true`。它对应 Terraform Vault provider 自身的 `skip_child_token` 配置项；注意前缀是 `TERRAFORM_VAULT_` 而不是 `VAULT_`——`VAULT_*` 那些环境变量由 Vault SDK 直接消费，provider 自己额外加的开关用 `TERRAFORM_VAULT_*` 命名空间。Terraform Vault provider 默认会先调一次 `auth/token/create` 给自己派生一枚短命子 token，再用子 token 去读 secrets。一方面这要求调用者持有 `auth/token/create` 权限，而 Operator 用的最小 AppRole policy 只允许读那条 AWS `creds` 路径，所以默认行为会被 Vault 直接拒绝；另一方面，即便放开 token-create 权限，子 token 拉到的 AWS lease 也会挂在子 token 名下，逃出 Proxy auto-auth 管理的父 token 的续期范围，长 apply 仍会失败。`TERRAFORM_VAULT_SKIP_CHILD_TOKEN=true` 让 Terraform 直接复用 Proxy auto-auth sink 中的那枚 token，Proxy 才能真正接管这次拉到的 AWS lease 的续期。
 
 这条生产形态可以理解成：
 
