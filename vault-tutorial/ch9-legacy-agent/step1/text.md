@@ -65,10 +65,13 @@ timeout 8 /usr/local/bin/legacy-app
 
 `source=file` 说明二进制刚才是从配置文件读到了凭据。
 
-也可以试一下环境变量分支：
+也可以试一下环境变量分支。注意 `cred1.json` 的 TTL 只有 30 秒，等你读完上面这段文字时它多半已经被 Vault revoke 掉了，所以这里重新签一份再喂给二进制：
 
 ```bash
-DB_USER=$DB_USER DB_PASSWORD=$DB_PASS timeout 5 /usr/local/bin/legacy-app
+vault read -format=json database/creds/readonly > /tmp/cred2.json
+DB_USER=$(jq -r '.data.username' /tmp/cred2.json) \
+DB_PASSWORD=$(jq -r '.data.password' /tmp/cred2.json) \
+  timeout 5 /usr/local/bin/legacy-app
 ```{{exec}}
 
 这次 `source=env`。两条读取路径都验证 OK，意味着接下来无论是 Consul-Template（更新文件）还是 Vault Agent Process Supervisor（注入环境变量），都能把这个"无法改造"的二进制喂饱。
