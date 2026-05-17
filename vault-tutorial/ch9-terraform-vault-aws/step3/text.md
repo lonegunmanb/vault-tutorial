@@ -112,6 +112,7 @@ cd /root/terraform-vault-aws-ministack/operator-workspace
 
 export VAULT_ADDR=http://127.0.0.1:8100
 export VAULT_TOKEN="$(cat /root/terraform-proxy-token)"
+export VAULT_SKIP_CHILD_TOKEN=true
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
 export AWS_DEFAULT_REGION=us-east-1
@@ -121,6 +122,8 @@ export AWS_MAX_ATTEMPTS=1
 terraform apply -auto-approve -var='apply_delay=150s'
 terraform output
 ```
+
+> `VAULT_SKIP_CHILD_TOKEN=true` 是走 Vault Proxy 时的必备一项。Terraform Vault provider 默认会先调一次 `auth/token/create` 给自己派生一枚短命子 token，再用子 token 去读 secrets。这里有两个问题：第一，AppRole policy `terraform-operator-dynamic-aws` 故意只授权了 `${backend}/creds/${role}` 一条路径，没有 `auth/token/create`，子 token 派生会被 Vault 拒绝（`Code: 403 permission denied`）；第二，即便放开了 `auth/token/create`，子 token 拿回来的 AWS lease 会挂在子 token 名下，而 Proxy 的 cache 与续期只覆盖它自己 auto-auth 管理的那枚父 token 所拉的 lease，子 token 的 lease 反而绕过了 Proxy 的续期路径，长 apply 会和第二步一样失败。设了 `VAULT_SKIP_CHILD_TOKEN=true` 后，Terraform 就直接复用 Proxy auto-auth 写到 `/root/terraform-proxy-token` 的那枚 token，Proxy 才能把这次拉到的 AWS lease 纳入缓存并在后台续期。
 
 这次应当成功。背后发生的是：Terraform 仍然读取同一条 Vault AWS `creds` 路径；但这次请求经过 Proxy，Proxy 发现它是「由自己管理的 token 创建出来的 leased secret」，于是把响应纳入缓存并在后台续期。150 秒后，AWS provider 再调用 EC2 API 时，那名动态 IAM user 仍然存在。
 
@@ -153,6 +156,7 @@ terraform state list || true
 
 - [ ] Terraform 文件没有改动
 - [ ] `VAULT_ADDR` 改为 `http://127.0.0.1:8100`
+- [ ] 设置了 `VAULT_SKIP_CHILD_TOKEN=true`，让 Terraform Vault provider 复用 Proxy 的 token
 - [ ] `terraform apply -auto-approve -var='apply_delay=150s'` 成功
 - [ ] MiniStack 中能看到动态 IAM user 与 EC2 instance
 - [ ] `terraform destroy -auto-approve -var='apply_delay=0s'` 后 state 为空
