@@ -28,7 +28,7 @@ sed -n '1,220p' main.tf
 3. `vault_aws_secret_backend`：把 AWS secrets engine 挂到 Vault，并把刚生成的 access key / secret key 写进去；
 4. `vault_aws_secret_backend_role`：创建 role，定义将来 Operator 领到的动态 IAM user 有哪些 AWS 权限。
 
-> `default_lease_ttl_seconds = 120` 对齐官方教程：动态 AWS 凭据默认只活 120 秒。它从 `vault_aws_access_credentials` data source 被读取的那一刻开始倒计时。
+> `default_lease_ttl_seconds = 120` 对齐官方教程：动态 AWS 凭据默认只活 120 秒。它从 Operator 读取 Vault AWS `creds` 路径的那一刻开始倒计时。
 
 ## 1.2 初始化并应用 Admin 工作区
 

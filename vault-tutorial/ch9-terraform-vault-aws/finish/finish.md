@@ -3,7 +3,7 @@
 恭喜！你已经用 LocalStack 复现了官方 Terraform + Vault Provider 教程的完整主线：
 
 - Vault Admin 工作区创建了 Vault AWS secrets engine 与 `iam_user` 类型 role；
-- Terraform Operator 工作区没有直接持有长期 AWS key，而是通过 `vault_aws_access_credentials` 现场领取短期 AWS 凭据；
+- Terraform Operator 工作区没有直接持有长期 AWS key，而是现场读取 Vault AWS `creds` 路径领取短期 AWS 凭据；
 - 固定 120 秒 TTL 下，短 apply 成功、长 apply 因动态 IAM user 到期被回收而失败；
 - Terraform 文件一行不改，只把 Vault 接入改成 Vault Proxy 后，同一条长 apply 成功；
 - Admin 移除 role 中的 `ec2:*` 后，Operator 的下一次 `terraform plan` 因 EC2 权限不足失败。
@@ -14,7 +14,7 @@
 | --- | --- |
 | `vault_aws_secret_backend` | Admin 把 AWS secrets engine 声明成 Terraform 管理的 Vault 资源 |
 | `vault_aws_secret_backend_role` | Admin 集中定义 Operator 动态 AWS 凭据的权限边界 |
-| `vault_aws_access_credentials` | Operator 在运行中向 Vault 领取短期 AWS key |
+| `vault_generic_secret` 读取 `creds` 路径 | Operator 在运行中向 Vault 领取短期 AWS key；这是 LocalStack 版对官方 `vault_aws_access_credentials` 的适配 |
 | `default_lease_ttl_seconds = 120` | 直连 Vault 时长 apply 会失败，因为 Terraform provider 不续租 |
 | Vault Proxy `cache {}` | Terraform 代码不变时，可由 Proxy 托管动态 token / lease 续期 |
 | 移除 `ec2:*` 后 plan 失败 | 权限收紧集中在 Vault role，下一次凭据签发立即生效 |

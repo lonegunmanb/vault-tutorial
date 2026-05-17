@@ -23,23 +23,33 @@ export AWS_PAGER=""
 sed -n '1,220p' main.tf
 ```
 
-重点看这三段：
+重点看这四段：
 
 ```hcl
 data "terraform_remote_state" "admin" { ... }
 
-data "vault_aws_access_credentials" "creds" {
-  backend = data.terraform_remote_state.admin.outputs.backend
-  role    = data.terraform_remote_state.admin.outputs.role
+data "vault_generic_secret" "creds" {
+  path = "${data.terraform_remote_state.admin.outputs.backend}/creds/${data.terraform_remote_state.admin.outputs.role}"
+}
+
+resource "time_sleep" "after_vault_credentials" {
+  create_duration = var.apply_delay
+
+  triggers = {
+    lease_id    = data.vault_generic_secret.creds.lease_id
+    apply_delay = var.apply_delay
+  }
 }
 
 provider "aws" {
-  access_key = data.vault_aws_access_credentials.creds.access_key
-  secret_key = data.vault_aws_access_credentials.creds.secret_key
+  access_key = data.vault_generic_secret.creds.data["access_key"]
+  secret_key = data.vault_generic_secret.creds.data["secret_key"]
 }
 ```
 
 这就是官方教程的核心：AWS provider 用的不是本机长期 key，而是 Vault data source 现场返回的动态 key。
+
+> 官方教程使用专门的 `vault_aws_access_credentials` data source。它在真实 AWS 中很合适，但当前 Vault provider 版本会在返回前用 AWS SDK 调真实 IAM 做一次凭据有效性校验，且这个校验没有 LocalStack endpoint 参数。因此本实验用通用的 `vault_generic_secret` 读取同一个 `${backend}/creds/${role}` 路径；Vault AWS secrets engine 签发动态 IAM user、返回 lease、到期回收的行为完全相同，只是跳过了这个真实 AWS 校验。
 
 > 官方教程用 `data "aws_ami" "ubuntu"` 查询真实 AWS 的 Ubuntu AMI。本实验运行在 LocalStack 上，没有真实公共 AMI 目录，所以使用一个 LocalStack 可接受的模拟 AMI ID；同时保留 `data "aws_availability_zones" "available"`，让 `terraform plan` 阶段仍然会调用 EC2 API。这样第 4 步移除 `ec2:*` 后，权限拒绝会发生在 plan 阶段，而不是拖到 apply 阶段，失败点仍与官方教程一致。
 
@@ -49,7 +59,7 @@ provider "aws" {
 terraform init
 ```
 
-这一步会下载 `aws`、`vault` 与 `external` 三个 provider。`external` 只用来执行一个本地 `delay.sh`，模拟「Terraform 已经拿到 Vault 动态 AWS 凭据，但真正调用 EC2 API 之前中间耗时很久」。
+这一步会下载 `aws`、`vault` 与 `time` 三个 provider。`time_sleep` 资源只用来模拟「Terraform 已经拿到 Vault 动态 AWS 凭据，但真正调用 EC2 API 之前中间耗时很久」。它的 `triggers` 里包含 `lease_id`，所以每次 Vault 签发新 lease 时都会重新等待一次。
 
 ## 2.3 短 apply：`apply_delay=0s` 成功
 
@@ -67,7 +77,7 @@ instance_id = "i-..."
 这一刻发生了三件事：
 
 1. Terraform 读取 Admin 工作区 state，拿到 Vault backend 与 role 名；
-2. `vault_aws_access_credentials` 读取 `dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role`；
+2. `vault_generic_secret` 读取 `dynamic-aws-creds-vault-path/creds/dynamic-aws-creds-vault-role`；
 3. Vault 在 LocalStack IAM 里创建一名动态 IAM user，AWS provider 用这名用户的 access key 创建 EC2 instance。
 
 ## 2.4 在 LocalStack 里观察动态 IAM user 与 EC2 instance
@@ -122,7 +132,7 @@ LocalStack 可能仍返回 terminated instance 记录，这是 EC2 API 的正常
 
 ## 2.7 长 apply：同一份 Terraform 代码，`apply_delay=150s` 失败
 
-现在不改任何 `.tf` 文件，只把变量改成 `apply_delay=150s`：Terraform 会先通过 `vault_aws_access_credentials` 读取一对 120 秒 TTL 的动态 AWS key，然后 `delay.sh` 等 150 秒，再让 AWS provider 调 EC2 API。
+现在不改任何 `.tf` 文件，只把变量改成 `apply_delay=150s`：Terraform 会先通过 Vault data source 读取一对 120 秒 TTL 的动态 AWS key，然后 `time_sleep` 等 150 秒，再让 AWS provider 调 EC2 API。
 
 ```bash
 terraform apply -auto-approve -var='apply_delay=150s' -no-color 2>&1 | tee /tmp/static-ttl-long-apply.log
@@ -132,7 +142,7 @@ echo "terraform exit code: $STATIC_STATUS"
 grep -Ei 'UnauthorizedOperation|AccessDenied|InvalidClientTokenId|not authorized|expired|failed' /tmp/static-ttl-long-apply.log | tail -10
 ```
 
-期望结果是失败。失败原因不是 Terraform 代码写错，而是这条链路里没有任何组件替 `vault_aws_access_credentials` 领到的 lease 续期；150 秒后，Vault 已经回收动态 IAM user，AWS provider 手里的 access key 也就失效了。
+期望结果是失败。失败原因不是 Terraform 代码写错，而是这条链路里没有任何组件替这次 Vault 读取拿到的 lease 续期；150 秒后，Vault 已经回收动态 IAM user，AWS provider 手里的 access key 也就失效了。
 
 旁证这一点：
 

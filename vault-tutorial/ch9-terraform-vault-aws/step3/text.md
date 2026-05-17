@@ -47,7 +47,7 @@ vault write -f -field=secret_id auth/approle/role/terraform-proxy/secret-id > /r
 chmod 600 /root/terraform-proxy-role-id /root/terraform-proxy-secret-id
 ```
 
-> `token_ttl=2m` 是故意贴近动态 AWS 凭据的 120 秒 TTL。Proxy 不只会续动态 secret lease，也会续它自己 auto-auth 拿到的 token。
+> `token_ttl=5m` 给 Proxy 自己的 token 留出更宽裕的续期窗口。Proxy 不只会续动态 secret lease，也会续它自己 auto-auth 拿到的 token。
 
 ## 3.2 启动带 cache 的 Vault Proxy
 
@@ -120,7 +120,7 @@ terraform apply -auto-approve -var='apply_delay=150s'
 terraform output
 ```
 
-这次应当成功。背后发生的是：Terraform 仍然通过 `vault_aws_access_credentials` 读取同一条 Vault AWS role；但这次请求经过 Proxy，Proxy 发现它是「由自己管理的 token 创建出来的 leased secret」，于是把响应纳入缓存并在后台续期。150 秒后，AWS provider 再调用 EC2 API 时，那名动态 IAM user 仍然存在。
+这次应当成功。背后发生的是：Terraform 仍然读取同一条 Vault AWS `creds` 路径；但这次请求经过 Proxy，Proxy 发现它是「由自己管理的 token 创建出来的 leased secret」，于是把响应纳入缓存并在后台续期。150 秒后，AWS provider 再调用 EC2 API 时，那名动态 IAM user 仍然存在。
 
 旁证一下：
 

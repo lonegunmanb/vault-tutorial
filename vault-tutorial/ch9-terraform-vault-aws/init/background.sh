@@ -234,9 +234,9 @@ terraform {
       source  = "hashicorp/vault"
       version = "3.17.0"
     }
-    external = {
-      source  = "hashicorp/external"
-      version = "2.3.3"
+    time = {
+      source  = "hashicorp/time"
+      version = "0.11.1"
     }
   }
 
@@ -295,21 +295,23 @@ data "terraform_remote_state" "admin" {
   }
 }
 
-data "vault_aws_access_credentials" "creds" {
-  backend = data.terraform_remote_state.admin.outputs.backend
-  role    = data.terraform_remote_state.admin.outputs.role
+data "vault_generic_secret" "creds" {
+  path = "${data.terraform_remote_state.admin.outputs.backend}/creds/${data.terraform_remote_state.admin.outputs.role}"
 }
 
-data "external" "after_vault_credentials_delay" {
-  program = ["bash", "${path.module}/delay.sh", var.apply_delay]
+resource "time_sleep" "after_vault_credentials" {
+  create_duration = var.apply_delay
 
-  depends_on = [data.vault_aws_access_credentials.creds]
+  triggers = {
+    lease_id    = data.vault_generic_secret.creds.lease_id
+    apply_delay = var.apply_delay
+  }
 }
 
 provider "aws" {
   region     = var.region
-  access_key = data.vault_aws_access_credentials.creds.access_key
-  secret_key = data.vault_aws_access_credentials.creds.secret_key
+  access_key = data.vault_generic_secret.creds.data["access_key"]
+  secret_key = data.vault_generic_secret.creds.data["secret_key"]
 
   skip_credentials_validation = true
   skip_metadata_api_check     = true
@@ -325,7 +327,7 @@ provider "aws" {
 data "aws_availability_zones" "available" {
   state = "available"
 
-  depends_on = [data.external.after_vault_credentials_delay]
+  depends_on = [time_sleep.after_vault_credentials]
 }
 
 resource "aws_instance" "main" {
@@ -345,15 +347,6 @@ output "instance_id" {
 }
 EOF
 
-  cat > "$LAB_DIR/operator-workspace/delay.sh" <<'EOF'
-#!/bin/bash
-set -euo pipefail
-
-duration="${1:-0s}"
-sleep "$duration"
-printf '{"slept":"%s"}\n' "$duration"
-EOF
-  chmod +x "$LAB_DIR/operator-workspace/delay.sh"
 }
 
 create_lab_files

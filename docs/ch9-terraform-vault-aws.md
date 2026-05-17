@@ -98,7 +98,7 @@ Vault: dynamic-aws-creds-vault-path/roles/dynamic-aws-creds-vault-role
 Terraform Operator
   │
   │ ③ data.terraform_remote_state 读出 backend 与 role
-  │ ④ data.vault_aws_access_credentials 请求短期 AWS 凭据
+  │ ④ Vault data source 请求短期 AWS 凭据
   ▼
 Vault AWS secrets engine
   │
@@ -113,7 +113,7 @@ AWS EC2
 
 这里有两个初学者很容易混淆的点。
 
-**第一，Vault provider 和 AWS provider 是两条不同的认证链。** Vault provider 用 `VAULT_ADDR` / `VAULT_TOKEN` 连接 Vault；AWS provider 用 `data.vault_aws_access_credentials.creds.access_key` 与 `secret_key` 连接 AWS。也就是说，Operator 仍然需要有一枚能访问 Vault 的 token，但不再需要长期 AWS key。
+**第一，Vault provider 和 AWS provider 是两条不同的认证链。** Vault provider 用 `VAULT_ADDR` / `VAULT_TOKEN` 连接 Vault；AWS provider 用 Vault data source 返回的 `access_key` 与 `secret_key` 连接 AWS。也就是说，Operator 仍然需要有一枚能访问 Vault 的 token，但不再需要长期 AWS key。
 
 **第二，`terraform_remote_state` 不是把 Admin 权限交给 Operator。** Operator 只读取 Admin 工作区输出的两个普通字符串：AWS secrets engine 的挂载路径和 role 名。真正能不能拿凭据，仍然由 Operator 当前使用的 Vault token 是否允许访问 `backend/creds/role` 决定。官方教程为了聚焦主线使用 dev 模式 root token，本课程实验也保持这个简化；生产环境必须给 Operator 单独发一枚最小权限 Vault token，只允许读取那条 `creds` 路径。
 
@@ -125,6 +125,8 @@ AWS EC2
 
 本课程实验会把这个问题拆成两幕，而且两幕使用**同一份 Terraform 代码**：第一幕直连 Vault，固定 120 秒 TTL，短 apply 成功、长 apply 失败；第二幕 Terraform 文件一行不改，只把 Vault 接入方式换成 Vault Proxy，让 Proxy 托管动态 lease 的续期，同一条长 apply 成功。
 
+有一个 LocalStack 适配点要提前说明：官方教程的 Operator 工作区使用 `vault_aws_access_credentials` data source；本实验读取的是同一个 `backend/creds/role` 路径，但用通用的 `vault_generic_secret` data source。原因是当前 Vault provider 的 `vault_aws_access_credentials` 会额外向真实 AWS IAM 做凭据有效性校验，却没有 LocalStack IAM endpoint 参数；`vault_generic_secret` 不做这一步校验，仍然能拿到 Vault AWS secrets engine 签发的 `access_key`、`secret_key`、`lease_id`、`lease_duration` 与 `lease_renewable`。
+
 ### 4.1 第一幕：直连 Vault，短 apply 成功、长 apply 失败
 
 先把最基本的边界说清楚：`vault_aws_access_credentials` 读取 AWS secrets engine 时会拿到一份带 lease 的动态 AWS 凭据；但 **Terraform Vault provider 自己不会替这份 lease 做续期**。官方 provider 文档也明确提醒：当你把这个 data source 的输出交给 AWS provider 使用时，这组凭据无法由 Terraform 自动续租，因此 lease 必须长到足以覆盖这次 Terraform 运行。也就是说，如果你只按官方教程的最小形态直连 Vault：
@@ -135,11 +137,11 @@ Terraform Vault provider ──▶ Vault ──▶ AWS dynamic credentials ─�
 
 那么 Terraform 的确认等待时间、`plan` / `apply` 执行时间、网络重试时间，都必须落在这份 lease 的有效窗口内。否则 AWS provider 后续调用就会因为凭据已被 Vault 回收而失败。`-auto-approve` 只能减少「人停在确认提示上」的等待时间，不能解决大型 apply 本身跑很久的问题。
 
-实验里会用一个 `apply_delay` 变量模拟 apply 中间的长耗时操作。`apply_delay=0s` 时，Terraform 很快创建 LocalStack EC2 instance，120 秒 TTL 足够用；`apply_delay=150s` 时，Terraform 在拿到 Vault 动态 AWS key 之后故意等待 150 秒，再去调用 EC2 API。这时 Vault 已经回收了动态 IAM user，AWS provider 手里的 access key 变成了失效凭据，长 apply 就会挂掉。
+实验里会用一个 `apply_delay` 变量和 `time_sleep` 资源模拟 apply 中间的长耗时操作。`apply_delay=0s` 时，Terraform 很快创建 LocalStack EC2 instance，120 秒 TTL 足够用；`apply_delay=150s` 时，Terraform 在拿到 Vault 动态 AWS key 之后故意等待 150 秒，再去调用 EC2 API。这时 Vault 已经回收了动态 IAM user，AWS provider 手里的 access key 变成了失效凭据，长 apply 就会挂掉。
 
 ### 4.2 第二幕：Terraform 代码不改，只改 Vault 接入配置，由 Proxy 续租
 
-第二幕的关键是：**不改 Terraform 文件**。仍然是同一个 `data "vault_aws_access_credentials" "creds"`，仍然是同一个 AWS provider 配置，仍然跑 `apply_delay=150s` 的长 apply。唯一变化是 Terraform 不再直连 Vault Server，而是把 `VAULT_ADDR` 指向本机 Vault Proxy listener。
+第二幕的关键是：**不改 Terraform 文件**。仍然是同一个读取 Vault AWS `creds` 路径的 data source，仍然是同一个 AWS provider 配置，仍然跑 `apply_delay=150s` 的长 apply。唯一变化是 Terraform 不再直连 Vault Server，而是把 `VAULT_ADDR` 指向本机 Vault Proxy listener。
 
 Vault Proxy 通过 Auto-auth 先拿到一枚它自己管理的 Vault token；Terraform 运行时用这枚 token 通过 Proxy 请求 AWS 动态凭据。由于这次 leased secret 创建请求经过 Proxy，并且使用的是 Proxy 已经管理的 token，Proxy 会缓存这份动态 AWS 凭据响应，并在后台通过 Vault renewer 替它续期。
 
@@ -189,7 +191,7 @@ Terraform Vault provider ──▶ Vault Proxy ──▶ Vault ──▶ AWS dyn
 | 手动 `terraform apply` 后输入 `yes` | 实验用 `-auto-approve`，避免 120 秒 TTL 被人工等待耗尽 |
 | 真实 AWS 计费风险 | 无真实 AWS 账号，无云费用 |
 
-除此之外，核心结构保持一致：仍然是两个 Terraform 工作区，仍然由 Admin 工作区创建 Vault AWS secrets engine 与 role，仍然由 Operator 工作区通过 `vault_aws_access_credentials` 领取动态 AWS key，仍然用移除 `ec2:*` 来验证权限收紧。
+除此之外，核心结构保持一致：仍然是两个 Terraform 工作区，仍然由 Admin 工作区创建 Vault AWS secrets engine 与 role，仍然由 Operator 工作区读取同一条 Vault AWS `creds` 路径领取动态 AWS key，仍然用移除 `ec2:*` 来验证权限收紧。
 
 实验里还会以 `ENFORCE_IAM=1` 启动 LocalStack。这样当 Admin 移除 `ec2:*` 后，Operator 再次运行 plan 时会看到与真实 AWS 类似的未授权错误，而不是被本地模拟器「宽松放行」。
 
@@ -220,7 +222,7 @@ Terraform Vault provider ──▶ Vault Proxy ──▶ Vault ──▶ AWS dyn
 1. **不要把长期 AWS key 发给每个 Terraform Operator**；
 2. **让 Vault AWS secrets engine 成为短期 AWS 凭据的发行方**；
 3. **Admin 工作区配置「凭据工厂」**：IAM root credential、Vault AWS backend、Vault role；
-4. **Operator 工作区只读取动态凭据**：`terraform_remote_state` 找到 role，`vault_aws_access_credentials` 领取 key；
+4. **Operator 工作区只读取动态凭据**：`terraform_remote_state` 找到 role，再读取 Vault AWS `creds` 路径领取 key；
 5. **TTL 要按运行形态设计**：直连 Vault 时 Terraform provider 不续租；长 apply 要么拆小 / 调长 TTL，要么让 Agent / Proxy 托管动态 lease 续期；
 6. **权限收紧集中在 Vault role**：移除 `ec2:*` 后，下一次动态凭据立即失去 EC2 能力；
 7. **state 仍然敏感**：动态凭据不是忽略 Terraform state 安全的理由。
