@@ -137,7 +137,7 @@ export default defineConfig({
              { text: '9.6 Vault 作为身份代理（Identity Broker）：把 AWS IAM 与 K8s ServiceAccount 联邦到 PostgreSQL 动态账号', link: '/ch9-identity-broker-postgres' },
              { text: '9.7 Terraform 与 Vault Provider：用动态 AWS 凭据运行基础设施变更', link: '/ch9-terraform-vault-aws' },
              { text: '9.8 让无法改造的遗留应用接入 Vault：Consul-Template 与 Process Supervisor 双轨实践', link: '/ch9-legacy-agent' },
-             { text: '9.9 把 Vault 当成网站的 LDAP + TOTP 登录网关：两阶段登录与首次绑定', link: '/ch9-ldap-mfa-gateway' }
+             { text: '9.9 把 Vault OSS 当成网站的 LDAP + TOTP 登录网关：两阶段编排与首次绑定', link: '/ch9-ldap-mfa-gateway' }
            ]
          }
         ],

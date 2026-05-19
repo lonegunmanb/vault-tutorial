@@ -1,5 +1,5 @@
 #!/bin/bash
-set +e
+set -Eeuo pipefail
 
 LOG=/var/log/ldap-mfa-init.log
 exec > >(tee -a "$LOG") 2>&1
@@ -7,10 +7,19 @@ export PS4='+ [\D{%H:%M:%S}] '
 set -x
 
 stage() { echo "===== [$(date +%H:%M:%S)] $* ====="; }
+mark_failed() {
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "FATAL: background.sh failed with exit code $rc"
+    touch /tmp/.setup-failed
+  fi
+}
+trap mark_failed EXIT
+
 stage "background.sh start"
 
 if [ ! -f /root/setup-common.sh ]; then
-  echo "FATAL: /root/setup-common.sh missing — assets were not copied. Aborting."
+  echo "FATAL: /root/setup-common.sh missing - assets were not copied. Aborting."
   exit 1
 fi
 source /root/setup-common.sh
@@ -25,9 +34,7 @@ if ! command -v docker > /dev/null 2>&1; then
   apt-get install -y -qq docker.io > /dev/null 2>&1
 fi
 
-# ──────────────────────────────────────────────────────────
-# 并行：装 Vault、装 Go 1.22、拉 OpenLDAP 镜像
-# ──────────────────────────────────────────────────────────
+stage "install Vault + Go 1.22 + pull OpenLDAP"
 install_vault > /var/log/install-vault.log 2>&1 &
 INSTALL_VAULT_PID=$!
 
@@ -51,7 +58,7 @@ PULL_LDAP_PID=$!
 
 wait "$INSTALL_VAULT_PID"
 wait "$INSTALL_GO_PID"
-wait "$PULL_LDAP_PID" 2>/dev/null
+wait "$PULL_LDAP_PID"
 
 export PATH=/usr/local/go/bin:$PATH
 cat > /etc/profile.d/go.sh <<'EOF'
@@ -59,9 +66,6 @@ export PATH=/usr/local/go/bin:$PATH
 EOF
 chmod +x /etc/profile.d/go.sh
 
-# ──────────────────────────────────────────────────────────
-# 启动 OpenLDAP，预置 ou=users / ou=groups + alice 用户
-# ──────────────────────────────────────────────────────────
 stage "start OpenLDAP"
 docker rm -f vault-openldap > /dev/null 2>&1 || true
 docker run -d \
@@ -74,15 +78,22 @@ docker run -d \
   --rm \
   osixia/openldap:1.5.0 > /dev/null
 
+LDAP_READY=0
 for i in $(seq 1 60); do
   if ldapsearch -x -H ldap://127.0.0.1:389 \
       -D "cn=admin,dc=learn,dc=example" -w 2LearnVault \
       -b "dc=learn,dc=example" -s base "(objectClass=*)" > /dev/null 2>&1; then
     echo "OpenLDAP ready"
+    LDAP_READY=1
     break
   fi
   sleep 1
 done
+if [ "$LDAP_READY" != "1" ]; then
+  echo "FATAL: OpenLDAP did not become ready"
+  docker logs vault-openldap || true
+  exit 1
+fi
 
 ldapadd -c -x -H ldap://127.0.0.1:389 \
   -D "cn=admin,dc=learn,dc=example" -w 2LearnVault <<'EOF' > /tmp/ldapadd.log 2>&1
@@ -101,18 +112,12 @@ sn: Liddell
 userPassword: LdapPass!2026
 EOF
 
-# ──────────────────────────────────────────────────────────
-# 启动 Vault dev + 开 audit
-# ──────────────────────────────────────────────────────────
 stage "start_vault_dev + enable audit"
 start_vault_dev
 touch /var/log/vault-audit.log
 chmod 666 /var/log/vault-audit.log
-vault audit enable file file_path=/var/log/vault-audit.log > /dev/null
+vault audit enable file file_path=/var/log/vault-audit.log > /dev/null 2>&1 || true
 
-# ──────────────────────────────────────────────────────────
-# 四块积木之 1：auth/ldap
-# ──────────────────────────────────────────────────────────
 stage "enable + configure auth/ldap"
 vault auth enable ldap > /dev/null 2>&1 || true
 vault write auth/ldap/config \
@@ -128,73 +133,45 @@ LDAP_ACC=$(vault auth list -format=json | jq -r '.["ldap/"].accessor')
 echo "LDAP accessor: $LDAP_ACC"
 echo "$LDAP_ACC" > /root/ldap-accessor
 
-# ──────────────────────────────────────────────────────────
-# 四块积木之 2：TOTP MFA method
-# ──────────────────────────────────────────────────────────
-stage "create totp mfa method my-totp"
-if ! vault write sys/mfa/method/totp/my-totp \
-  issuer="MyWebsite" \
-  period=30 \
-  algorithm=SHA1 \
-  digits=6 > /dev/null; then
-  echo "FATAL: failed to create sys/mfa/method/totp/my-totp"
-  exit 1
-fi
+stage "enable totp secrets engine"
+vault secrets enable totp > /dev/null 2>&1 || true
+echo "alice" > /root/totp-key-name
 
-TOTP_ID=$(vault read -field=id sys/mfa/method/totp/my-totp 2>/tmp/totp-method-read.err)
-if [ -z "$TOTP_ID" ]; then
-  echo "FATAL: failed to read TOTP method id from sys/mfa/method/totp/my-totp"
-  cat /tmp/totp-method-read.err 2>/dev/null || true
-  exit 1
-fi
-echo "TOTP method id: $TOTP_ID"
-echo "$TOTP_ID" > /root/totp-method-id
-
-# 把 TOTP_METHOD_ID 写进所有 shell 的环境
-cat > /etc/profile.d/totp.sh <<EOF
-export TOTP_METHOD_ID='$TOTP_ID'
+cat > /etc/profile.d/totp.sh <<'EOF'
+export TOTP_KEY_NAME='alice'
 EOF
 chmod +x /etc/profile.d/totp.sh
-grep -q "TOTP_METHOD_ID=" /root/.bashrc 2>/dev/null || \
-  echo "export TOTP_METHOD_ID='$TOTP_ID'" >> /root/.bashrc
+grep -q "TOTP_KEY_NAME=" /root/.bashrc 2>/dev/null || \
+  echo "export TOTP_KEY_NAME='alice'" >> /root/.bashrc
 
-# ──────────────────────────────────────────────────────────
-# 四块积木之 3：Login Enforcement
-# ──────────────────────────────────────────────────────────
-stage "create login-enforcement ldap-mfa-enforce"
-if ! vault write sys/mfa/login-enforcement/ldap-mfa-enforce \
-  mfa_method_ids="$TOTP_ID" \
-  auth_method_types="ldap" \
-  auth_method_accessors="$LDAP_ACC" > /dev/null; then
-  echo "FATAL: failed to create sys/mfa/login-enforcement/ldap-mfa-enforce"
-  exit 1
-fi
+stage "create alice-totp-login policy"
+vault policy write alice-totp-login - <<'EOF' > /dev/null
+path "totp/code/alice" {
+  capabilities = ["update"]
+}
+EOF
 
-# ──────────────────────────────────────────────────────────
-# 破"鸡生蛋"：预先为 alice 创建 Identity Entity + entity-alias，
-# 但不生成 TOTP 密钥 —— step 2 让学员亲手跑 enrollment 把它补上。
-# ──────────────────────────────────────────────────────────
-stage "pre-create alice entity + alias (no TOTP yet)"
-ALICE_EID=$(vault write -field=id identity/entity name=alice policies=default)
+stage "pre-create alice entity + alias + policy (no TOTP key yet)"
+ALICE_EID=$(vault write -field=id identity/entity name=alice policies=default,alice-totp-login)
 vault write identity/entity-alias \
   name=alice \
   canonical_id="$ALICE_EID" \
   mount_accessor="$LDAP_ACC" > /dev/null
 echo "$ALICE_EID" > /root/alice-entity-id
 
-# ──────────────────────────────────────────────────────────
-# 准备 enrollment 脚本：step 2 让学员单击运行
-# ──────────────────────────────────────────────────────────
 cat > /usr/local/bin/enroll-alice.sh <<'EOF'
 #!/bin/bash
-# 给 alice 生成一份 TOTP 密钥并把它注入本地 oathtool。
-# 这一步在真实生产里是一个独立的 enrollment service：用户拿一次性邀请链接
-# 打开后，后端用 admin token 跑等价的命令并把二维码 PNG 推给用户扫码。
 set -e
-ENTITY_ID=$(cat /root/alice-entity-id)
+
 RESP=$(vault write -format=json \
-  sys/mfa/method/totp/my-totp/admin-generate \
-  entity_id="$ENTITY_ID")
+  totp/keys/alice \
+  generate=true \
+  exported=true \
+  issuer="MyWebsite" \
+  account_name="alice" \
+  period=30 \
+  algorithm=SHA1 \
+  digits=6)
 URL=$(echo "$RESP" | jq -r '.data.url')
 SECRET=$(echo "$URL" | sed -n 's/.*[?&]secret=\([^&]*\).*/\1/p')
 if [ -z "$SECRET" ]; then
@@ -215,14 +192,9 @@ echo "------------------------------------------------------------"
 EOF
 chmod +x /usr/local/bin/enroll-alice.sh
 
-# ──────────────────────────────────────────────────────────
-# 编译 Go 网站并以 nohup 起到 :8080
-# 注意：站点依赖 TOTP_METHOD_ID 环境变量，所以传给子进程时显式 export。
-# ──────────────────────────────────────────────────────────
 stage "build + start web app"
 mkdir -p /root/web-app
 cd /root/web-app
-ls -la
 GOPROXY=off CGO_ENABLED=0 go build -o app . 2>&1 | tee /var/log/go-build.log
 if [ ! -x /root/web-app/app ]; then
   echo "FATAL: app build failed"
@@ -230,22 +202,23 @@ if [ ! -x /root/web-app/app ]; then
   exit 1
 fi
 
-# 用一个独立的启动脚本封装，方便学员在 step 中重启
 cat > /usr/local/bin/start-web-app.sh <<'EOF'
 #!/bin/bash
-pkill -f /root/web-app/app 2>/dev/null
+set -e
+pkill -f /root/web-app/app 2>/dev/null || true
 sleep 1
 export VAULT_ADDR='http://127.0.0.1:8200'
-TOTP_METHOD_ID=$(cat /root/totp-method-id)
-if [ -z "$TOTP_METHOD_ID" ]; then
-  echo "FATAL: /root/totp-method-id is empty"
+TOTP_KEY_NAME=$(cat /root/totp-key-name)
+if [ -z "$TOTP_KEY_NAME" ]; then
+  echo "FATAL: /root/totp-key-name is empty"
   exit 1
 fi
-export TOTP_METHOD_ID
+export TOTP_KEY_NAME
 export APP_ADDR=':8080'
 nohup /root/web-app/app > /var/log/web-app.log 2>&1 &
 sleep 1
-echo "web-app pid=$(pgrep -f /root/web-app/app), logs: /var/log/web-app.log"
+pid=$(pgrep -f /root/web-app/app || true)
+echo "web-app pid=$pid, logs: /var/log/web-app.log"
 EOF
 chmod +x /usr/local/bin/start-web-app.sh
 /usr/local/bin/start-web-app.sh

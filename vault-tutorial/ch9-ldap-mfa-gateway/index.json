@@ -1,6 +1,6 @@
 {
-  "title": "把 Vault 当成 LDAP + TOTP 登录网关：两阶段登录与首次绑定",
-  "description": "On a single Killercoda host: start OpenLDAP (with user alice), dev-mode Vault, and a tiny Go website on :8080. Vault is preconfigured with the four building blocks (auth/ldap, sys/mfa/method/totp/my-totp, sys/mfa/login-enforcement/ldap-mfa-enforce, identity entity+alias for alice — but NO TOTP secret yet). Step 1 walks through what is preconfigured. Step 2 reproduces the new-user chicken-and-egg lockout, then runs an enrollment script that calls admin-generate and registers the TOTP secret with oathtool. Step 3 drives a full two-phase login from curl, then from the browser via the Killercoda tab on port 8080. Step 4 explores negative cases (wrong OTP, reused mfa_request_id) and reads the structured audit log entries for the whole flow.",
+  "title": "把 Vault OSS 当成 LDAP + TOTP 登录网关：两阶段编排与首次绑定",
+  "description": "On a single Killercoda host: start OpenLDAP with user alice, dev-mode Vault, the OSS TOTP secrets engine, and a tiny Go website on :8080. The website orchestrates two-stage login itself: LDAP auth returns a pending Vault token, then totp/code/alice validates the OTP before the token is promoted to a logged-in session. Step 1 inspects the preconfigured auth/ldap, totp engine, identity alias, and narrow policy. Step 2 shows the not-yet-enrolled state and runs enrollment to create totp/keys/alice. Step 3 drives the full flow from curl and browser. Step 4 explores wrong OTP, replayed TOTP code, token cleanup, and audit logs.",
   "details": {
     "intro": {
       "text": "init/init.md",
@@ -9,11 +9,11 @@
     },
     "steps": [
       {
-        "title": "第一步：检查 Vault 里预置好的四块积木",
+        "title": "第一步：检查 OSS 两阶段登录的基础配置",
         "text": "step1/text.md"
       },
       {
-        "title": "第二步：复现新用户登录死循环并跑通 enrollment",
+        "title": "第二步：复现未绑定状态并跑通 enrollment",
         "text": "step2/text.md"
       },
       {
@@ -21,7 +21,7 @@
         "text": "step3/text.md"
       },
       {
-        "title": "第四步：错误 OTP / 一次性 mfa_request_id / 审计日志",
+        "title": "第四步：错误 OTP / code 重放 / 审计日志",
         "text": "step4/text.md"
       }
     ],

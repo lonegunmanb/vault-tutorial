@@ -1,64 +1,59 @@
-# 第二步：复现新用户登录死循环，再跑通 enrollment
+# 第二步：复现未绑定状态，再跑通 enrollment
 
-按 9.9 §4，让我们**先亲眼看到死循环长什么样**，再用 admin-generate 把它解开。
+OSS 编排方案里，Vault LDAP auth 会在密码正确时直接发 token。网站的职责是先把这枚 token 扣在服务端 pending session 中，直到 TOTP 也通过才算登录完成。
 
-## 2.1 复现死循环：alice 尝试登录，被 `mfa_requirement` 卡住
+## 2.1 第一阶段会成功，但第二阶段没有 key 可用
+
+先直接调用 Vault LDAP auth：
 
 ```bash
-curl -s -X POST \
+RESP=$(curl -s -X POST \
   -d '{"password":"LdapPass!2026"}' \
-  http://127.0.0.1:8200/v1/auth/ldap/login/alice | jq
+  http://127.0.0.1:8200/v1/auth/ldap/login/alice)
+echo "$RESP" | jq '{token_issued: (.auth.client_token != null), policies: .auth.policies, entity_id: .auth.entity_id}'
+TOKEN=$(echo "$RESP" | jq -r '.auth.client_token')
 ```{{exec}}
 
-关键观察点：
+这枚 `$TOKEN` 只说明 alice 的 LDAP 密码正确。网站在这个时刻不能把用户放进 `/protected`，而是要进入 pending session。
 
-- `auth.client_token` 是**空字符串** —— 这是 9.9 §5.1 描述的"还差一步"的信号；
-- `auth.mfa_requirement.mfa_request_id` 有一个 UUID —— 这是第二阶段的入场券；
-- `mfa_constraints.ldap-mfa-enforce.any[0].id` 就是你在 step 1 看到的 `TOTP_METHOD_ID`，`uses_passcode: true` 表示它要求一个 6 位数字。
-
-**现在的死循环在哪？** 试着拿这个 `mfa_request_id` 配一个**瞎编的 OTP** 去 validate：
+现在模拟第二阶段：用这枚 pending token 去验证一个 OTP。由于还没有 `totp/keys/alice`，Vault 没有 seed 可算：
 
 ```bash
-MRID=$(curl -s -X POST -d '{"password":"LdapPass!2026"}' \
-  http://127.0.0.1:8200/v1/auth/ldap/login/alice \
-  | jq -r '.auth.mfa_requirement.mfa_request_id')
-TOTP_METHOD_ID="$(cat /root/totp-method-id)"
-
 curl -s -X POST \
-  -d "{\"mfa_request_id\":\"$MRID\",\"mfa_payload\":{\"$TOTP_METHOD_ID\":[\"000000\"]}}" \
-  http://127.0.0.1:8200/v1/sys/mfa/validate | jq
+  -H "X-Vault-Token: $TOKEN" \
+  -d '{"code":"000000"}' \
+  http://127.0.0.1:8200/v1/totp/code/alice | jq
+
+curl -s -o /dev/null -w 'revoke pending token: HTTP %{http_code}\n' \
+  -X POST -H "X-Vault-Token: $TOKEN" \
+  http://127.0.0.1:8200/v1/auth/token/revoke-self
 ```{{exec}}
 
-返回里 `errors` 一栏会出现 *"entity is missing TOTP secret"* 或类似措辞——这正是 9.9 §4 里"alice 永远登不上"的根因：**没有 TOTP 密钥就过不了 `validate`，但要生成 TOTP 密钥又必须先有 Entity**。Entity 已经被 init 替你建好了，所以现在只差最后一步——给 alice 生成密钥。
+这就是“首次绑定前”的卡点：密码阶段能过，但 OTP 阶段没有 key，网站必须拒绝并撤销 pending token。
 
-## 2.2 跑 enrollment：调 admin-generate，把 secret 交给 Authenticator
+## 2.2 跑 enrollment：创建 `totp/keys/alice`
 
-生产里这一步通常是一个独立的 **enrollment service**：用户拿一次性邀请链接打开，后端用一份高权限 token 调 `admin-generate`，把返回的 `otpauth://` URL 渲染成二维码 PNG 推给用户。这里我们用一段 shell 脚本模拟它：
+生产里这一步通常是独立 enrollment service：用户拿一次性邀请链接打开，后端用高权限 token 创建 `totp/keys/alice`，把 `otpauth://` URL 或二维码给用户绑定 Authenticator。这里用一段 shell 脚本模拟：
 
 ```bash
 /usr/local/bin/enroll-alice.sh
 ```{{exec}}
 
-脚本做的事就三件（你可以 `cat /usr/local/bin/enroll-alice.sh` 验证）：
+脚本做三件事：
 
-1. 用 root token 调 `POST /v1/sys/mfa/method/totp/my-totp/admin-generate`，带上 alice 的 `entity_id`；
-2. 从响应里把 `otpauth://...?secret=XXXX` 那一段 secret 抠出来；
-3. 把 secret 写到 `/root/alice-totp-secret`（实验里用 `oathtool` 模拟 Authenticator App）。
+1. 调 `vault write -format=json totp/keys/alice generate=true exported=true ...`；
+2. 从响应的 `otpauth://...?secret=...` URL 中解析 Base32 secret；
+3. 把 secret 写入 `/root/alice-totp-secret`，实验里用 `oathtool` 模拟 Authenticator App。
 
-> 真实生产里输出的 `barcode` 字段是 Base64 编码的 PNG，前端解码后就能直接显示成二维码图片。
-
-## 2.3 用 `oathtool` 算出当前 6 位 OTP
-
-`oathtool` 是 Linux 上的命令行 TOTP 生成器，给它同一份 secret，它每 30 秒能生成和 Authenticator App **完全一致**的 6 位数字：
+## 2.3 确认 key 已存在，并算出当前 OTP
 
 ```bash
+vault read totp/keys/alice
 oathtool --totp -b "$(cat /root/alice-totp-secret)"
 ```{{exec}}
 
-记下这个数字（或者干脆下一节实时再算一次）——它就是 step 3 第二阶段要提交的 OTP。
-
-> 用真实 Authenticator？把 `cat /root/alice-totp-secret` 出来的 Base32 字符串手动添加为一个 TOTP 条目（issuer 填 MyWebsite、account 填 alice），它跟 `oathtool` 算出来的数字会一模一样。
+记住这个数字只在当前时间窗口有效；如果之后要在网页里输入，重新运行一遍命令拿最新值。
 
 ---
 
-`/root/alice-totp-secret` 文件一旦存在，alice 的 enrollment 就算正式完成。下一步开始走完整的两阶段登录。
+现在 alice 已经完成 enrollment。下一步用 curl 和浏览器跑完整两阶段登录。

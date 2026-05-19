@@ -1,26 +1,26 @@
-// 一个尽量精简的 Go 网站，演示 9.9 节里描述的 Vault Login MFA 两阶段登录流。
+// 一个尽量精简的 Go 网站，演示 Vault OSS 下的 LDAP + TOTP 两阶段登录编排。
 //
-// 整个应用只有三条 HTTP 路由：
+// Vault OSS 没有 Enterprise Login MFA 的 /sys/mfa 自动拦截器，所以网站后端
+// 自己串起两个 Vault 能力：
 //
-//   GET  /            登录页（用户名 + 密码表单）
-//   POST /login       第一阶段：把用户名 / 密码丢给 Vault 的 LDAP 认证方法
-//                     - 如果命中了 Login Enforcement，Vault 会返回一个
-//                       mfa_requirement.mfa_request_id；本应用把它存进
-//                       服务端 session、跳转到 /mfa
-//                     - 如果没命中 MFA，直接拿到 client_token，跳 /protected
-//   GET  /mfa         OTP 输入页
-//   POST /mfa         第二阶段：把 OTP + mfa_request_id 提交给
-//                     /v1/sys/mfa/validate，换回 Vault Client Token
-//   GET  /protected   登录成功后才能访问的页面，显示 entity_id / policies
-//   POST /logout      调 auth/token/revoke-self 主动撤销 token，清 cookie
+//	GET  /            登录页（用户名 + 密码表单）
+//	POST /login       第一阶段：把用户名 / 密码丢给 Vault 的 LDAP 认证方法。
+//	                  Vault OSS 会立即返回 client_token；本应用先把它扣在
+//	                  服务端 pending session 中，不把用户视为已登录。
+//	GET  /mfa         OTP 输入页
+//	POST /mfa         第二阶段：用 pending token 调 /v1/totp/code/<username>
+//	                  验证 OTP。valid=true 后才把 pending token 提升为正式
+//	                  登录 session；失败或超时则 revoke pending token。
+//	GET  /protected   登录成功后才能访问的页面，显示 entity_id / policies
+//	POST /logout      调 auth/token/revoke-self 主动撤销 token，清 cookie
 //
 // 与 Vault 通信只用 net/http，没有引入任何 Vault SDK，方便直接看到
 // "网站和 Vault 之间到底交换了哪些 HTTP 报文"。
 //
 // 环境变量：
-//   VAULT_ADDR       Vault 地址，默认 http://127.0.0.1:8200
-//   TOTP_METHOD_ID   sys/mfa/method/totp/my-totp 的 method ID（UUID）
-//   APP_ADDR         监听地址，默认 :8080
+//
+//	VAULT_ADDR       Vault 地址，默认 http://127.0.0.1:8200
+//	APP_ADDR         监听地址，默认 :8080
 package main
 
 import (
@@ -33,23 +33,19 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
-// ─────────────────────────────── 服务端 Session ───────────────────────────────
-//
-// 内存里的最简实现：sid -> session 结构。生产里要换成 Redis / 数据库 + TTL，
-// 这里只为演示。session 里同时承载两类状态：
-//   - 第一阶段成功后、第二阶段未完成：保留 MFARequestID
-//   - 第二阶段成功后：保留 Vault 颁发的 client_token
+const pendingTTL = 5 * time.Minute
 
 type session struct {
 	Username     string
-	MFARequestID string    // 第一阶段拿到、第二阶段用掉，用完即清
-	Token        string    // 第二阶段拿到的 Vault Client Token（注意：不会出现在 cookie 里）
+	PendingToken string
+	Token        string
 	EntityID     string
 	Policies     []string
 	CreatedAt    time.Time
@@ -93,12 +89,17 @@ func dropSession(sid string) {
 
 func setSidCookie(w http.ResponseWriter, sid string) {
 	http.SetCookie(w, &http.Cookie{
-		Name: "sid", Value: sid, Path: "/", HttpOnly: true,
+		Name:     "sid",
+		Value:    sid,
+		Path:     "/",
+		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
-// ─────────────────────────────── Vault HTTP ───────────────────────────────
+func clearSidCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: "sid", Value: "", Path: "/", MaxAge: -1})
+}
 
 func vaultAddr() string {
 	a := os.Getenv("VAULT_ADDR")
@@ -108,9 +109,6 @@ func vaultAddr() string {
 	return strings.TrimRight(a, "/")
 }
 
-// vaultPOST 发送一次 POST 到 Vault；body 会被 JSON 编码；
-// token 为空时不带 X-Vault-Token（unauthenticated 调用，如 ldap/login、sys/mfa/validate）。
-// 返回 (status, 解析后的 JSON, error)；HTTP >=400 仍然解析 body 以便上层看 errors 字段。
 func vaultPOST(path string, body any, token string) (int, map[string]any, error) {
 	var reader io.Reader
 	if body != nil {
@@ -150,7 +148,17 @@ func vaultErrors(out map[string]any) string {
 	return string(b)
 }
 
-// ─────────────────────────────── 模板 ───────────────────────────────
+func dataMap(out map[string]any) map[string]any {
+	d, _ := out["data"].(map[string]any)
+	return d
+}
+
+func revokeToken(token string) {
+	if token == "" {
+		return
+	}
+	_, _, _ = vaultPOST("/v1/auth/token/revoke-self", nil, token)
+}
 
 var tpls = template.Must(template.New("").Parse(`
 {{define "layout"}}<!doctype html>
@@ -171,8 +179,7 @@ pre{background:#f4f4f4;padding:10px;border-radius:4px;overflow:auto;font-size:12
 
 {{define "login"}}{{template "layout" .}}{{end}}
 {{define "body_login"}}
-<div class="note">第一阶段：把用户名/密码交给 Vault 的 LDAP 认证方法。<br>
-如果该挂载点配了 Login Enforcement，Vault 会回一个 mfa_request_id，把你引到下一页。</div>
+<div class="note">第一阶段：网站把用户名/密码交给 Vault LDAP auth。Vault OSS 会立即发 token；本网站先把它扣在服务端 pending session 中，等第二阶段 TOTP 通过后才算登录完成。</div>
 <form method="POST" action="/login">
   <label>LDAP Username<input name="username" autofocus></label>
   <label>Password<input name="password" type="password"></label>
@@ -182,9 +189,7 @@ pre{background:#f4f4f4;padding:10px;border-radius:4px;overflow:auto;font-size:12
 
 {{define "mfa"}}{{template "layout" .}}{{end}}
 {{define "body_mfa"}}
-<div class="note">第二阶段：你的 LDAP 密码已被 Vault 接受。<br>
-请打开 Authenticator App（或在终端用 oathtool）输入当前 6 位验证码。<br>
-mfa_request_id 是一次性的：输错就要回 /login 重来。</div>
+<div class="note">第二阶段：LDAP 密码已被 Vault 接受，但 token 仍只在服务端 pending session 中。请输入 Authenticator App 当前显示的 6 位验证码，网站会调用 Vault 的 totp/code/{{.Username}} 进行校验。</div>
 <form method="POST" action="/mfa">
   <label>6 位 TOTP 验证码<input name="otp" inputmode="numeric" pattern="[0-9]{6}" autofocus></label>
   <button type="submit">提交</button>
@@ -193,8 +198,7 @@ mfa_request_id 是一次性的：输错就要回 /login 重来。</div>
 
 {{define "protected"}}{{template "layout" .}}{{end}}
 {{define "body_protected"}}
-<div class="note">登录成功。下面这些字段都是 Vault /sys/mfa/validate 响应里返回的，
-被网站后端存进了服务端 session；浏览器从未直接接触 Vault Token。</div>
+<div class="note">登录成功。Vault token 保存在网站服务端 session；浏览器只拿到本站自己的 sid Cookie。</div>
 <pre>username:  {{.Username}}
 entity_id: {{.EntityID}}
 policies:  {{.Policies}}
@@ -205,7 +209,6 @@ policies:  {{.Policies}}
 
 func render(w http.ResponseWriter, name string, data map[string]any) {
 	data["Title"] = data["Title"].(string)
-	// 两层模板：先选 body_<name>，再套 layout
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	wrap := template.Must(template.Must(tpls.Clone()).Parse(
 		`{{define "body"}}{{template "body_` + name + `" .}}{{end}}`))
@@ -214,15 +217,12 @@ func render(w http.ResponseWriter, name string, data map[string]any) {
 	}
 }
 
-// ─────────────────────────────── Handlers ───────────────────────────────
-
 func handleIndex(w http.ResponseWriter, r *http.Request) {
-	// 已登录就直接跳保护页
 	if _, s := getSession(r); s != nil && s.Token != "" {
 		http.Redirect(w, r, "/protected", http.StatusSeeOther)
 		return
 	}
-	render(w, "login", map[string]any{"Title": "登录 — Vault LDAP + TOTP 网关示例"})
+	render(w, "login", map[string]any{"Title": "登录 - Vault OSS LDAP + TOTP 网关示例"})
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -233,15 +233,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	u := strings.TrimSpace(r.FormValue("username"))
 	p := r.FormValue("password")
 	if u == "" || p == "" {
-		render(w, "login", map[string]any{
-			"Title": "登录", "Err": "用户名或密码不能为空",
-		})
+		render(w, "login", map[string]any{"Title": "登录", "Err": "用户名或密码不能为空"})
 		return
 	}
 
-	// 第一阶段：POST /v1/auth/ldap/login/<username> {password}
-	status, out, err := vaultPOST("/v1/auth/ldap/login/"+u,
-		map[string]string{"password": p}, "")
+	status, out, err := vaultPOST("/v1/auth/ldap/login/"+url.PathEscape(u), map[string]string{"password": p}, "")
 	if err != nil || status >= 400 {
 		msg := "LDAP 校验失败"
 		if out != nil {
@@ -253,95 +249,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	auth, _ := out["auth"].(map[string]any)
 	if auth == nil {
-		render(w, "login", map[string]any{"Title": "登录",
-			"Err": "Vault 响应里没有 auth 字段：" + vaultErrors(out)})
+		render(w, "login", map[string]any{"Title": "登录", "Err": "Vault 响应里没有 auth 字段：" + vaultErrors(out)})
 		return
 	}
-
-	// 分支一：MFA 强制 —— 进入第二阶段
-	if mfa, ok := auth["mfa_requirement"].(map[string]any); ok {
-		sid := putSession(&session{
-			Username:     u,
-			MFARequestID: mfa["mfa_request_id"].(string),
-		})
-		setSidCookie(w, sid)
-		http.Redirect(w, r, "/mfa", http.StatusSeeOther)
-		return
-	}
-
-	// 分支二：没强制 MFA —— 第一阶段就拿到 token 了
 	tok, _ := auth["client_token"].(string)
 	if tok == "" {
-		render(w, "login", map[string]any{"Title": "登录",
-			"Err": "Vault 既没回 mfa_requirement 也没回 client_token，配置异常"})
-		return
-	}
-	finish(w, r, u, tok, auth)
-}
-
-func handleMFAGet(w http.ResponseWriter, r *http.Request) {
-	_, s := getSession(r)
-	if s == nil || s.MFARequestID == "" {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	render(w, "mfa", map[string]any{"Title": "MFA — 输入 TOTP"})
-}
-
-func handleMFAPost(w http.ResponseWriter, r *http.Request) {
-	sid, s := getSession(r)
-	if s == nil || s.MFARequestID == "" {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	otp := strings.TrimSpace(r.FormValue("otp"))
-	methodID := os.Getenv("TOTP_METHOD_ID")
-	if methodID == "" {
-		render(w, "mfa", map[string]any{"Title": "MFA",
-			"Err": "服务器没配 TOTP_METHOD_ID 环境变量"})
+		render(w, "login", map[string]any{"Title": "登录", "Err": "Vault LDAP 登录没有返回 client_token：" + vaultErrors(out)})
 		return
 	}
 
-	// 第二阶段：POST /v1/sys/mfa/validate {mfa_request_id, mfa_payload}
-	// 注意 mfa_payload 的 key 必须是 method 的 UUID，而不是它的好记名字
-	body := map[string]any{
-		"mfa_request_id": s.MFARequestID,
-		"mfa_payload":    map[string][]string{methodID: {otp}},
-	}
-	status, out, err := vaultPOST("/v1/sys/mfa/validate", body, "")
-	if err != nil || status >= 400 {
-		// mfa_request_id 是一次性的：失败了必须回 /login 重走第一阶段
-		dropSession(sid)
-		http.SetCookie(w, &http.Cookie{Name: "sid", Value: "", Path: "/", MaxAge: -1})
-		msg := "MFA 校验失败，请重新登录"
-		if out != nil {
-			msg += "：" + vaultErrors(out)
-		}
-		render(w, "login", map[string]any{"Title": "登录", "Err": msg})
-		return
-	}
-
-	auth, _ := out["auth"].(map[string]any)
-	tok, _ := auth["client_token"].(string)
-	if tok == "" {
-		render(w, "login", map[string]any{"Title": "登录",
-			"Err": "MFA 通过但没拿到 token：" + vaultErrors(out)})
-		return
-	}
-	finish(w, r, s.Username, tok, auth)
-}
-
-// finish 把第二阶段（或没启 MFA 时的第一阶段）拿到的 token 放进 session，
-// 清掉 mfa_request_id，跳转到保护页。
-func finish(w http.ResponseWriter, r *http.Request, user, token string, auth map[string]any) {
-	sid, s := getSession(r)
-	if s == nil {
-		s = &session{Username: user}
-		sid = putSession(s)
-		setSidCookie(w, sid)
-	}
-	s.Token = token
-	s.MFARequestID = ""
+	s := &session{Username: u, PendingToken: tok}
 	if v, ok := auth["entity_id"].(string); ok {
 		s.EntityID = v
 	}
@@ -350,6 +267,66 @@ func finish(w http.ResponseWriter, r *http.Request, user, token string, auth map
 			s.Policies = append(s.Policies, fmt.Sprint(p))
 		}
 	}
+	sid := putSession(s)
+	setSidCookie(w, sid)
+	log.Printf("first factor accepted for %s; token is pending MFA", u)
+	http.Redirect(w, r, "/mfa", http.StatusSeeOther)
+}
+
+func handleMFAGet(w http.ResponseWriter, r *http.Request) {
+	_, s := getSession(r)
+	if s == nil || s.PendingToken == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	render(w, "mfa", map[string]any{"Title": "MFA - 输入 TOTP", "Username": s.Username})
+}
+
+func failPending(w http.ResponseWriter, sid string, s *session, msg string) {
+	if s != nil {
+		revokeToken(s.PendingToken)
+	}
+	if sid != "" {
+		dropSession(sid)
+	}
+	clearSidCookie(w)
+	render(w, "login", map[string]any{"Title": "登录", "Err": msg})
+}
+
+func handleMFAPost(w http.ResponseWriter, r *http.Request) {
+	sid, s := getSession(r)
+	if s == nil || s.PendingToken == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if time.Since(s.CreatedAt) > pendingTTL {
+		failPending(w, sid, s, "MFA 流程已超时，请重新登录")
+		return
+	}
+	otp := strings.TrimSpace(r.FormValue("otp"))
+	if otp == "" {
+		render(w, "mfa", map[string]any{"Title": "MFA", "Username": s.Username, "Err": "验证码不能为空"})
+		return
+	}
+
+	status, out, err := vaultPOST("/v1/totp/code/"+url.PathEscape(s.Username), map[string]string{"code": otp}, s.PendingToken)
+	if err != nil || status >= 400 {
+		msg := "TOTP 校验失败，请重新登录"
+		if out != nil {
+			msg += "：" + vaultErrors(out)
+		}
+		failPending(w, sid, s, msg)
+		return
+	}
+	valid, _ := dataMap(out)["valid"].(bool)
+	if !valid {
+		failPending(w, sid, s, "TOTP 校验失败，请重新登录")
+		return
+	}
+
+	s.Token = s.PendingToken
+	s.PendingToken = ""
+	log.Printf("second factor accepted for %s; pending token promoted", s.Username)
 	http.Redirect(w, r, "/protected", http.StatusSeeOther)
 }
 
@@ -369,18 +346,16 @@ func handleProtected(w http.ResponseWriter, r *http.Request) {
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	sid, s := getSession(r)
-	if s != nil && s.Token != "" {
-		// 主动撤 token，缩短泄漏窗口
-		_, _, _ = vaultPOST("/v1/auth/token/revoke-self", nil, s.Token)
+	if s != nil {
+		revokeToken(s.Token)
+		revokeToken(s.PendingToken)
 	}
 	if sid != "" {
 		dropSession(sid)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "sid", Value: "", Path: "/", MaxAge: -1})
+	clearSidCookie(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
-
-// ─────────────────────────────── main ───────────────────────────────
 
 func main() {
 	mux := http.NewServeMux()

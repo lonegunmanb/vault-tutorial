@@ -1,82 +1,82 @@
-# 第四步：错误 OTP / 一次性 mfa_request_id / 审计日志
+# 第四步：错误 OTP / code 重放 / 审计日志
 
-9.9 §7 列了几个"容易忽略的工程细节"——这一步把其中三条用真实命令验出来。
+这一步验证 OSS 编排方案里的几个关键边界：OTP 错了要拒绝并 revoke pending token；同一个 TOTP code 不能在当前窗口里重复使用；审计日志能看到 LDAP 登录、TOTP 校验和 revoke。
 
-## 4.1 错误 OTP 直接被 Vault 当场拒掉
+## 4.1 错误 OTP 返回 `valid=false`
 
 ```bash
 RESP1=$(curl -s -X POST -d '{"password":"LdapPass!2026"}' \
   http://127.0.0.1:8200/v1/auth/ldap/login/alice)
-MRID=$(echo "$RESP1" | jq -r '.auth.mfa_requirement.mfa_request_id')
-TOTP_METHOD_ID="$(cat /root/totp-method-id)"
+TOKEN=$(echo "$RESP1" | jq -r '.auth.client_token')
 
-# 故意提交一个肯定不对的 OTP
+GOOD=$(oathtool --totp -b "$(cat /root/alice-totp-secret)")
+BAD=$(printf '%06d' $(( (10#$GOOD + 1) % 1000000 )))
+echo "good=$GOOD bad=$BAD"
+
 curl -s -X POST \
-  -d "{\"mfa_request_id\":\"$MRID\",\"mfa_payload\":{\"$TOTP_METHOD_ID\":[\"123456\"]}}" \
-  http://127.0.0.1:8200/v1/sys/mfa/validate | jq
+  -H "X-Vault-Token: $TOKEN" \
+  -d "{\"code\":\"$BAD\"}" \
+  http://127.0.0.1:8200/v1/totp/code/alice | jq
+
+curl -s -o /dev/null -w 'revoke pending token: HTTP %{http_code}\n' \
+  -X POST -H "X-Vault-Token: $TOKEN" \
+  http://127.0.0.1:8200/v1/auth/token/revoke-self
 ```{{exec}}
 
-`errors` 里会说类似 *"failed to satisfy enforcement ..."* 或 *"code did not match"*。第二阶段失败 ≠ 第一阶段成功 —— `auth.client_token` 仍然不会出现。
+`valid=false` 是正常业务结果，不是 403。网站要根据这个字段拒绝登录，并撤销 pending token。
 
-## 4.2 `mfa_request_id` 是一次性的：用过一次再用一次直接报"找不到"
+## 4.2 同一个 TOTP code 不能重放
 
 ```bash
-# 第一次走完整流程，正确 OTP，应该成功
 RESP1=$(curl -s -X POST -d '{"password":"LdapPass!2026"}' \
   http://127.0.0.1:8200/v1/auth/ldap/login/alice)
-MRID=$(echo "$RESP1" | jq -r '.auth.mfa_requirement.mfa_request_id')
-TOTP_METHOD_ID="$(cat /root/totp-method-id)"
+TOKEN=$(echo "$RESP1" | jq -r '.auth.client_token')
+OTP=$(oathtool --totp -b "$(cat /root/alice-totp-secret)")
+echo "OTP=$OTP"
 
+echo '=== first submit ==='
 curl -s -X POST \
-  -d "{\"mfa_request_id\":\"$MRID\",\"mfa_payload\":{\"$TOTP_METHOD_ID\":[\"$(oathtool --totp -b "$(cat /root/alice-totp-secret)")\"]}}" \
-  http://127.0.0.1:8200/v1/sys/mfa/validate | jq '{client_token: .auth.client_token}'
+  -H "X-Vault-Token: $TOKEN" \
+  -d "{\"code\":\"$OTP\"}" \
+  http://127.0.0.1:8200/v1/totp/code/alice | jq
 
-# 紧接着拿"同一个 MRID"再试一次（OTP 故意也算出来个对的）
-sleep 1
+echo '=== replay same code ==='
 curl -s -X POST \
-  -d "{\"mfa_request_id\":\"$MRID\",\"mfa_payload\":{\"$TOTP_METHOD_ID\":[\"$(oathtool --totp -b "$(cat /root/alice-totp-secret)")\"]}}" \
-  http://127.0.0.1:8200/v1/sys/mfa/validate | jq
+  -H "X-Vault-Token: $TOKEN" \
+  -d "{\"code\":\"$OTP\"}" \
+  http://127.0.0.1:8200/v1/totp/code/alice | jq
 ```{{exec}}
 
-第二次 validate 会回 *"MFA request ID is invalid"* 之类——这就是 9.9 §7 里强调的"OTP 页失败必须回 /login 重走第一阶段"的硬约束。
+第二次通常会返回 `code already used; wait until the next time period`。这说明 Vault provider 模式自己维护了当前窗口内的 code 防重放状态。
 
-## 4.3 翻审计日志：整个流程的结构化 JSON
+## 4.3 翻审计日志：看完整链路
 
 ```bash
-echo "=== 最近 10 条 ==="
-tail -20 /var/log/vault-audit.log | jq -c '{type, path: .request.path, op: .request.operation, mount_type: .request.mount_type, err: .response.data.error // .error}' 2>/dev/null \
-  | tail -10
-
-echo ""
-echo "=== 只看 ldap/login 和 mfa/validate ==="
-grep -E 'auth/ldap/login|sys/mfa/validate' /var/log/vault-audit.log \
-  | jq -c '{type, time, path: .request.path, error: .error // .response.data.error}' \
-  | tail -10
+echo '=== 最近 12 条关键记录 ==='
+grep -E 'auth/ldap/login|totp/code/alice|auth/token/revoke-self' /var/log/vault-audit.log \
+  | jq -c '{type, time, path: .request.path, op: .request.operation, err: .error // .response.data.error}' \
+  | tail -12
 ```{{exec}}
 
-可以看到每一次 `auth/ldap/login/alice` 和 `sys/mfa/validate` 都各对应**两条**记录：`type=request` 和 `type=response`。看 `error` 字段就能立刻分辨哪一次是 4.1 的错 OTP、哪一次是 4.2 的重用 MRID、哪一次是 3.2 的正常成功。
+你会看到 `auth/ldap/login/alice`、`totp/code/alice` 与 `auth/token/revoke-self` 的 request/response 记录。排查“密码过了但 OTP 为什么没过”时，audit log 是第一现场。
 
-> 这一段就是 9.9 §7 第 4 点的实操样例——再叠加 9.1 那条 `auth/ldap/login` 上的 rate limit quota，"密码暴力破解 + OTP 暴力穷举"两条攻击路径都能在 Vault 这一层挡掉。
-
-## 4.4 把 enforcement 临时撤掉，对比"裸 LDAP 登录"
-
-最后一个对照实验：把 `ldap-mfa-enforce` 删掉再登一次，看看响应变什么样：
+## 4.4 对照：直接拿 LDAP token 的风险
 
 ```bash
-vault delete sys/mfa/login-enforcement/ldap-mfa-enforce
+RESP1=$(curl -s -X POST -d '{"password":"LdapPass!2026"}' \
+  http://127.0.0.1:8200/v1/auth/ldap/login/alice)
+TOKEN=$(echo "$RESP1" | jq -r '.auth.client_token')
 
-curl -s -X POST -d '{"password":"LdapPass!2026"}' \
-  http://127.0.0.1:8200/v1/auth/ldap/login/alice \
-  | jq '{client_token: .auth.client_token, mfa_requirement: .auth.mfa_requirement}'
+curl -s -H "X-Vault-Token: $TOKEN" \
+  http://127.0.0.1:8200/v1/auth/token/lookup-self \
+  | jq '{display_name: .data.display_name, policies: .data.policies}'
 
-# 立刻把 enforcement 加回来，避免后续误以为没启 MFA
-vault write sys/mfa/login-enforcement/ldap-mfa-enforce \
-  mfa_method_ids="$(cat /root/totp-method-id)" \
-  auth_method_types="ldap" \
-  auth_method_accessors="$(cat /root/ldap-accessor)"
+curl -s -o /dev/null -w 'cleanup token: HTTP %{http_code}\n' \
+  -X POST -H "X-Vault-Token: $TOKEN" \
+  http://127.0.0.1:8200/v1/auth/token/revoke-self
 ```{{exec}}
 
-注意中间那一次响应里 `client_token` 直接是 `hvs.xxxx`、`mfa_requirement` 是 `null`——这就是"没强制 MFA"时第一阶段就出 token 的样子。两种响应放在一起，9.9 §5.1 那张协议图就立体起来了。
+这就是为什么网站必须把第一阶段 token 留在 pending session，而不是把它暴露给浏览器：Vault OSS 本身不会自动替你强制第二阶段，编排责任在网站后端。
 
 ---
 
