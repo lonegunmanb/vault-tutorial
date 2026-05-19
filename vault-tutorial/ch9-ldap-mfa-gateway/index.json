@@ -1,0 +1,45 @@
+{
+  "title": "把 Vault 当成 LDAP + TOTP 登录网关：两阶段登录与首次绑定",
+  "description": "On a single Killercoda host: start OpenLDAP (with user alice), dev-mode Vault, and a tiny Go website on :8080. Vault is preconfigured with the four building blocks (auth/ldap, sys/mfa/method/totp/my-totp, sys/mfa/login-enforcement/ldap-mfa-enforce, identity entity+alias for alice — but NO TOTP secret yet). Step 1 walks through what is preconfigured. Step 2 reproduces the new-user chicken-and-egg lockout, then runs an enrollment script that calls admin-generate and registers the TOTP secret with oathtool. Step 3 drives a full two-phase login from curl, then from the browser via the Killercoda tab on port 8080. Step 4 explores negative cases (wrong OTP, reused mfa_request_id) and reads the structured audit log entries for the whole flow.",
+  "details": {
+    "intro": {
+      "text": "init/init.md",
+      "background": "init/background.sh",
+      "foreground": "init/foreground.sh"
+    },
+    "steps": [
+      {
+        "title": "第一步：检查 Vault 里预置好的四块积木",
+        "text": "step1/text.md"
+      },
+      {
+        "title": "第二步：复现新用户登录死循环并跑通 enrollment",
+        "text": "step2/text.md"
+      },
+      {
+        "title": "第三步：用 curl 与浏览器分别跑完整两阶段登录",
+        "text": "step3/text.md"
+      },
+      {
+        "title": "第四步：错误 OTP / 一次性 mfa_request_id / 审计日志",
+        "text": "step4/text.md"
+      }
+    ],
+    "finish": {
+      "text": "finish/finish.md"
+    },
+    "assets": {
+      "host01": [
+        {"file": "setup-common.sh", "target": "/root", "chmod": "+x"},
+        {"file": "main.go", "target": "/root/web-app"},
+        {"file": "go.mod", "target": "/root/web-app"}
+      ]
+    }
+  },
+  "backend": {
+    "imageid": "ubuntu"
+  },
+  "interface": {
+    "layout": "editor-terminal"
+  }
+}

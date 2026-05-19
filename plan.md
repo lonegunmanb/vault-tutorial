@@ -355,6 +355,16 @@ Vault 从 1.13 版本起，在开源系统的内核层面正式实装了原生 *
   * 9.8.1 Auto-auth 自动化网络鉴权与 Token 生命守护逻辑  
   * 9.8.2 Consul-Template 高级模板渲染引擎与动态文件注入  
   * 9.8.3 进程监督器（Process Supervisor）底层环境变量包裹模式
+* 9.9 **【核心新增】** 把 Vault 作为网站的 LDAP + MFA 认证网关：基于 Login MFA 的两阶段登录与 TOTP 首次绑定流  
+  * 9.9.1 场景与架构：网站不直连 OpenLDAP、不自实现 TOTP，把 Vault 作为统一的 Authentication Broker  
+  * 9.9.2 Vault 侧基础配置：`vault auth enable ldap` + `auth/ldap/config` 接入实验环境 OpenLDAP（`url` / `userdn` / `groupdn`）  
+  * 9.9.3 启用内置 TOTP MFA 方法：`vault write sys/mfa/method/totp/my-totp issuer=...` 与返回的 `method_id`  
+  * 9.9.4 绑定 Login Enforcement：通过 `vault auth list -detailed` 取得 LDAP `Accessor`，写入 `sys/mfa/login-enforcement/ldap-mfa-enforce`（`mfa_method_ids` + `auth_method_types=ldap` + `auth_method_accessors`）  
+  * 9.9.5 两阶段登录 API 流：① `POST /v1/auth/ldap/login/<username>` 校验 LDAP 主凭证并拿到带 `mfa_requirement` 的响应与 `mfa_request_id`；② `POST /v1/sys/mfa/validate` 提交 TOTP 验证码换取最终 Client Token  
+  * 9.9.6 工程难点：Login MFA 依赖 Identity Entity 绑定个人 TOTP 密钥，新用户存在“强制 MFA ↔ 尚未绑定”鸡生蛋死循环  
+  * 9.9.7 首次激活流：以高权限管理 Token 调用 `POST /v1/sys/mfa/method/totp/my-totp/admin-generate` 传入用户 `entity_id`，把返回的 QR 码 / `otpauth://` 链接展示给用户用 Authenticator 扫码绑定，并以一次校验完成确认后纳入强制范围  
+  * 9.9.8 网站后端集成要点：两阶段 HTTP 交互的状态机、`mfa_request_id` 的短时缓存、最终 Vault Token 与网站本地 Session 的映射边界  
+  🧪 动手实验 9.9：用 docker compose 起 OpenLDAP + Vault，跑通"创建 LDAP 用户 → 首次登录触发 admin-generate 绑定 TOTP → 二次登录走完整两阶段 Login MFA 拿到 Token"的完整闭环
 
 ## **第 10 章：技术趋势展望与全课程总结归纳**
 
