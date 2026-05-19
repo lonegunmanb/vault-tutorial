@@ -121,7 +121,7 @@ vault write sys/mfa/login-enforcement/ldap-mfa-enforce \
 
 该命令的语义为："任何**通过 ldap 这一类方法**且**经由 `auth_ldap_xxxxx` 这一具体挂载**发起的登录尝试，都必须额外通过 `my-totp` 校验"。这条规则一旦写入，本节后续所有 `auth/ldap/login/...` 调用都不再直接返回 Token，而是先返回一个 `mfa_requirement`。
 
-### 3.4 用户的 TOTP 密钥（sys/mfa/method/totp/<name>/admin-generate）
+### 3.4 用户的 TOTP 密钥（`sys/mfa/method/totp/<name>/admin-generate`）
 
 上述三步是**对整套系统**的配置；这一步是**对单个用户**的配置——为 alice 在 Authenticator App 中绑定一份仅属于她的 TOTP 密钥：
 
