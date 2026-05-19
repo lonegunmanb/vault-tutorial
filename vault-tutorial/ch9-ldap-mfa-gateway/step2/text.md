@@ -22,6 +22,7 @@ curl -s -X POST \
 MRID=$(curl -s -X POST -d '{"password":"LdapPass!2026"}' \
   http://127.0.0.1:8200/v1/auth/ldap/login/alice \
   | jq -r '.auth.mfa_requirement.mfa_request_id')
+TOTP_METHOD_ID="$(cat /root/totp-method-id)"
 
 curl -s -X POST \
   -d "{\"mfa_request_id\":\"$MRID\",\"mfa_payload\":{\"$TOTP_METHOD_ID\":[\"000000\"]}}" \

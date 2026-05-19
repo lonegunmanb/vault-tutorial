@@ -27,9 +27,10 @@ cat /root/totp-method-id
 vault read sys/mfa/method/totp/my-totp
 ```{{exec}}
 
-`method_id` 是一个 UUID——这就是 9.9 §3.2 里强调的"真正的引用 key"。它已经写进 `/etc/profile.d/totp.sh`，所以本节后续所有 shell 里都能直接用 `$TOTP_METHOD_ID`：
+`vault read` 输出里的 `id` 是一个 UUID——这就是 9.9 §3.2 里强调的"真正的引用 key"，后续 `mfa_payload` 要用它而不是 `my-totp` 这个名字。它也已经写进 `/root/totp-method-id`，需要时可以刷新到当前 shell：
 
 ```bash
+export TOTP_METHOD_ID="$(cat /root/totp-method-id)"
 echo "$TOTP_METHOD_ID"
 ```{{exec}}
 
@@ -43,7 +44,7 @@ vault read sys/mfa/login-enforcement/ldap-mfa-enforce
 
 - `auth_method_types = [ldap]`：覆盖所有 LDAP 类型的认证挂载；
 - `auth_method_accessors`：另一个收口，限定到 LDAP 这一个具体挂载实例（accessor 在 `/root/ldap-accessor`）；
-- `mfa_method_ids` 里就是 1.2 那条 `method_id`。
+- `mfa_method_ids` 里就是 1.2 那条 method ID。
 
 只要这条 enforcement 在，**所有 `auth/ldap/login` 调用都会先回 `mfa_requirement` 而不是直接发 Token**——这是 step 3 那条 `curl` 流程的根本前提。
 

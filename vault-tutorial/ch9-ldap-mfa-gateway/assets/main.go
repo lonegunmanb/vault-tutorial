@@ -19,7 +19,7 @@
 //
 // 环境变量：
 //   VAULT_ADDR       Vault 地址，默认 http://127.0.0.1:8200
-//   TOTP_METHOD_ID   sys/mfa/method/totp/my-totp 的 method_id（UUID）
+//   TOTP_METHOD_ID   sys/mfa/method/totp/my-totp 的 method ID（UUID）
 //   APP_ADDR         监听地址，默认 :8080
 package main
 

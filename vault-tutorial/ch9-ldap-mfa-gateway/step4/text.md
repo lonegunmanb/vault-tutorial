@@ -8,6 +8,7 @@
 RESP1=$(curl -s -X POST -d '{"password":"LdapPass!2026"}' \
   http://127.0.0.1:8200/v1/auth/ldap/login/alice)
 MRID=$(echo "$RESP1" | jq -r '.auth.mfa_requirement.mfa_request_id')
+TOTP_METHOD_ID="$(cat /root/totp-method-id)"
 
 # 故意提交一个肯定不对的 OTP
 curl -s -X POST \
@@ -24,6 +25,7 @@ curl -s -X POST \
 RESP1=$(curl -s -X POST -d '{"password":"LdapPass!2026"}' \
   http://127.0.0.1:8200/v1/auth/ldap/login/alice)
 MRID=$(echo "$RESP1" | jq -r '.auth.mfa_requirement.mfa_request_id')
+TOTP_METHOD_ID="$(cat /root/totp-method-id)"
 
 curl -s -X POST \
   -d "{\"mfa_request_id\":\"$MRID\",\"mfa_payload\":{\"$TOTP_METHOD_ID\":[\"$(oathtool --totp -b "$(cat /root/alice-totp-secret)")\"]}}" \
@@ -69,7 +71,7 @@ curl -s -X POST -d '{"password":"LdapPass!2026"}' \
 
 # 立刻把 enforcement 加回来，避免后续误以为没启 MFA
 vault write sys/mfa/login-enforcement/ldap-mfa-enforce \
-  mfa_method_ids="$TOTP_METHOD_ID" \
+  mfa_method_ids="$(cat /root/totp-method-id)" \
   auth_method_types="ldap" \
   auth_method_accessors="$(cat /root/ldap-accessor)"
 ```{{exec}}

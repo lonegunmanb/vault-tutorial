@@ -8,7 +8,7 @@
 - **OpenLDAP 容器**：监听 `localhost:389`，目录树根 `dc=learn,dc=example`；预创建一位真实用户 `cn=alice,ou=users,dc=learn,dc=example`，初始口令 `LdapPass!2026`；rootdn 为 `cn=admin,dc=learn,dc=example`、口令 `2LearnVault`；
 - **Vault 这四块积木已经写好**（对应 9.9 §3）：
   - `auth/ldap` 已启用并连上 OpenLDAP；
-  - `sys/mfa/method/totp/my-totp` 已创建，`method_id` 已写入 `/root/totp-method-id` 与 `/etc/profile.d/totp.sh`（环境变量 `TOTP_METHOD_ID`）；
+  - `sys/mfa/method/totp/my-totp` 已创建，method ID 已写入 `/root/totp-method-id` 与 `/etc/profile.d/totp.sh`（环境变量 `TOTP_METHOD_ID`）；
   - `sys/mfa/login-enforcement/ldap-mfa-enforce` 已生效——所有 `auth/ldap/login` 都强制走 TOTP；
   - alice 的 **Identity Entity 与 entity-alias 已经预建好**（解了第 4 节里那个鸡生蛋）；**但 alice 还没有 TOTP 密钥**——这一步留到 step 2 由你来跑；
 - **Go 网站源码**已落到 `/root/web-app/`（一个文件 `main.go` + `go.mod`，Go 标准库实现，约 300 行），background 脚本会把它编译成 `/root/web-app/app` 并以 `nohup` 起到 `:8080`；

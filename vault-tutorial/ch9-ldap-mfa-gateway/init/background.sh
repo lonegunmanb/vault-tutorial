@@ -132,14 +132,22 @@ echo "$LDAP_ACC" > /root/ldap-accessor
 # 四块积木之 2：TOTP MFA method
 # ──────────────────────────────────────────────────────────
 stage "create totp mfa method my-totp"
-vault write sys/mfa/method/totp/my-totp \
+if ! vault write sys/mfa/method/totp/my-totp \
   issuer="MyWebsite" \
   period=30 \
   algorithm=SHA1 \
-  digits=6 > /dev/null
+  digits=6 > /dev/null; then
+  echo "FATAL: failed to create sys/mfa/method/totp/my-totp"
+  exit 1
+fi
 
-TOTP_ID=$(vault read -field=method_id sys/mfa/method/totp/my-totp)
-echo "TOTP method_id: $TOTP_ID"
+TOTP_ID=$(vault read -field=id sys/mfa/method/totp/my-totp 2>/tmp/totp-method-read.err)
+if [ -z "$TOTP_ID" ]; then
+  echo "FATAL: failed to read TOTP method id from sys/mfa/method/totp/my-totp"
+  cat /tmp/totp-method-read.err 2>/dev/null || true
+  exit 1
+fi
+echo "TOTP method id: $TOTP_ID"
 echo "$TOTP_ID" > /root/totp-method-id
 
 # 把 TOTP_METHOD_ID 写进所有 shell 的环境
@@ -154,10 +162,13 @@ grep -q "TOTP_METHOD_ID=" /root/.bashrc 2>/dev/null || \
 # 四块积木之 3：Login Enforcement
 # ──────────────────────────────────────────────────────────
 stage "create login-enforcement ldap-mfa-enforce"
-vault write sys/mfa/login-enforcement/ldap-mfa-enforce \
+if ! vault write sys/mfa/login-enforcement/ldap-mfa-enforce \
   mfa_method_ids="$TOTP_ID" \
   auth_method_types="ldap" \
-  auth_method_accessors="$LDAP_ACC" > /dev/null
+  auth_method_accessors="$LDAP_ACC" > /dev/null; then
+  echo "FATAL: failed to create sys/mfa/login-enforcement/ldap-mfa-enforce"
+  exit 1
+fi
 
 # ──────────────────────────────────────────────────────────
 # 破"鸡生蛋"：预先为 alice 创建 Identity Entity + entity-alias，
@@ -225,7 +236,12 @@ cat > /usr/local/bin/start-web-app.sh <<'EOF'
 pkill -f /root/web-app/app 2>/dev/null
 sleep 1
 export VAULT_ADDR='http://127.0.0.1:8200'
-export TOTP_METHOD_ID=$(cat /root/totp-method-id)
+TOTP_METHOD_ID=$(cat /root/totp-method-id)
+if [ -z "$TOTP_METHOD_ID" ]; then
+  echo "FATAL: /root/totp-method-id is empty"
+  exit 1
+fi
+export TOTP_METHOD_ID
 export APP_ADDR=':8080'
 nohup /root/web-app/app > /var/log/web-app.log 2>&1 &
 sleep 1

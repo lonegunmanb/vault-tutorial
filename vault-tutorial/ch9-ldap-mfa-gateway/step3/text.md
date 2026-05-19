@@ -21,6 +21,7 @@ echo "MFA_REQUEST_ID=$MRID"
 
 ```bash
 OTP=$(oathtool --totp -b "$(cat /root/alice-totp-secret)")
+TOTP_METHOD_ID="$(cat /root/totp-method-id)"
 echo "current OTP = $OTP"
 
 curl -s -X POST \
@@ -32,6 +33,7 @@ curl -s -X POST \
 `client_token` 现在是 `hvs.xxxx`——登录完成。可以拿它去 `lookup-self`：
 
 ```bash
+TOTP_METHOD_ID="$(cat /root/totp-method-id)"
 TOKEN=$(curl -s -X POST \
   -d "{\"mfa_request_id\":\"$MRID\",\"mfa_payload\":{\"$TOTP_METHOD_ID\":[\"$(oathtool --totp -b "$(cat /root/alice-totp-secret)")\"]}}" \
   http://127.0.0.1:8200/v1/sys/mfa/validate \

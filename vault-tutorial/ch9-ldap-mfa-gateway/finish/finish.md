@@ -11,7 +11,7 @@
 ## 你掌握的要点
 
 - Vault Login MFA 把登录切成两段 HTTP 调用的协议骨架，以及网站后端如何用服务端 session 串起两次调用；
-- `method_id`（UUID）在 `mfa_payload` 里是必须的，"好记名字" `my-totp` 不行；
+- method ID（UUID）在 `mfa_payload` 里是必须的，"好记名字" `my-totp` 不行；
 - `mfa_request_id` 一次性 + 短期，所以 OTP 输错必须回 `/login` 重走第一阶段；
 - 新用户的"先有 Entity 才能有 TOTP 密钥"是 Login MFA 的固有约束，由 enrollment service 显式破解，**不要**让日常登录路径背这个权限；
 - Vault Token 不能写进浏览器 Cookie；要主动 `revoke-self` 关掉 session；

@@ -100,9 +100,9 @@ vault write sys/mfa/method/totp/my-totp \
     digits=6
 ```
 
-返回中会带有一个 `method_id`（UUID）——这才是后续所有命令都需要引用的"这一类 MFA 方法的内部句柄"，请妥善记录。
+读取该方法时会看到一个 `id` 字段（UUID）——这才是后续所有命令都需要引用的"这一类 MFA 方法的内部句柄"，也就是常说的 method ID，请妥善记录。
 
-> 这里的 `my-totp` 只是为该方法取的易读名称，可任意命名；而 `method_id` 由 Vault 自动生成、固定不变，是真正的引用 key。
+> 这里的 `my-totp` 只是为该方法取的易读名称，可任意命名；而 `id` / method ID 由 Vault 自动生成、固定不变，是真正的引用 key。
 
 ### 3.3 Login Enforcement（sys/mfa/login-enforcement）
 
@@ -111,7 +111,7 @@ vault write sys/mfa/method/totp/my-totp \
 ```bash
 # 先拿到 LDAP 认证方法的 accessor（每个挂载实例独有的内部 ID）
 LDAP_ACC=$(vault auth list -format=json | jq -r '.["ldap/"].accessor')
-TOTP_ID=$(vault read -field=method_id sys/mfa/method/totp/my-totp)
+TOTP_ID=$(vault read -field=id sys/mfa/method/totp/my-totp)
 
 vault write sys/mfa/login-enforcement/ldap-mfa-enforce \
     mfa_method_ids="$TOTP_ID" \
