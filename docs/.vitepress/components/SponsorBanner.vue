@@ -1,5 +1,7 @@
 <script setup>
-const qrcodeUrl = '/images/donate-qrcode-placeholder.png'
+import { withBase } from 'vitepress'
+
+const qrcodeUrl = withBase('/images/donate-qrcode-placeholder.png')
 </script>
 
 <template>
